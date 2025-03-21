@@ -1,0 +1,41 @@
+# Stack build artifacts
+.stack-work/
+dist/
+dist-newstyle/
+.cabal-sandbox/
+cabal.sandbox.config
+*.hi
+*.o
+*.chi
+*.chs.h
+*.dyn_o
+*.dyn_hi
+*.prof
+*.aux
+*.hp
+*.eventlog
+
+# Client session keys
+client_session_key.aes
+
+# IDE specific files
+.idea/
+.vscode/
+*.iml
+*.swp
+*~
+
+# Haskell package artifacts
+.ghc.environment.*
+cabal.project.local
+cabal.project.local~
+
+# macOS specific
+.DS_Store
+
+# Windows specific
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
