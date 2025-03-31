@@ -23,3 +23,11 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - directory
+
+  kai:
+    main: Main.hs
+    source-dirs: Kai
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
