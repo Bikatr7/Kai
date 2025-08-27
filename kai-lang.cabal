@@ -11,6 +11,7 @@ homepage:       https://github.com/bikatr7/kai
 author:         Kaden Bilyeu (Bikatr7)
 maintainer:     bikatr7@proton.me
 license:        AGPL-3.0-only
+license-file:   LICENSE
 build-type:     Simple
 
 library
