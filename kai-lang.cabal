@@ -4,23 +4,33 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           haskell-website
+name:           kai-lang
 version:        0.1.0.0
+description:    A minimal, typed expression language implemented in Haskell
+homepage:       https://github.com/kbilyeu/kai
+author:         Kai Bilyeu
+maintainer:     kbilyeu@example.com
+license:        MIT
 build-type:     Simple
 
-executable haskell-website
+executable kai
   main-is: Main.hs
   other-modules:
-      Paths_haskell_website
+      Evaluator
+      Parser
+      Syntax
+      TypeChecker
+      Paths_kai_lang
   hs-source-dirs:
-      app
+      src
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
     , base >=4.7 && <5
     , bytestring
     , containers
-    , directory
+    , megaparsec
+    , parser-combinators
     , shakespeare
     , text
     , warp
@@ -30,21 +40,21 @@ executable haskell-website
     , yesod-static
   default-language: Haskell2010
 
-executable kai
+executable kai-website
   main-is: Main.hs
   other-modules:
-      Evaluator
-      Syntax
-      TypeChecker
-      Paths_haskell_website
+      Paths_kai_lang
   hs-source-dirs:
-      Kai
+      website
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
     , base >=4.7 && <5
     , bytestring
     , containers
+    , directory
+    , megaparsec
+    , parser-combinators
     , shakespeare
     , text
     , warp

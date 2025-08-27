@@ -66,7 +66,7 @@ getHomeR = defaultLayout $ do
                 <div .element-block>
                     <h3>Operators
                     <div .code-example>
-                        <code>+</code> · <code>-</code> · <code>*</code> · <code>/</code> · <code>==</code> · <code><</code> · <code>and</code> · <code>or</code> · <code>not</code>
+                        <code>+</code> · <code>-</code> · <code>*</code> · <code>/</code> · <code>==</code> · <code><</code> · <code>></code> · <code>and</code> · <code>or</code> · <code>not</code>
                 
                 <div .element-block>
                     <h3>Control Flow
@@ -75,34 +75,46 @@ getHomeR = defaultLayout $ do
 
             <section #examples>
                 <h2>Example Expressions
-                <pre>
-                    <code>1 + 2</code>
+                <div .element-block>
+                    <h3>Arithmetic & Logic
+                    <div .code-example>
+                        <code>42 * (10 - 3)</code> · <code>5 > 3 and true</code> · <code>not false</code>
+                
+                <div .element-block>
+                    <h3>Conditionals
+                    <div .code-example>
+                        <code>if 5 > 3 then 42 * 2 else 0</code>
+                        
+                <div .element-block>
+                    <h3>Complex Expressions  
+                    <div .code-example>
+                        <code>if (10 / 2) == 5 then "success" else "fail"</code>
 
             <section #roadmap>
                 <h2>Development Roadmap
                 <div .timeline>
-                    <div .timeline-item>
-                        <div .timeline-marker .current>
+                    <div .timeline-item .current>
+                        <div .timeline-marker .current data-step="1">
                         <div .timeline-content>
                             <h3>Expressions
                             <p>Core types, operators, and control flow
                     <div .timeline-item>
-                        <div .timeline-marker>
+                        <div .timeline-marker data-step="2">
                         <div .timeline-content>
                             <h3>Lambda Functions
                             <p>First-class functions and application
                     <div .timeline-item>
-                        <div .timeline-marker>
+                        <div .timeline-marker data-step="3">
                         <div .timeline-content>
                             <h3>Variables
                             <p>Binding and environments
                     <div .timeline-item>
-                        <div .timeline-marker>
+                        <div .timeline-marker data-step="4">
                         <div .timeline-content>
                             <h3>Error Handling
                             <p>Robust error recovery
                     <div .timeline-item>
-                        <div .timeline-marker>
+                        <div .timeline-marker data-step="5">
                         <div .timeline-content>
                             <h3>State Management
                             <p>Controlled mutability
@@ -114,5 +126,5 @@ getHomeR = defaultLayout $ do
 main :: IO ()
 main = do
     putStrLn "Starting server on http://localhost:3000"
-    static <- static "static"
+    static <- static "website/static"
     warp 3000 $ HelloWorld static 

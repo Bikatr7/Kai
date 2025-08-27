@@ -88,6 +88,14 @@ typeCheck (Lt e1 e2) = do
     (TInt, t) -> Left $ TypeMismatch TInt t
     (t, _) -> Left $ TypeMismatch TInt t
 
+typeCheck (Gt e1 e2) = do
+  t1 <- typeCheck e1
+  t2 <- typeCheck e2
+  case (t1, t2) of
+    (TInt, TInt) -> Right TBool
+    (TInt, t) -> Left $ TypeMismatch TInt t
+    (t, _) -> Left $ TypeMismatch TInt t
+
 typeCheck (If c t e) = do
   tc <- typeCheck c
   case tc of

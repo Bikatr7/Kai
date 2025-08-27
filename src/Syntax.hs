@@ -12,5 +12,6 @@ data Expr
   | Not Expr              -- Logical NOT
   | Eq Expr Expr          -- Equality
   | Lt Expr Expr          -- Less than
+  | Gt Expr Expr          -- Greater than
   | If Expr Expr Expr     -- If-then-else
   deriving (Show, Eq) 

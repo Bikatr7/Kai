@@ -81,6 +81,13 @@ eval (Lt e1 e2) = do
     (VInt n1, VInt n2) -> Right $ VBool (n1 < n2)
     _ -> Left $ TypeError "Less than comparison requires integer operands"
 
+eval (Gt e1 e2) = do
+  v1 <- eval e1
+  v2 <- eval e2
+  case (v1, v2) of
+    (VInt n1, VInt n2) -> Right $ VBool (n1 > n2)
+    _ -> Left $ TypeError "Greater than comparison requires integer operands"
+
 eval (If c t e) = do
   vc <- eval c
   case vc of

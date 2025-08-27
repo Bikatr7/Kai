@@ -1,5 +1,11 @@
-name: haskell-website
+name: kai-lang
 version: 0.1.0.0
+description: A minimal, typed expression language implemented in Haskell
+homepage: https://github.com/kbilyeu/kai
+license: MIT
+author: Kai Bilyeu
+maintainer: kbilyeu@example.com
+
 dependencies:
   - base >= 4.7 && < 5
   - yesod
@@ -12,11 +18,13 @@ dependencies:
   - aeson
   - containers
   - bytestring
+  - megaparsec
+  - parser-combinators
 
 executables:
-  haskell-website:
+  kai-website:
     main: Main.hs
-    source-dirs: app
+    source-dirs: website
     ghc-options:
       - -threaded
       - -rtsopts
@@ -26,7 +34,7 @@ executables:
 
   kai:
     main: Main.hs
-    source-dirs: Kai
+    source-dirs: src
     ghc-options:
       - -threaded
       - -rtsopts
