@@ -33,7 +33,7 @@ getHomeR = defaultLayout $ do
         <div .container>
             <header>
                 <h1>Kai
-                <p .tagline>A minimal, typed expression language
+                <p .tagline>A minimal, statically typed expression language
 
             <nav>
                 <ul>
@@ -46,14 +46,14 @@ getHomeR = defaultLayout $ do
                 <h2>Core Features
                 <div .features-grid>
                     <div .feature>
-                        <h3>Static Typing
-                        <p>Catch errors before they happen with compile-time type checking.
+                        <h3>Static Typing (MVP)
+                        <p>Simple type checker for ints, bools, and functions.
                     <div .feature>
-                        <h3>Simple Syntax
-                        <p>Clean, intuitive syntax focused on what matters.
+                        <h3>Clean Syntax
+                        <p>Haskell-like lambdas, precedence, and keywords.
                     <div .feature>
                         <h3>Pure Expressions
-                        <p>Predictable evaluation without side effects.
+                        <p>Predictable evaluation without side effects (core is pure).
 
             <section #elements>
                 <h2>Language Elements
@@ -72,6 +72,11 @@ getHomeR = defaultLayout $ do
                     <h3>Control Flow
                     <div .code-example>
                         <code>if condition then expr1 else expr2</code>
+                        
+                <div .element-block>
+                    <h3>Lambda Functions
+                    <div .code-example>
+                        <code>\x -> x + 1</code> · <code>\f -> f 42</code>
 
             <section #examples>
                 <h2>Example Expressions
@@ -86,38 +91,45 @@ getHomeR = defaultLayout $ do
                         <code>if 5 > 3 then 42 * 2 else 0</code>
                         
                 <div .element-block>
-                    <h3>Complex Expressions  
+                    <h3>Lambda Functions & Application
                     <div .code-example>
-                        <code>if (10 / 2) == 5 then "success" else "fail"</code>
+                        <code>\x -> x + 1</code>
+                        <br/>
+                        <code>(\x -> x + 1) 5</code> · <code>(\x -> x * x) 4</code>
+                        
+                <div .element-block>
+                    <h3>Higher-Order Functions
+                    <div .code-example>
+                        <code>(\f -> f 42) (\x -> x + 1)</code>
 
             <section #roadmap>
-                <h2>Development Roadmap
+                <h2>Current Status & Roadmap
                 <div .timeline>
-                    <div .timeline-item .current>
-                        <div .timeline-marker .current data-step="1">
-                        <div .timeline-content>
-                            <h3>Expressions
-                            <p>Core types, operators, and control flow
                     <div .timeline-item>
-                        <div .timeline-marker data-step="2">
+                        <div .timeline-marker data-step="1">
                         <div .timeline-content>
-                            <h3>Lambda Functions
-                            <p>First-class functions and application
+                            <h3>Expressions (Done)
+                            <p>Ints, bools, arithmetic, comparisons, conditionals
+                    <div .timeline-item .current>
+                        <div .timeline-marker .current data-step="2">
+                        <div .timeline-content>
+                            <h3>Lambda Functions (Done)
+                            <p>First-class functions, closures, application
                     <div .timeline-item>
                         <div .timeline-marker data-step="3">
                         <div .timeline-content>
-                            <h3>Variables
-                            <p>Binding and environments
+                            <h3>Type System (In Progress)
+                            <p>Improve inference and error messages
                     <div .timeline-item>
                         <div .timeline-marker data-step="4">
                         <div .timeline-content>
-                            <h3>Error Handling
-                            <p>Robust error recovery
+                            <h3>Variables & Modules (Planned)
+                            <p>Let-bindings, top-level defs, modules/imports
                     <div .timeline-item>
                         <div .timeline-marker data-step="5">
                         <div .timeline-content>
-                            <h3>State Management
-                            <p>Controlled mutability
+                            <h3>Stdlib & I/O (Planned)
+                            <p>Strings, lists, file/process/JSON utilities
 
             <footer>
                 <p .copyright>Kai Language · Implemented in Haskell

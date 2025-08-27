@@ -1,108 +1,139 @@
 module TypeChecker where
 
 import Syntax
+import qualified Data.Map as Map
 
--- Kai types, not gonna pretend I know what I'm doing here
-data Type = TInt | TBool
+data Type = TInt | TBool | TFun Type Type  -- TFun arg_type return_type
   deriving (Show, Eq)
 
--- Type checking errors (allegedly)
+type TypeEnv = Map.Map String Type
+
 data TypeError
   = TypeMismatch Type Type
   | ExpectedInt Type
   | ExpectedBool Type
+  | ExpectedFunction Type
+  | UnboundVariable String
   | DivisionByZero
   deriving (Show, Eq)
 
--- Type check an expression
 typeCheck :: Expr -> Either TypeError Type
-typeCheck (IntLit _) = Right TInt
-typeCheck (BoolLit _) = Right TBool
+typeCheck = typeCheckWithEnv Map.empty
 
-typeCheck (Add e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv :: TypeEnv -> Expr -> Either TypeError Type
+typeCheckWithEnv _ (IntLit _) = Right TInt
+typeCheckWithEnv _ (BoolLit _) = Right TBool
+
+typeCheckWithEnv env (Var x) = 
+  case Map.lookup x env of
+    Just t -> Right t
+    Nothing -> Left $ UnboundVariable x
+
+typeCheckWithEnv env (Add e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   case (t1, t2) of
     (TInt, TInt) -> Right TInt
     (TInt, t) -> Left $ TypeMismatch TInt t
     (t, _) -> Left $ TypeMismatch TInt t
 
-typeCheck (Sub e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv env (Sub e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   case (t1, t2) of
     (TInt, TInt) -> Right TInt
     (TInt, t) -> Left $ TypeMismatch TInt t
     (t, _) -> Left $ TypeMismatch TInt t
 
-typeCheck (Mul e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv env (Mul e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   case (t1, t2) of
     (TInt, TInt) -> Right TInt
     (TInt, t) -> Left $ TypeMismatch TInt t
     (t, _) -> Left $ TypeMismatch TInt t
 
-typeCheck (Div e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv env (Div e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   case (t1, t2) of
     (TInt, TInt) -> Right TInt
     (TInt, t) -> Left $ TypeMismatch TInt t
     (t, _) -> Left $ TypeMismatch TInt t
 
-typeCheck (And e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv env (And e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   case (t1, t2) of
     (TBool, TBool) -> Right TBool
     (TBool, t) -> Left $ TypeMismatch TBool t
     (t, _) -> Left $ TypeMismatch TBool t
 
-typeCheck (Or e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv env (Or e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   case (t1, t2) of
     (TBool, TBool) -> Right TBool
     (TBool, t) -> Left $ TypeMismatch TBool t
     (t, _) -> Left $ TypeMismatch TBool t
 
-typeCheck (Not e) = do
-  t <- typeCheck e
+typeCheckWithEnv env (Not e) = do
+  t <- typeCheckWithEnv env e
   case t of
     TBool -> Right TBool
     t' -> Left $ ExpectedBool t'
 
-typeCheck (Eq e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv env (Eq e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   if t1 == t2
     then Right TBool
     else Left $ TypeMismatch t1 t2
 
-typeCheck (Lt e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv env (Lt e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   case (t1, t2) of
     (TInt, TInt) -> Right TBool
     (TInt, t) -> Left $ TypeMismatch TInt t
     (t, _) -> Left $ TypeMismatch TInt t
 
-typeCheck (Gt e1 e2) = do
-  t1 <- typeCheck e1
-  t2 <- typeCheck e2
+typeCheckWithEnv env (Gt e1 e2) = do
+  t1 <- typeCheckWithEnv env e1
+  t2 <- typeCheckWithEnv env e2
   case (t1, t2) of
     (TInt, TInt) -> Right TBool
     (TInt, t) -> Left $ TypeMismatch TInt t
     (t, _) -> Left $ TypeMismatch TInt t
 
-typeCheck (If c t e) = do
-  tc <- typeCheck c
+typeCheckWithEnv env (If c t e) = do
+  tc <- typeCheckWithEnv env c
   case tc of
     TBool -> do
-      tt <- typeCheck t
-      te <- typeCheck e
+      tt <- typeCheckWithEnv env t
+      te <- typeCheckWithEnv env e
       if tt == te
         then Right tt
         else Left $ TypeMismatch tt te
-    t -> Left $ ExpectedBool t 
+    t -> Left $ ExpectedBool t
+
+-- Lambda functions: \x -> body has type (arg_type -> return_type)
+-- We need to infer the argument type, but for now let's be simple as i am fucking lazy
+typeCheckWithEnv env (Lambda param body) = do
+  -- For now, we'll require explicit types or use a simple inference
+  -- This is a simplified version - in practice you'd want proper type inference
+  let argType = TInt  -- Default to Int for now - this is hacky but works for examples and i am lazy
+  let env' = Map.insert param argType env
+  retType <- typeCheckWithEnv env' body
+  return $ TFun argType retType
+
+-- Function application: (f arg) where f :: a -> b and arg :: a gives b
+typeCheckWithEnv env (App fun arg) = do
+  funType <- typeCheckWithEnv env fun
+  argType <- typeCheckWithEnv env arg
+  case funType of
+    TFun expectedArgType retType ->
+      if argType == expectedArgType
+        then Right retType
+        else Left $ TypeMismatch expectedArgType argType
+    _ -> Left $ ExpectedFunction funType

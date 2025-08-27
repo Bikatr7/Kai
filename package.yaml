@@ -1,10 +1,10 @@
 name: kai-lang
-version: 0.1.0.0
+version: 0.1.1
 description: A minimal, typed expression language implemented in Haskell
-homepage: https://github.com/kbilyeu/kai
-license: MIT
-author: Kai Bilyeu
-maintainer: kbilyeu@example.com
+homepage: https://github.com/bikatr7/kai
+license: AGPL-3.0-only
+author: Kaden Bilyeu (Bikatr7)
+maintainer: bikatr7@proton.me
 
 dependencies:
   - base >= 4.7 && < 5
@@ -20,6 +20,16 @@ dependencies:
   - bytestring
   - megaparsec
   - parser-combinators
+  - hspec
+  - QuickCheck
+
+library:
+  source-dirs: src
+  exposed-modules:
+    - Syntax
+    - Parser
+    - Evaluator
+    - TypeChecker
 
 executables:
   kai-website:
@@ -39,3 +49,21 @@ executables:
       - -threaded
       - -rtsopts
       - -with-rtsopts=-N
+
+tests:
+  kai-test:
+    main: Spec.hs
+    source-dirs: 
+      - test
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+    dependencies:
+      - hspec
+      - QuickCheck
+      - kai-lang
+      - directory
+      - filepath
+    build-tools:
+      - hspec-discover

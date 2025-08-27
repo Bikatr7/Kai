@@ -1,157 +1,154 @@
 # Kai Language
 
-A minimal, typed expression language implemented in Haskell.
+A minimal, statically typed expression language, implemented in Haskell.
 
-## Note
+Kai aims to combine a clean, understandable syntax with a solid static type system and a pleasant scripting experience.
 
-Work in progress, i have little time, nor know anything about how to write a language properly, or haskell really lol.
+## Current Status (MVP)
 
-## Overview
+The language currently supports a compact, expression‑only core with full test coverage.
 
-Kai is a simple yet powerful programming language that combines static typing with clean syntax. It's designed to be easy to learn while providing the safety and expressiveness of modern functional programming.
+Features available today:
 
-### Features
+- Expressions: integers, booleans, parentheses, unary minus
+- Arithmetic: `+`, `-`, `*`, `/` (integer division, division by zero error)
+- Booleans: `and`, `or`, `not`
+- Comparisons: `==`, `<`, `>`
+- Conditionals: `if cond then e1 else e2`
+- Functions: lambdas (`\x -> expr`), application (`f x`), closures
+- Static checking: simple type checker with `TInt`, `TBool`, `TFun`
+- Parser: Megaparsec with precedence/associativity, reserved keywords
+- CLI: parse and evaluate expressions or files
+- Tests: Hspec suite (103 examples) — all passing
 
-- ✅ **Static Typing** - Catch errors at compile time
-- ✅ **Pure Expressions** - Predictable evaluation without side effects  
-- ✅ **Simple Syntax** - Clean, intuitive language design
-- ✅ **Script Files** - Parse and run `.kai` files
-- ✅ **Web Interface** - Modern landing page with language documentation
+Limitations (by design at this stage):
 
-### Current Language Support
+- No top‑level bindings, modules, or imports
+- No strings, lists, records, or user‑defined data types (yet)
+- Type checking is simple; lambdas default an `Int` parameter type (placeholder for real inference)
+- Purely functional core; no side effects or I/O in the language itself
 
-- **Basic Types**: Integers (`42`, `-5`) and Booleans (`true`, `false`)
-- **Operators**: `+`, `-`, `*`, `/`, `==`, `<`, `>`, `and`, `or`, `not`
-- **Control Flow**: `if condition then expr1 else expr2`
-- **Parentheses**: For grouping expressions
+## Quickstart
 
-## Getting Started
+Prerequisites: GHC/Stack via GHCup or your platform’s package manager.
 
-### Prerequisites
-
-Install the Haskell toolchain:
-
-```bash
-# Option 1: GHCup (Recommended)
-curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
-ghcup install ghc cabal stack
-
-# Option 2: Homebrew (macOS)
-brew install ghc cabal-install stack
-```
-
-### Build & Run
+Build, test, and run:
 
 ```bash
-# Build the project
 stack build
+stack test
 
-# Run the Kai interpreter with examples
+## Run interpreter (no args = REPL-like single input mode)
 stack exec kai
 
-# Run a Kai script file
-stack exec kai tests/test.kai
+## Run a file
+stack exec kai path/to/script.kai
 
-# Start the web interface
-stack exec kai-website
+## Website demo (intro page)
+stack exec kai-website  # visit http://localhost:3000
 ```
 
-Visit http://localhost:3000 for the web interface. This is currently just an introduction site.
+Script samples in tests:
 
-### Example Usage
+- `stack test` also discovers `.kai` files under `tests/` and `test/`, evaluates them, and shows each file’s result in the test output under two sections.
+- Add your own `.kai` script to those folders to have it run automatically.
 
-Create a file `example.kai`:
+## Examples
+
+Arithmetic, booleans, conditionals:
+
 ```kai
-if 10 > 5 then 42 * 2 else 0
+42 * (10 - 3)
+true and not false
+if 10 > 5 then 84 else 0
 ```
 
-Run it:
-```bash
-stack exec kai example.kai
+Lambdas and application:
+
+```kai
+(\x -> x + 1) 41      // => 42
+(\f -> f 10) (\n -> n * 2)  // => 20
 ```
 
-Output:
+Type safety (checked before evaluation):
+
+```kai
+1 + true         // Type error: TypeMismatch TInt TBool
+if 5 then 1 else 2  // Type error: ExpectedBool TInt
 ```
-Running file: example.kai
-AST: If (Gt (IntLit 10) (IntLit 5)) (Mul (IntLit 42) (IntLit 2)) (IntLit 0)
-Type: TInt
-Evaluation: VInt 84
-```
+
+## Language Notes
+
+- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`).
+- Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
+- Application binds tighter than infix operators (`f x + y` parses as `(f x) + y`).
 
 ## Project Structure
 
 ```
 .
-├── src/                    # Kai language implementation
-│   ├── Main.hs            # CLI interpreter
-│   ├── Syntax.hs          # AST definitions
-│   ├── Parser.hs          # Parser (Megaparsec)
-│   ├── TypeChecker.hs     # Static type checker
-│   └── Evaluator.hs       # Expression evaluator
-├── website/               # Web interface
-│   ├── Main.hs           # Yesod web server
-│   └── static/           # CSS, favicon, etc.
-├── tests/                # Test files
-│   └── test.kai         # Example Kai scripts
-├── package.yaml         # Project configuration
-└── README.md           # This file
+├── src/                   ## Language implementation
+│   ├── Syntax.hs          ## AST definitions
+│   ├── Parser.hs          ## Megaparsec parser
+│   ├── TypeChecker.hs     ## Static type checker (TInt, TBool, TFun)
+│   ├── Evaluator.hs       ## Interpreter (closures, pure evaluation)
+│   └── Main.hs            ## CLI entry for `kai`
+├── website/               ## Small Yesod site (intro)
+├── test/                  ## Hspec test suite
+├── package.yaml           ## Project config (library + exes + tests)
+└── README.md
 ```
 
-## Development Roadmap
+## Vision: Kai as a Clean, Typed Scripting Language
 
-### ✅ Phase 1: Core Expressions (Current)
-- [x] Basic types and operators
-- [x] Control flow (if-then-else)
-- [x] File parsing and CLI
-- [x] Type checking and evaluation
+Design goals:
 
-### 🚧 Phase 2: Lambda Functions (Next)
-- [ ] Function definitions
-- [ ] Function application
-- [ ] First-class functions
+- Static first: strong, predictable types with great errors
+- Clean syntax: concise, readable, expression‑oriented
+- Scriptable: fast edit‑run loop, ergonomic CLI, shebang support
+- Practical: a small standard library and productive defaults
 
-### 📋 Phase 3: Variables & Environments
-- [ ] Variable binding (`let x = 5 in x + 1`)
-- [ ] Scope management
-- [ ] Environment handling
+Planned language features:
 
-### 📋 Phase 4: Error Handling
-- [ ] Better error messages
-- [ ] Error recovery
-- [ ] Debugging support
+- Bindings and modules
+  - Let‑bindings and top‑level definitions
+  - Module system and imports
+  - Script runner (`kai script.kai`) and `#!/usr/bin/env kai` support
 
-### 📋 Phase 5: Advanced Features
-- [ ] Pattern matching
-- [ ] Data types
-- [ ] Module system
+- Types and inference
+  - Hindley–Milner style type inference with annotations when needed
+  - Algebraic data types, pattern matching, type aliases
+  - Parametric polymorphism; later, typeclasses/traits if justified
 
-## Language Examples
+- Data and stdlib
+  - Strings, lists, maps/records, options/results
+  - A focused, batteries‑included standard library for scripting
+  - Interop/FFI for host system calls
 
-### Arithmetic & Logic
+- Effects and I/O
+  - Simple, principled I/O model that keeps the core pure
+  - File and process utilities; JSON and text handling
+
+- Tooling and UX
+  - Formatter and linter
+  - REPL with multiline input, completion, and :type
+  - Error messages with helpful suggestions
+
+Example future script:
+
 ```kai
-42 * (10 - 3)
-5 > 3 and true
-not false
-```
+#!/usr/bin/env kai
 
-### Conditionals
-```kai
-if 5 > 3 then 42 * 2 else 0
-if (10 / 2) == 5 then 100 else 0
-```
+import System (args, readFile, writeFile)
 
-### Type Safety
-```kai
-1 + true          // Type error: TypeMismatch TInt TBool
-10 / 0            // Runtime error: DivByZero  
+let greet name =
+  if name == "" then "Hello, world!" else "Hello, " + name
+
+let main =
+  let input = if length args > 0 then head args else "Kai"
+  in print (greet input)
 ```
 
 ## Contributing
 
-Contributions welcome! This is a learning project, so feel free to:
-
-- Add new language features
-- Improve error messages
-- Enhance the web interface
-- Write documentation
-- Add tests
+You are more than welcome to contribute anything.

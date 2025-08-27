@@ -17,6 +17,11 @@ examples =
   , "if 3 < 5 then 1 else 0"
   , "if 3 < 5 then true else false"
   , "if 3 < 5 then 1 else false"
+  , "\\x -> x + 1"
+  , "(\\x -> x + 1) 5"
+  , "(\\x -> x * 2) 10"
+  , "(\\x -> if x > 0 then x else 0) (-5)"
+  , "(\\f -> f 42) (\\x -> x + 1)"
   ]
 
 runExpression :: String -> IO ()
