@@ -48,6 +48,15 @@ stack exec kai path/to/script.kai
 stack exec kai-website  # visit http://localhost:3000
 ```
 
+Export a static site bundle:
+
+- Generate `dist-site/` with an `index.html` and static assets you can open locally or deploy to GitHub Pages/Netlify.
+
+```bash
+bash scripts/export-site.sh
+## open dist-site/index.html in a browser
+```
+
 Script samples in tests:
 
 - `stack test` also discovers `.kai` files under `tests/` and `test/`, evaluates them, and shows each file’s result in the test output under two sections.

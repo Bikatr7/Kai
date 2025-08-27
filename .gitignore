@@ -41,5 +41,5 @@ desktop.ini
 *.log
 
 goals.txt
-
+dist-site/
 Main

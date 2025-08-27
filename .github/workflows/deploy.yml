@@ -38,21 +38,11 @@ jobs:
     - name: Build project
       run: stack build --system-ghc
     
-    - name: Generate static site
+    - name: Export static site
       run: |
-        mkdir -p _site
-        cp -r website/static/* _site/
-        # Generate index.html by running the website briefly
-        timeout 10s stack exec kai-website &
-        sleep 5
-        curl -s http://localhost:3000 > _site/index.html || echo "Site generation failed"
-        pkill -f kai-website || true
-        
-        # Ensure we have basic files
-        if [ ! -f "_site/index.html" ]; then
-          echo "Creating basic index.html"
-          echo '<!DOCTYPE html><html><head><title>Kai Language</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="style.css"></head><body><div class="container"><header><h1>Kai</h1><p class="tagline">A minimal, typed expression language</p></header><p>Static site generation in progress. Please check back soon.</p></div></body></html>' > _site/index.html
-        fi
+        chmod +x scripts/export-site.sh
+        ./scripts/export-site.sh
+        rm -rf _site && mv dist-site _site
     
     - name: Setup Pages
       uses: actions/configure-pages@v4
