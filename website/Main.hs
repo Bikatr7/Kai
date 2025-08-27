@@ -94,7 +94,7 @@ getHomeR = defaultLayout $ do
                     <h3>Lambda Functions & Application
                     <div .code-example>
                         <code>\x -> x + 1</code>
-                        <br/>
+                        <br>
                         <code>(\x -> x + 1) 5</code> · <code>(\x -> x * x) 4</code>
                         
                 <div .element-block>
