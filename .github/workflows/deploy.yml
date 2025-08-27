@@ -51,25 +51,7 @@ jobs:
         # Ensure we have basic files
         if [ ! -f "_site/index.html" ]; then
           echo "Creating basic index.html"
-          cat > _site/index.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Kai Language</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>Kai</h1>
-            <p class="tagline">A minimal, typed expression language</p>
-        </header>
-        <p>Static site generation in progress. Please check back soon.</p>
-    </div>
-</body>
-</html>
-EOF
+          echo '<!DOCTYPE html><html><head><title>Kai Language</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="stylesheet" href="style.css"></head><body><div class="container"><header><h1>Kai</h1><p class="tagline">A minimal, typed expression language</p></header><p>Static site generation in progress. Please check back soon.</p></div></body></html>' > _site/index.html
         fi
     
     - name: Setup Pages
