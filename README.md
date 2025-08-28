@@ -62,7 +62,7 @@ kai path/to/script.kai
 
 Prebuilt binaries (CI Releases):
 
-- Tag a release (e.g., `git tag v0.0.1 && git push --tags`) and GitHub Actions will build binaries for Linux and macOS and attach them to the release.
+- Update the version in `package.yaml` and push to master. GitHub Actions will automatically create a release with binaries for Linux and macOS.
 - Download the appropriate `kai-<platform>` binary from the Releases page, `chmod +x`, and place it on your `PATH`.
 - From source, `stack install` also produces a native binary in your local Stack install path.
 

@@ -2,14 +2,47 @@ name: Build and Release Binaries
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - master
   workflow_dispatch:
 
 jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      tag: ${{ steps.get-version.outputs.tag }}
+      should-release: ${{ steps.check-tag.outputs.should-release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get version from package.yaml
+        id: get-version
+        run: |
+          VERSION=$(grep '^version:' package.yaml | cut -d' ' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Found version: $VERSION"
+      
+      - name: Check if tag already exists
+        id: check-tag
+        run: |
+          TAG="v${{ steps.get-version.outputs.version }}"
+          if git tag -l | grep -q "^$TAG$"; then
+            echo "Tag $TAG already exists, skipping release"
+            echo "should-release=false" >> $GITHUB_OUTPUT
+          else
+            echo "Tag $TAG does not exist, proceeding with release"
+            echo "should-release=true" >> $GITHUB_OUTPUT
+          fi
+
   build:
     name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    needs: check-version
+    if: needs.check-version.outputs.should-release == 'true'
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -62,10 +95,21 @@ jobs:
           path: dist/*
 
   release:
-    needs: build
+    needs: [check-version, build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    if: needs.check-version.outputs.should-release == 'true'
     steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Create and push tag
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git tag ${{ needs.check-version.outputs.tag }}
+          git push origin ${{ needs.check-version.outputs.tag }}
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -73,6 +117,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.check-version.outputs.tag }}
+          name: "Kai v${{ needs.check-version.outputs.version }}"
+          generate_release_notes: true
           files: |
             artifacts/**/kai-*
         env:
