@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# A friendly runner for Kai scripts, so you can run:
+#   kai myscript.kai
+# without typing `stack exec` explicitly.
+
+# 1) If a compiled `kai` binary exists in PATH (and it's not this script), use it.
+if command -v kai >/dev/null 2>&1 && [ "$(command -v kai)" != "${BASH_SOURCE[0]}" ]; then
+  if [ -n "${KAI_BIN:-}" ] && [ -x "${KAI_BIN}" ]; then
+    exec "${KAI_BIN}" "$@"
+  else
+    exec kai "$@"
+  fi
+fi
+
+# 2) If inside the repo, try the locally built binary under .stack-work
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}"/.. && pwd)"
+
+for CAND in \
+  "${REPO_DIR}"/.stack-work/install/*/*/*/bin/kai \
+  "${REPO_DIR}"/.stack-work/install/*/*/bin/kai \
+  "${REPO_DIR}"/.stack-work/dist/*/build/kai/kai
+do
+  if [ -x "${CAND}" ]; then
+    exec "${CAND}" "$@"
+  fi
+done
+
+# 3) Fallback to stack if available
+if command -v stack >/dev/null 2>&1; then
+  exec stack exec kai -- "$@"
+fi
+
+echo "kai: no runnable binary found. Install via 'stack install' or add this script to PATH." >&2
+exit 1
+

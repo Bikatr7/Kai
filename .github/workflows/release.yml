@@ -1,0 +1,80 @@
+name: Build and Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Haskell (Stack)
+      # Uses the same action as the Pages workflow
+      # Ensures GHC/Stack are available across platforms
+      
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4.8'
+          enable-stack: true
+          stack-version: 'latest'
+
+      - name: Cache Stack
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock') }}
+
+      - name: Build CLI binary
+        run: |
+          stack --no-terminal build :kai
+          mkdir -p dist
+          # Locate the built binary
+          BIN_PATH=$(stack path --local-install-root)/bin/kai || true
+          if [ ! -x "$BIN_PATH" ]; then
+            # fallback attempt
+            BIN_PATH=$(stack path --local-bin)/kai || true
+          fi
+          if [ ! -x "$BIN_PATH" ]; then
+            echo "Binary not found" >&2; exit 1
+          fi
+          cp "$BIN_PATH" dist/
+          # Name artifact according to platform
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            mv dist/kai dist/kai-macos-amd64
+          else
+            mv dist/kai dist/kai-linux-amd64
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kai-${{ runner.os }}
+          path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/kai-*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

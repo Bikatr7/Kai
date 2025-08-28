@@ -48,6 +48,24 @@ stack exec kai path/to/script.kai
 stack exec kai-website  # visit http://localhost:3000
 ```
 
+Install the CLI (no explicit `stack` needed):
+
+- Lightweight runner script: installs a `kai` command that prefers a compiled binary and otherwise falls back to `stack exec kai` transparently.
+
+```bash
+make install              # installs to ~/.local/bin/kai by default
+export PATH="$HOME/.local/bin:$PATH"  # if not already set
+
+# Now you can run Kai directly
+kai path/to/script.kai
+```
+
+Prebuilt binaries (CI Releases):
+
+- Tag a release (e.g., `git tag v0.0.1 && git push --tags`) and GitHub Actions will build binaries for Linux and macOS and attach them to the release.
+- Download the appropriate `kai-<platform>` binary from the Releases page, `chmod +x`, and place it on your `PATH`.
+- From source, `stack install` also produces a native binary in your local Stack install path.
+
 Export a static site bundle:
 
 - Generate `dist-site/` with an `index.html` and static assets you can open locally or deploy to GitHub Pages/Netlify.
