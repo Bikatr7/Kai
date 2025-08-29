@@ -21,7 +21,7 @@ Features available today:
 - CLI: parse and evaluate expressions or files
 - Tests: Hspec suite (103 examples) — all passing
 
-Limitations (by design at this stage):
+Limitations (by design at this stage): 
 
 - No top‑level bindings, modules, or imports
 - No strings, lists, records, or user‑defined data types (yet)
