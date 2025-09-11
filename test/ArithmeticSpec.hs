@@ -28,6 +28,9 @@ spec = describe "Arithmetic Operations" $ do
     
     it "handles double negatives" $ do
       parseEvaluate "10 - (-3)" `shouldBe` Right (VInt 13)
+
+    it "supports unary minus on variable and expression" $ do
+      parseEvaluate "-(1 + 2)" `shouldBe` Right (VInt (-3))
   
   describe "Basic Multiplication" $ do
     it "evaluates 3 * 4 to 12" $ do

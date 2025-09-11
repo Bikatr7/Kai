@@ -27,9 +27,22 @@ parens = between (symbol "(") (symbol ")")
 keywords :: [String]
 keywords = ["true", "false", "if", "then", "else", "and", "or", "not"]
 
--- Parse non-negative integers only; unary '-' is handled as a prefix operator
-integer :: Parser Integer
-integer = lexeme L.decimal
+-- Parse signed integers (sign must be adjacent to digits) with bounds check
+integer :: Parser Int
+integer = lexeme $ do
+  s <- optionalSign
+  n <- (L.decimal :: Parser Integer)
+  let val = s * n
+  if val >= fromIntegral (minBound :: Int) && val <= fromIntegral (maxBound :: Int)
+    then pure (fromIntegral val)
+    else fail $ "Integer literal " ++ show val ++ " is outside Int bounds"
+
+-- Helper: consume '+' or '-' only if immediately followed by a digit
+optionalSign :: Parser Integer
+optionalSign =
+  (try (char '-' <* lookAhead digitChar) >> pure (-1))
+  <|> (try (char '+' <* lookAhead digitChar) >> pure 1)
+  <|> pure 1
 
 boolean :: Parser Bool
 boolean = choice
@@ -59,7 +72,7 @@ appExpr = do
 -- Atomic expressions
 atom :: Parser Expr
 atom = choice
-  [ IntLit . fromInteger <$> integer
+  [ IntLit <$> integer
   , BoolLit <$> boolean  
   , lambdaExpr
   , ifExpr
@@ -92,7 +105,9 @@ ifExpr = do
 operatorTable :: [[Operator Parser Expr]]
 operatorTable =
   [ [ Prefix (Not <$ symbol "not")
-    , Prefix ((\e -> Sub (IntLit 0) e) <$ symbol "-") -- unary minus
+    , Prefix ( (\e -> Sub (IntLit 0) e)
+             <$ try (char '-' <* notFollowedBy digitChar <* sc)
+             )
     ]
   , [ InfixL (Mul <$ symbol "*")
     , InfixL (Div <$ symbol "/")

@@ -47,6 +47,15 @@ spec = describe "Parser Tests" $ do
     
     it "parses division" $ do
       parseExpr "8 / 2" `shouldBe` Right (Div (IntLit 8) (IntLit 2))
+
+    it "parses unary minus on literals" $ do
+      parseExpr "-5" `shouldBe` Right (IntLit (-5))
+
+    it "parses unary minus on variables" $ do
+      parseExpr "-x" `shouldBe` Right (Sub (IntLit 0) (Var "x"))
+
+    it "parses unary minus on parenthesized expr" $ do
+      parseExpr "-(1 + 2)" `shouldBe` Right (Sub (IntLit 0) (Add (IntLit 1) (IntLit 2)))
   
   describe "Precedence Parsing" $ do
     it "multiplication before addition" $ do

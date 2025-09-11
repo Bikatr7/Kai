@@ -1,7 +1,7 @@
 PREFIX ?= $(HOME)/.local
 BIN_DIR ?= $(PREFIX)/bin
 
-.PHONY: install build-install uninstall
+.PHONY: install build-install uninstall test site
 
 install:
 	@mkdir -p "$(BIN_DIR)"
@@ -16,4 +16,10 @@ build-install:
 uninstall:
 	@rm -f "$(BIN_DIR)/kai"
 	@echo "Removed $(BIN_DIR)/kai"
+
+test:
+	stack test --fast --test-arguments "--format progress"
+
+site:
+	bash scripts/export-site.sh
 

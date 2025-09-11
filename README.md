@@ -4,28 +4,28 @@ A minimal, statically typed expression language, implemented in Haskell.
 
 Kai aims to combine a clean, understandable syntax with a solid static type system and a pleasant scripting experience.
 
-## Current Status (MVP)
+## Current Status (v0.0.2)
 
 The language currently supports a compact, expression‑only core with full test coverage.
 
 Features available today:
 
-- Expressions: integers, booleans, parentheses, unary minus
+- Expressions: integers, booleans, parentheses, unary minus (literals and unary op)
 - Arithmetic: `+`, `-`, `*`, `/` (integer division, division by zero error)
 - Booleans: `and`, `or`, `not`
 - Comparisons: `==`, `<`, `>`
 - Conditionals: `if cond then e1 else e2`
 - Functions: lambdas (`\x -> expr`), application (`f x`), closures
-- Static checking: simple type checker with `TInt`, `TBool`, `TFun`
+- Static typing & inference: `TInt`, `TBool`, `TFun` with unification and occurs check
 - Parser: Megaparsec with precedence/associativity, reserved keywords
 - CLI: parse and evaluate expressions or files
-- Tests: Hspec suite (103 examples) — all passing
+- Tests: Hspec + QuickCheck (210 examples) — all passing
 
 Limitations (by design at this stage): 
 
 - No top‑level bindings, modules, or imports
 - No strings, lists, records, or user‑defined data types (yet)
-- Type checking is simple; lambdas default an `Int` parameter type (placeholder for real inference)
+- No user annotations yet; inference covers ints, bools, and functions with unification
 - Purely functional core; no side effects or I/O in the language itself
 
 ## Quickstart
@@ -179,3 +179,43 @@ let main =
 ## Contributing
 
 You are more than welcome to contribute anything.
+
+## Local development
+
+Build and test quickly:
+
+```bash
+stack build --fast
+stack test --fast --test-arguments "--format progress"
+```
+
+Run specific groups or examples (substring match):
+
+```bash
+stack test --test-arguments "--match Property-Based"
+stack test --test-arguments "--match Stress"
+```
+
+Generate and preview the website locally:
+
+```bash
+stack exec kai-website   # http://localhost:3000
+bash scripts/export-site.sh  # writes dist-site/
+open dist-site/index.html
+```
+
+Runner script without stack:
+
+```bash
+make install
+export PATH="$HOME/.local/bin:$PATH"
+kai tests/arithmetic.kai
+```
+
+## Testing notes
+
+- Unit tests: parsing, evaluation, type checking.
+- Property tests: determinism, pretty‑print/parse stability, integer bounds, algebraic laws.
+- Script tests: all `.kai` files under `tests/` and `test/` are parsed and evaluated in the suite output.
+
+To add your own scripts, drop a `.kai` file into `tests/` and run `stack test`.

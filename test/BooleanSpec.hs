@@ -64,6 +64,15 @@ spec = describe "Boolean Logic Operations" $ do
       \a -> let boolStr x = if x then "true" else "false"
             in parseEvaluate ("not (not " ++ boolStr a ++ ")")
             == parseEvaluate (boolStr a)
+
+    it "negation toggles equality" $ property $
+      forAll (arbitrary :: Gen Int) $ \x ->
+      forAll (arbitrary :: Gen Int) $ \y ->
+        let e1 = Eq (IntLit x) (IntLit y)
+            e2 = Not e1
+        in case (eval e1, eval e2) of
+             (Right (VBool b1), Right (VBool b2)) -> b1 /= b2
+             _ -> False
   
   describe "Complex Boolean Expressions" $ do
     it "De Morgan's Law: not (a and b) = (not a) or (not b)" $ property $

@@ -46,8 +46,8 @@ getHomeR = defaultLayout $ do
                 <h2>Core Features
                 <div .features-grid>
                     <div .feature>
-                        <h3>Static Typing (MVP)
-                        <p>Simple type checker for ints, bools, and functions.
+                        <h3>Static Typing & Inference (MVP)
+                        <p>Type inference with unification and occurs check for ints, bools, and functions.
                     <div .feature>
                         <h3>Clean Syntax
                         <p>Haskell-like lambdas, precedence, and keywords.
@@ -103,13 +103,13 @@ getHomeR = defaultLayout $ do
                         <code>(\f -> f 42) (\x -> x + 1)</code>
 
             <section #roadmap>
-                <h2>Current Status & Roadmap
+                <h2>Current Status (v0.0.2) & Roadmap
                 <div .timeline>
                     <div .timeline-item>
                         <div .timeline-marker data-step="1">
                         <div .timeline-content>
                             <h3>Expressions (Done)
-                            <p>Ints, bools, arithmetic, comparisons, conditionals
+                            <p>Ints, bools, arithmetic (with unary minus), comparisons, conditionals
                     <div .timeline-item .current>
                         <div .timeline-marker .current data-step="2">
                         <div .timeline-content>
@@ -119,7 +119,7 @@ getHomeR = defaultLayout $ do
                         <div .timeline-marker data-step="3">
                         <div .timeline-content>
                             <h3>Type System (In Progress)
-                            <p>Improve inference and error messages
+                            <p>Richer annotations, data types, and clearer diagnostics
                     <div .timeline-item>
                         <div .timeline-marker data-step="4">
                         <div .timeline-content>
