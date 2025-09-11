@@ -3,35 +3,7 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/topics/lock_files
 
-packages:
-- completed:
-    hackage: yesod-1.6.2.1@sha256:504bc888257dae9bb40f4cd1e1110c4e80dfe7b867e8e207b22c4ca4dbd87f9a,2030
-    pantry-tree:
-      sha256: 5a78fa0c6e7dcb46c9acd687ab9409c8fcda0d59b930e2a93e5dc44128c740ec
-      size: 618
-  original:
-    hackage: yesod-1.6.2.1
-- completed:
-    hackage: yesod-core-1.6.24.3@sha256:fe14571504b9bee1b6f1351841ddcb6162bd1f7d45ddc237d69c85e97fbdf364,8303
-    pantry-tree:
-      sha256: 88b542f9bf0ac3d5fe72156405acaf62ad8a31766d5c222773be874c47ca1f39
-      size: 5661
-  original:
-    hackage: yesod-core-1.6.24.3
-- completed:
-    hackage: yesod-static-1.6.1.0@sha256:0f075bcb8c90626ef738367333e3ac745fd7872619c6db388c0555f2ce768a5a,4419
-    pantry-tree:
-      sha256: 5557d3ae5f7945741ae2d5f45a536ffe6c4568f9c1af2371441d3ae4e5dbc23b
-      size: 1699
-  original:
-    hackage: yesod-static-1.6.1.0
-- completed:
-    hackage: yesod-form-1.7.4@sha256:715828245ddcce43bf866e37ef4e5cd70f6f330b53a500055e4f0b621724833d,3388
-    pantry-tree:
-      sha256: 32d68c1362459b15766dd4725ef5adfc1b99f96d6f3109c11095e6571a00b465
-      size: 1729
-  original:
-    hackage: yesod-form-1.7.4
+packages: []
 snapshots:
 - completed:
     sha256: a81fb3877c4f9031e1325eb3935122e608d80715dc16b586eb11ddbff8671ecd
