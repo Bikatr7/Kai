@@ -1,1 +1,3 @@
-(\x -> -x) 5
+// expect: -5
+print "Testing unary minus on variable..."
+print ((\x -> -x) 5)

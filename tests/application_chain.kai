@@ -1,1 +1,3 @@
-((\f -> f 42) (\x -> x + 1))
+// expect: 43
+print "Testing application chain..."
+print (((\f -> f 42) (\x -> x + 1)))

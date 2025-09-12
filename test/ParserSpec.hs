@@ -48,6 +48,19 @@ spec = describe "Parser Tests" $ do
     it "parses division" $ do
       parseExpr "8 / 2" `shouldBe` Right (Div (IntLit 8) (IntLit 2))
 
+  describe "String Parsing" $ do
+    it "parses empty string" $ do
+      parseExpr "\"\"" `shouldBe` Right (StrLit "")
+
+    it "parses simple string" $ do
+      parseExpr "\"hello\"" `shouldBe` Right (StrLit "hello")
+
+    it "parses escaped quote (\")" $ do
+      parseExpr "\"\\\"\"" `shouldBe` Right (StrLit "\"")
+
+    it "parses escaped backslash (\\)" $ do
+      parseExpr "\"\\\\\"" `shouldBe` Right (StrLit "\\")
+
     it "parses unary minus on literals" $ do
       parseExpr "-5" `shouldBe` Right (IntLit (-5))
 

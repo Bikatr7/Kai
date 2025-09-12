@@ -1,2 +1,4 @@
-not (true and false) or (false or true)
+// expect: true
+print "Testing boolean operations..."
+print (not (true and false) or (false or true))
 

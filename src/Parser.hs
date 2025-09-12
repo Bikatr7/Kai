@@ -4,8 +4,11 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Data.Void
+import Data.Char (isAlphaNum)
 import Control.Monad.Combinators.Expr
 import Syntax
+import Data.List (lines)
+import System.IO (putStrLn)
 
 type Parser = Parsec Void String
 
@@ -25,7 +28,18 @@ parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 keywords :: [String]
-keywords = ["true", "false", "if", "then", "else", "and", "or", "not"]
+keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print"]
+
+-- Strings: double-quoted, with simple escapes \" and \\
+stringLit :: Parser String
+stringLit = lexeme $ char '"' *> many charChunk <* char '"'
+  where
+    charChunk = escaped <|> normal
+    escaped = char '\\' *> choice
+      [ '"' <$ char '"'
+      , '\\' <$ char '\\'
+      ]
+    normal = satisfy (\c -> c /= '"' && c /= '\\')
 
 -- Parse signed integers (sign must be adjacent to digits) with bounds check
 integer :: Parser Int
@@ -74,12 +88,21 @@ atom :: Parser Expr
 atom = choice
   [ IntLit <$> integer
   , BoolLit <$> boolean  
+  , StrLit <$> stringLit
+  , printExpr
   , lambdaExpr
   , ifExpr
   -- Use try so keywords like 'then', 'and', 'or' don't cause a consuming failure maybe?
   , try (Var <$> identifier)
   , parens expr
   ]
+
+-- Print expression: print expr
+printExpr :: Parser Expr
+printExpr = do
+  symbol "print"
+  e <- expr
+  return (Print e)
 
 -- Lambda expression: \x -> expr
 lambdaExpr :: Parser Expr
@@ -112,7 +135,8 @@ operatorTable =
   , [ InfixL (Mul <$ symbol "*")
     , InfixL (Div <$ symbol "/")
     ]
-  , [ InfixL (Add <$ symbol "+")
+  , [ InfixL (symbol "++" >> return Concat)
+    , InfixL (Add <$ symbol "+")
     , InfixL (Sub <$ symbol "-")
     ]
   , [ InfixN (Lt <$ symbol "<")
@@ -127,6 +151,28 @@ operatorTable =
 parseExpr :: String -> Either (ParseErrorBundle String Void) Expr
 parseExpr = parse (sc *> expr <* eof) ""
 
+-- Parse multiple statements (expressions) from string
+statements :: Parser [Expr]
+statements = many (expr <* sc <* (eol <|> eof))
+  where
+    eol = try (some (char '\n') *> notFollowedBy (char '\r'))
+
+-- Parse statements from string by splitting lines
+parseStatements :: String -> Either (ParseErrorBundle String Void) [Expr]
+parseStatements content = 
+  let contentLines = filter (not . null . dropWhile (== ' ')) $ lines content
+      nonCommentLines = filter (not . isComment) contentLines
+      isComment line = "//" `isPrefixOf` (dropWhile (== ' ') line)
+      isPrefixOf prefix str = take (length prefix) str == prefix
+      parseLine line = parse (sc *> expr <* eof) "" line
+  in case sequence $ map parseLine nonCommentLines of
+       Left err -> Left err
+       Right exprs -> Right exprs
+
 -- Parse expression from file
 parseFile :: String -> String -> Either (ParseErrorBundle String Void) Expr
 parseFile filename = parse (sc *> expr <* eof) filename
+
+-- Parse statements from file
+parseFileStatements :: String -> String -> Either (ParseErrorBundle String Void) [Expr]
+parseFileStatements filename = parse (sc *> statements <* eof) filename

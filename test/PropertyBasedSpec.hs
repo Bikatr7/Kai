@@ -10,7 +10,7 @@ import Evaluator
 import Control.Monad (liftM, liftM2, liftM3)
 
 -- Generator for valid Kai expressions
-data ValidExpr = ValidExpr Expr deriving (Show, Eq)
+newtype ValidExpr = ValidExpr Expr deriving (Show, Eq)
 
 instance Arbitrary ValidExpr where
   arbitrary = ValidExpr <$> sized arbitraryExpr
@@ -135,6 +135,12 @@ spec = describe "Property-Based Testing" $ do
             rhs = Add (Sub (IntLit 0) (IntLit x)) (Sub (IntLit 0) (IntLit y))
         in eval lhs == eval rhs
 
+  describe "String Properties" $ do
+    it "concatenation is associative" $ do
+      property $ \(a :: String) (b :: String) (c :: String) ->
+        let e1 = Concat (Concat (StrLit a) (StrLit b)) (StrLit c)
+            e2 = Concat (StrLit a) (Concat (StrLit b) (StrLit c))
+        in eval e1 == eval e2
   describe "Boolean Logic Properties" $ do
     it "boolean logic follows De Morgan's laws" $ do
       property $ \p q ->
@@ -208,7 +214,6 @@ spec = describe "Property-Based Testing" $ do
         case typeCheck expr of
           Left err1 -> case typeCheck expr of
             Left err2 -> err1 == err2
-            Right _ -> False
           Right _ -> True
     
     it "evaluation errors are deterministic" $ do

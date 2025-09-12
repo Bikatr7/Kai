@@ -71,6 +71,12 @@ spec = describe "Arithmetic Operations" $ do
     it "handles large expressions" $ do
       parseEvaluate "1 + 2 * 3 - 4 / 2 + 5" `shouldBe` Right (VInt 10)
 
+  describe "String Concatenation" $ do
+    it "concatenates literals" $ do
+      parseEvaluate "\"foo\" ++ \"bar\"" `shouldBe` Right (VStr "foobar")
+
+    it "concatenates nested" $ do
+      parseEvaluate "(\"a\" ++ \"b\") ++ \"c\"" `shouldBe` Right (VStr "abc")
 -- Helper function
 parseEvaluate :: String -> Either RuntimeError Value
 parseEvaluate input = case parseExpr input of

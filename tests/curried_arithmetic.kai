@@ -1,1 +1,3 @@
-(\x -> (\y -> (\z -> x + y * z))) 2 3 4
+// expect: 14
+print "Testing curried arithmetic..."
+print ((\x -> (\y -> (\z -> x + y * z))) 2 3 4)

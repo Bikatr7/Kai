@@ -1,2 +1,4 @@
-  (  2   +  3  )  *   4  
+// expect: 20
+print "Testing whitespace handling..."
+print (  (  2   +  3  )  *   4  )
 

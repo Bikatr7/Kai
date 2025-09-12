@@ -1,1 +1,3 @@
-(\x -> x + 1) 41
+// expect: 42
+print "Testing lambda increment..."
+print ((\x -> x + 1) 41)

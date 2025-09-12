@@ -1,1 +1,3 @@
-(\x -> x * x + 1) 4
+// expect: 17
+print "Testing lambda function..."
+print ((\x -> x * x + 1) 4)

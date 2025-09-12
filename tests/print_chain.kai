@@ -1,0 +1,3 @@
+// expect: "Hi!"
+print ((\x -> print (x ++ "!")) "Hi")
+

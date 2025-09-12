@@ -1,2 +1,4 @@
-1 + 2 * 3 - 4 / 2 + 5
+// expect: 10
+print "Testing operator precedence..."
+print (1 + 2 * 3 - 4 / 2 + 5)
 

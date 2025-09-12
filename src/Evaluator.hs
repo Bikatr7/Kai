@@ -2,11 +2,13 @@ module Evaluator where
 
 import Syntax
 import qualified Data.Map as Map
+import System.IO (hFlush, stdout)
 
 -- Values include functions (closures)
 data Value
   = VInt Int
   | VBool Bool
+  | VStr String
   | VFun String Expr Env  -- parameter, body, captured environment
   deriving (Show, Eq)
 
@@ -27,6 +29,7 @@ eval = evalWithEnv Map.empty
 evalWithEnv :: Env -> Expr -> Either RuntimeError Value
 evalWithEnv _ (IntLit n) = Right $ VInt n
 evalWithEnv _ (BoolLit b) = Right $ VBool b
+evalWithEnv _ (StrLit s) = Right $ VStr s
 
 evalWithEnv env (Var x) = 
   case Map.lookup x env of
@@ -61,6 +64,13 @@ evalWithEnv env (Div e1 e2) = do
     (VInt _, VInt 0) -> Left DivByZero
     (VInt n1, VInt n2) -> Right $ VInt (n1 `div` n2)
     _ -> Left $ TypeError "Division requires integer operands"
+
+evalWithEnv env (Concat e1 e2) = do
+  v1 <- evalWithEnv env e1
+  v2 <- evalWithEnv env e2
+  case (v1, v2) of
+    (VStr s1, VStr s2) -> Right $ VStr (s1 ++ s2)
+    _ -> Left $ TypeError "Concatenation requires string operands"
 
 evalWithEnv env (And e1 e2) = do
   v1 <- evalWithEnv env e1
@@ -111,6 +121,15 @@ evalWithEnv env (If c t e) = do
     VBool False -> evalWithEnv env e
     _ -> Left $ TypeError "If condition must be a boolean"
 
+-- Print: evaluate subexpr, print human-readable, return the same value
+evalWithEnv env (Print e) = do
+  v <- evalWithEnv env e
+  case v of
+    VInt n -> putStr (show n ++ "\n") `seq` hFlush stdout `seq` Right v
+    VBool b -> putStr (show b ++ "\n") `seq` hFlush stdout `seq` Right v
+    VStr s -> putStr (s ++ "\n") `seq` hFlush stdout `seq` Right v
+    VFun {} -> putStr ("<function>\n") `seq` hFlush stdout `seq` Right v
+
 -- Lambda creates a closure capturing the current environment
 evalWithEnv env (Lambda param body) = 
   Right $ VFun param body env
@@ -124,3 +143,19 @@ evalWithEnv env (App fun arg) = do
       let env' = Map.insert param argVal closureEnv
       in evalWithEnv env' body
     _ -> Left $ TypeError "Cannot apply non-function value"
+
+-- IO-based evaluator for handling Print statements
+evalWithEnvIO :: Env -> Expr -> IO (Either RuntimeError Value)
+evalWithEnvIO env (Print e) = do
+  result <- evalWithEnvIO env e
+  case result of
+    Left err -> return $ Left err
+    Right val -> do
+      case val of
+        VInt n -> putStrLn (show n)
+        VBool b -> putStrLn (show b)
+        VStr s -> putStrLn s
+        VFun {} -> putStrLn "<function>"
+      return $ Right val
+
+evalWithEnvIO env expr = return $ evalWithEnv env expr

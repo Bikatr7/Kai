@@ -1,1 +1,3 @@
-(3 + 2) == (1 + 4)
+// expect: true
+print "Testing numeric equality..."
+print ((3 + 2) == (1 + 4))

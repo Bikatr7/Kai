@@ -6,6 +6,13 @@ import Evaluator
 import Parser
 import System.Environment
 import System.IO
+import Data.List (intercalate)
+import qualified Data.Map as Map
+import Paths_kai_lang (version)
+import Data.Version (showVersion)
+
+versionString :: String
+versionString = "Kai v" ++ showVersion version
 
 examples :: [String]
 examples =
@@ -48,30 +55,56 @@ runFile :: FilePath -> IO ()
 runFile filename = do
   putStrLn $ "Running file: " ++ filename
   content <- readFile filename
-  case parseFile filename content of
+  case parseStatements content of
     Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr
-    Right expr -> do
-      putStrLn $ "AST: " ++ show expr
-      
-      putStr "Type: "
-      case typeCheck expr of
-        Left err -> putStrLn $ "Type error: " ++ show err
-        Right ty -> do
-          putStrLn $ show ty
-          
-          putStr "Evaluation: "
-          case eval expr of
+    Right stmts -> do
+      if null stmts then putStrLn "No statements found" else do
+        -- Execute all statements and show their output
+        mapM_ (\stmt -> do
+          result <- evalWithEnvIO Map.empty stmt
+          case result of
             Left err -> putStrLn $ "Runtime error: " ++ show err
-            Right val -> putStrLn $ show val
+            Right val -> return ()  -- Print statements handle their own output
+          ) stmts
+        
+        let expr = last stmts  -- Last statement is the main expression
+        putStrLn $ "AST: " ++ show expr
+        
+        putStr "Type: "
+        case typeCheck expr of
+          Left err -> putStrLn $ "Type error: " ++ show err
+          Right ty -> do
+            putStrLn $ show ty
+            
+            putStr "Evaluation: "
+            case eval expr of
+              Left err -> putStrLn $ "Runtime error: " ++ show err
+              Right val -> putStrLn $ show val
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
+    ["--help"] -> do
+      putStrLn (unlines
+        [ versionString
+        , "Usage:"
+        , "  kai                      # show help and examples"
+        , "  kai FILE.kai             # run a script file"
+        , "  kai -e 'EXPR'            # evaluate a one-liner expression"
+        , "  kai --help               # this message"
+        ])
+    ["-h"] -> do
+      putStrLn (unlines
+        [ versionString
+        , "Usage:"
+        , "  kai                      # show help and examples"
+        , "  kai FILE.kai             # run a script file"
+        , "  kai -e 'EXPR'            # evaluate a one-liner expression"
+        , "  kai --help               # this message"
+        ])
+    ["-e", exprStr] -> runExpression exprStr
     [] -> do
-      putStrLn "Kai Language Interpreter"
-      putStrLn "======================="
-      putStrLn "Running example expressions:"
-      mapM_ runExpression examples
+      putStrLn $ versionString ++ " — pass a file, -e 'expr', or --help for usage."
     [filename] -> runFile filename
     _ -> putStrLn "Usage: kai [filename]" 

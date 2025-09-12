@@ -10,6 +10,7 @@ import Control.Monad.Except
 data Type 
   = TInt 
   | TBool 
+  | TString
   | TFun Type Type
   | TVar String  -- Type variables for inference
   deriving (Show, Eq)
@@ -80,6 +81,7 @@ unify (TVar a) t
 unify t (TVar a) = unify (TVar a) t
 unify TInt TInt = Right Map.empty
 unify TBool TBool = Right Map.empty
+unify TString TString = Right Map.empty
 unify (TFun a1 r1) (TFun a2 r2) = do
   s1 <- unify a1 a2
   s2 <- unify (applySubst s1 r1) (applySubst s1 r2)
@@ -90,6 +92,7 @@ unify t1 t2 = Left $ UnificationError t1 t2
 infer :: TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 infer _ (IntLit _) = return (Map.empty, TInt)
 infer _ (BoolLit _) = return (Map.empty, TBool)
+infer _ (StrLit _) = return (Map.empty, TString)
 
 infer env (Var x) = case Map.lookup x env of
   Just t -> return (Map.empty, t)
@@ -106,6 +109,18 @@ infer env (Add e1 e2) = do
 infer env (Sub e1 e2) = infer env (Add e1 e2)  -- Same logic as addition
 infer env (Mul e1 e2) = infer env (Add e1 e2)  -- Same logic as addition
 infer env (Div e1 e2) = infer env (Add e1 e2)  -- Same logic as addition
+
+infer env (Concat e1 e2) = do
+  (s1, t1) <- infer env e1
+  (s2, t2) <- infer (applySubstEnv s1 env) e2
+  s3 <- lift $ unify (applySubst s2 t1) TString
+  s4 <- lift $ unify (applySubst s3 t2) TString
+  let finalSubst = composeSubst s4 (composeSubst s3 (composeSubst s2 s1))
+  return (finalSubst, TString)
+
+infer env (Print e) = do
+  (s, t) <- infer env e
+  return (s, t)  -- Print returns the type of its argument
 
 infer env (And e1 e2) = do
   (s1, t1) <- infer env e1

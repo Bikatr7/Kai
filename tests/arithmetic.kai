@@ -1,2 +1,4 @@
-((5 + 3) * 2) - (4 / 2)
+// expect: 14
+print "Testing arithmetic..."
+print (((5 + 3) * 2) - (4 / 2))
 

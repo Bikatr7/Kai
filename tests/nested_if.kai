@@ -1,2 +1,4 @@
-if true then if false then 0 else 1 else 2
+// expect: 1
+print "Testing nested if statements..."
+print (if true then if false then 0 else 1 else 2)
 

@@ -10,23 +10,36 @@ The language currently supports a compact, expression‑only core with full test
 
 Features available today:
 
-- Expressions: integers, booleans, parentheses, unary minus (literals and unary op)
-- Arithmetic: `+`, `-`, `*`, `/` (integer division, division by zero error)
-- Booleans: `and`, `or`, `not`
-- Comparisons: `==`, `<`, `>`
-- Conditionals: `if cond then e1 else e2`
-- Functions: lambdas (`\x -> expr`), application (`f x`), closures
-- Static typing & inference: `TInt`, `TBool`, `TFun` with unification and occurs check
-- Parser: Megaparsec with precedence/associativity, reserved keywords
-- CLI: parse and evaluate expressions or files
-- Tests: Hspec + QuickCheck (210 examples) — all passing
+- **Expressions**: integers, booleans, strings, parentheses, unary minus
+- **Arithmetic**: `+`, `-`, `*`, `/` (integer division, division by zero error)
+- **Booleans**: `and`, `or`, `not`
+- **Comparisons**: `==`, `<`, `>`
+- **Strings**: string literals (`"hello"`), concatenation (`++`)
+- **Print statements**: `print expr` for output
+- **Conditionals**: `if cond then e1 else e2`
+- **Functions**: lambdas (`\x -> expr`), application (`f x`), closures
+- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TFun` with unification and occurs check
+- **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
+- **CLI**: parse and evaluate expressions or files with `--help` and `-e` options
+- **Tests**: Hspec + QuickCheck (221 examples) — all passing with clear pass/fail indicators
 
 Limitations (by design at this stage): 
 
 - No top‑level bindings, modules, or imports
-- No strings, lists, records, or user‑defined data types (yet)
-- No user annotations yet; inference covers ints, bools, and functions with unification
-- Purely functional core; no side effects or I/O in the language itself
+- No lists, records, or user‑defined data types (yet)
+- No user annotations yet; inference covers ints, bools, strings, and functions with unification
+- Purely functional core; minimal I/O (only print statements for output)
+- No REPL for interactive experimentation
+- No standard library (even basic functions like `length`, `head`)
+- No error recovery (one parse error stops execution)
+- No variables or let-bindings (expressions only)
+
+**Practical limitations for real-world use:**
+- Limited to single-file scripts (no multi-file projects)
+- No way to define reusable functions or constants
+- No data structures for complex data manipulation
+- No file I/O beyond print statements
+- No way to handle errors gracefully
 
 ## Quickstart
 
@@ -38,8 +51,10 @@ Build, test, and run:
 stack build
 stack test
 
-## Run interpreter (no args = REPL-like single input mode)
-stack exec kai
+## Run interpreter
+stack exec kai -- --help
+stack exec kai -- -e "\"hi\" ++ \"!\""
+stack exec kai -- -e "print (42 + 1)"
 
 ## Run a file
 stack exec kai path/to/script.kai
@@ -90,6 +105,14 @@ true and not false
 if 10 > 5 then 84 else 0
 ```
 
+Strings and printing:
+
+```kai
+"Hello, " ++ "World"
+print ("The answer is " ++ "42")
+print (if 5 > 3 then "yes" else "no")
+```
+
 Lambdas and application:
 
 ```kai
@@ -106,9 +129,12 @@ if 5 then 1 else 2  // Type error: ExpectedBool TInt
 
 ## Language Notes
 
-- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`).
+- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`).
 - Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
+- String concatenation uses `++` and is left-associative: `"a" ++ "b" ++ "c"`.
+- Print statements evaluate their argument and display the result.
 - Application binds tighter than infix operators (`f x + y` parses as `(f x) + y`).
+- Multi-statement files are supported: each line is parsed as a separate expression.
 
 ## Project Structure
 
@@ -149,23 +175,46 @@ Planned language features:
   - Module system and imports
 
 - Types and inference
-  - Hindley–Milner style type inference with annotations when needed
+  - ~~Hindley–Milner style type inference with annotations when needed~~ ✅ **DONE**
   - Algebraic data types, pattern matching, type aliases
   - Parametric polymorphism; later, typeclasses/traits if justified
 
 - Data and stdlib
-  - Strings, lists, maps/records, options/results
+  - ~~Strings~~ ✅ **DONE** (literals, concatenation)
+  - Lists, maps/records, options/results
   - A focused, batteries‑included standard library for scripting
   - Interop/FFI for host system calls
 
 - Effects and I/O
-  - Simple, principled I/O model that keeps the core pure
+  - ~~Simple, principled I/O model that keeps the core pure~~ ✅ **DONE** (print statements)
   - File and process utilities; JSON and text handling
 
 - Tooling and UX
-  - Formatter and linter
   - REPL with multiline input, completion, and :type
+  - Formatter and linter
   - Error messages with helpful suggestions
+  - Better error recovery and diagnostics
+  - Interactive debugging tools
+
+- Standard Library
+  - Basic list operations (`length`, `head`, `tail`, `map`, `filter`)
+  - String utilities (`split`, `join`, `trim`)
+  - Math functions (`abs`, `min`, `max`, `sqrt`)
+  - Type conversion utilities
+
+- Language Completeness
+  - Variables and let-bindings for code reuse
+  - Pattern matching and destructuring
+  - Error handling (Maybe/Either types)
+  - Recursive function definitions
+  - Multi-file projects and imports
+
+- Developer Experience
+  - Interactive REPL with history and completion
+  - Better error messages with suggestions
+  - Syntax highlighting and IDE support
+  - Package manager for libraries
+  - Debugging and profiling tools
 
 Example future script:
 
