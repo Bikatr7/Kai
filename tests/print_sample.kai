@@ -1,3 +1,2 @@
 // expect: "Hello, Kai!"
-print "Hello, Kai" ++ "!"
-
+let u = print "Hello, Kai" in "Hello, Kai!"

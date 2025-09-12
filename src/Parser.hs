@@ -1,4 +1,11 @@
-module Parser where
+module Parser 
+  ( parseExpr
+  , parseStatements  
+  , parseFileExpr
+  , parseFile
+  , Parser
+  , ParseErrorBundle
+  ) where
 
 import Text.Megaparsec
 import Text.Megaparsec.Char
@@ -6,6 +13,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import Data.Void
 import Data.Char (isAlphaNum)
 import Control.Monad.Combinators.Expr
+import Control.Monad (void)
 import Syntax
 import Data.List (lines)
 import System.IO (putStrLn)
@@ -28,17 +36,20 @@ parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 keywords :: [String]
-keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print"]
+keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print", "let", "letrec", "in"]
 
--- Strings: double-quoted, with simple escapes \" and \\
 stringLit :: Parser String
 stringLit = lexeme $ char '"' *> many charChunk <* char '"'
   where
     charChunk = escaped <|> normal
-    escaped = char '\\' *> choice
-      [ '"' <$ char '"'
-      , '\\' <$ char '\\'
-      ]
+    escaped = do
+      _ <- char '\\'
+      c <- anySingle
+      case c of
+        '"' -> pure '"'
+        '\\' -> pure '\\'
+        'n' -> pure '\n'
+        _ -> fail $ "UnknownEscape '" ++ [c] ++ "' (supported: \\\" \\\\ \\n)"
     normal = satisfy (\c -> c /= '"' && c /= '\\')
 
 -- Parse signed integers (sign must be adjacent to digits) with bounds check
@@ -63,6 +74,9 @@ boolean = choice
   [ symbol "true" >> return True
   , symbol "false" >> return False
   ]
+
+unit :: Parser ()
+unit = void (symbol "()")
 
 -- Parse identifiers (excluding keywords)
 identifier :: Parser String
@@ -89,9 +103,12 @@ atom = choice
   [ IntLit <$> integer
   , BoolLit <$> boolean  
   , StrLit <$> stringLit
+  , UnitLit <$ unit
   , printExpr
   , lambdaExpr
   , ifExpr
+  , letRecExpr
+  , letExpr
   -- Use try so keywords like 'then', 'and', 'or' don't cause a consuming failure maybe?
   , try (Var <$> identifier)
   , parens expr
@@ -101,8 +118,7 @@ atom = choice
 printExpr :: Parser Expr
 printExpr = do
   symbol "print"
-  e <- expr
-  return (Print e)
+  Print <$> expr
 
 -- Lambda expression: \x -> expr
 lambdaExpr :: Parser Expr
@@ -110,8 +126,7 @@ lambdaExpr = do
   symbol "\\"
   param <- identifier
   symbol "->"
-  body <- expr
-  return $ Lambda param body
+  Lambda param <$> expr
 
 -- If-then-else expression
 ifExpr :: Parser Expr
@@ -121,30 +136,50 @@ ifExpr = do
   symbol "then"
   thenExpr <- expr
   symbol "else"
-  elseExpr <- expr
-  return $ If cond thenExpr elseExpr
+  If cond thenExpr <$> expr
 
--- Operator precedence table (function application handled separately)
+-- Let expression: let x = val in expr
+letExpr :: Parser Expr
+letExpr = do
+  symbol "let"
+  var <- identifier
+  symbol "="
+  val <- expr
+  symbol "in"
+  Let var val <$> expr
+
+-- LetRec expression: letrec x = val in expr
+letRecExpr :: Parser Expr
+letRecExpr = do
+  symbol "letrec"
+  var <- identifier
+  symbol "="
+  val <- expr
+  symbol "in"
+  LetRec var val <$> expr
+
+-- Operator precedence table (Haskell-aligned, function application handled separately)
 operatorTable :: [[Operator Parser Expr]]
 operatorTable =
   [ [ Prefix (Not <$ symbol "not")
-    , Prefix ( (\e -> Sub (IntLit 0) e)
+    , Prefix ( Sub (IntLit 0)
              <$ try (char '-' <* notFollowedBy digitChar <* sc)
              )
     ]
   , [ InfixL (Mul <$ symbol "*")
     , InfixL (Div <$ symbol "/")
     ]
-  , [ InfixL (symbol "++" >> return Concat)
-    , InfixL (Add <$ symbol "+")
+  , [ InfixL (Add <$ try (char '+' <* notFollowedBy (char '+') <* sc))
     , InfixL (Sub <$ symbol "-")
+    ]
+  , [ InfixR (symbol "++" >> return Concat)  -- right-assoc like Haskell
     ]
   , [ InfixN (Lt <$ symbol "<")
     , InfixN (Gt <$ symbol ">")
     , InfixN (Eq <$ symbol "==")
     ]
-  , [ InfixL (And <$ symbol "and") ]
-  , [ InfixL (Or <$ symbol "or") ]
+  , [ InfixR (And <$ symbol "and") ]  -- right-assoc like Haskell &&
+  , [ InfixR (Or <$ symbol "or") ]    -- right-assoc like Haskell ||
   ]
 
 -- Parse expression from string
@@ -162,17 +197,25 @@ parseStatements :: String -> Either (ParseErrorBundle String Void) [Expr]
 parseStatements content = 
   let contentLines = filter (not . null . dropWhile (== ' ')) $ lines content
       nonCommentLines = filter (not . isComment) contentLines
-      isComment line = "//" `isPrefixOf` (dropWhile (== ' ') line)
+      isComment line = "//" `isPrefixOf` dropWhile (== ' ') line
       isPrefixOf prefix str = take (length prefix) str == prefix
-      parseLine line = parse (sc *> expr <* eof) "" line
-  in case sequence $ map parseLine nonCommentLines of
+      parseLine = parse (sc *> expr <* eof) ""
+  in case mapM parseLine nonCommentLines of
        Left err -> Left err
        Right exprs -> Right exprs
 
+-- Parse single expression from multi-line content (ignoring comments)
+parseFileExpr :: String -> Either (ParseErrorBundle String Void) Expr
+parseFileExpr content = 
+  let cleanContent = unlines $ filter (not . isComment) $ lines content
+      isComment line = "//" `isPrefixOf` dropWhile (== ' ') line
+      isPrefixOf prefix str = take (length prefix) str == prefix
+  in parse (sc *> expr <* eof) "" cleanContent
+
 -- Parse expression from file
 parseFile :: String -> String -> Either (ParseErrorBundle String Void) Expr
-parseFile filename = parse (sc *> expr <* eof) filename
+parseFile = parse (sc *> expr <* eof)
 
 -- Parse statements from file
 parseFileStatements :: String -> String -> Either (ParseErrorBundle String Void) [Expr]
-parseFileStatements filename = parse (sc *> statements <* eof) filename
+parseFileStatements = parse (sc *> statements <* eof)

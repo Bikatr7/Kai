@@ -1,0 +1,5 @@
+// expect: true
+let a = true in
+  let b = false in
+    let c = not b in
+      a and c

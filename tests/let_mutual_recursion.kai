@@ -1,0 +1,13 @@
+// expect: true
+// Test mutual recursion simulation using letrec (single recursive function)
+letrec is_even_odd = \n ->
+  let is_even_n = 
+    if n == 0 then true
+    else if n == 1 then false
+    else not (is_even_odd (n - 1)) in
+  is_even_n in
+    let test1 = is_even_odd 4 in
+      let test2 = is_even_odd 7 in
+        let test3 = is_even_odd 0 in
+          let test4 = is_even_odd 1 in
+            test1 and (not test2) and test3 and (not test4)

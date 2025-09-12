@@ -1,0 +1,5 @@
+// expect: "Hello, Kai!"
+let greeting = "Hello" in
+  let name = "Kai" in
+    let punctuation = "!" in
+      greeting ++ ", " ++ name ++ punctuation

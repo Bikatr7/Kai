@@ -1,0 +1,4 @@
+// expect: 15
+let x = 5 in
+  let y = 10 in
+    let u = print (x + y) in x + y

@@ -1,3 +1,2 @@
 // expect: 0
-print "Testing lambda with conditional..."
-print ((\x -> if x > 0 then x else 0) (-5))
+(\x -> if x > 0 then x else 0) (-5)

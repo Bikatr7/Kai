@@ -1,4 +1,3 @@
 // expect: 1
-print "Testing conditionals..."
-print (if (3 * 4) > (10 - 1) then 1 else 0)
+if (3 * 4) > (10 - 1) then 1 else 0
 

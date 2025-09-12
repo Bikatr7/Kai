@@ -1,3 +1,2 @@
 // expect: 15
-print "Testing curried functions..."
-print (((\x -> (\y -> x + y)) 10) 5)
+((\x -> (\y -> x + y)) 10) 5

@@ -1,3 +1,2 @@
 // expect: true
-print "Testing boolean logic..."
-print ((true and (false or true)) and (not false))
+(true and (false or true)) and (not false)

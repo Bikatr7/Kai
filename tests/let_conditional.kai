@@ -1,0 +1,4 @@
+// expect: 42
+let x = 10 in
+  let condition = x > 5 in
+    if condition then 42 else 0

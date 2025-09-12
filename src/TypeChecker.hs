@@ -11,6 +11,7 @@ data Type
   = TInt 
   | TBool 
   | TString
+  | TUnit
   | TFun Type Type
   | TVar String  -- Type variables for inference
   deriving (Show, Eq)
@@ -82,6 +83,7 @@ unify t (TVar a) = unify (TVar a) t
 unify TInt TInt = Right Map.empty
 unify TBool TBool = Right Map.empty
 unify TString TString = Right Map.empty
+unify TUnit TUnit = Right Map.empty
 unify (TFun a1 r1) (TFun a2 r2) = do
   s1 <- unify a1 a2
   s2 <- unify (applySubst s1 r1) (applySubst s1 r2)
@@ -93,6 +95,7 @@ infer :: TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 infer _ (IntLit _) = return (Map.empty, TInt)
 infer _ (BoolLit _) = return (Map.empty, TBool)
 infer _ (StrLit _) = return (Map.empty, TString)
+infer _ UnitLit = return (Map.empty, TUnit)
 
 infer env (Var x) = case Map.lookup x env of
   Just t -> return (Map.empty, t)
@@ -119,8 +122,8 @@ infer env (Concat e1 e2) = do
   return (finalSubst, TString)
 
 infer env (Print e) = do
-  (s, t) <- infer env e
-  return (s, t)  -- Print returns the type of its argument
+  (s, _) <- infer env e
+  return (s, TUnit)  -- Print returns Unit
 
 infer env (And e1 e2) = do
   (s1, t1) <- infer env e1
@@ -180,6 +183,27 @@ infer env (App fun arg) = do
   s3 <- lift $ unify (applySubst s2 funType) (TFun argType resultType)
   let finalSubst = composeSubst s3 (composeSubst s2 s1)
   return (finalSubst, applySubst s3 resultType)
+
+-- Let binding: let x = val in body
+infer env (Let var val body) = do
+  (s1, valType) <- infer env val
+  let env' = Map.insert var valType (applySubstEnv s1 env)
+  (s2, bodyType) <- infer env' body
+  let finalSubst = composeSubst s2 s1
+  return (finalSubst, bodyType)
+
+-- Recursive let binding: letrec x = val in body
+infer env (LetRec var val body) = do
+  -- Create a fresh type variable for the recursive binding
+  recType <- freshTVar
+  let env' = Map.insert var recType env
+  (s1, valType) <- infer env' val
+  s2 <- lift $ unify (applySubst s1 recType) (applySubst s1 valType)
+  let combinedSubst = composeSubst s2 s1
+  let finalEnv = Map.insert var (applySubst combinedSubst recType) (applySubstEnv combinedSubst env)
+  (s3, bodyType) <- infer finalEnv body
+  let finalSubst = composeSubst s3 combinedSubst
+  return (finalSubst, bodyType)
 
 -- Public interface
 typeCheck :: Expr -> Either TypeError Type

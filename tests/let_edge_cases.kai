@@ -1,0 +1,32 @@
+// expect: 50
+// Test edge cases and boundary conditions
+let empty_let = 
+  let x = 0 in x in
+    let single_char = 
+      let a = 1 in
+        let b = 2 in
+          let c = 3 in
+            a + b + c in
+      let deeply_nested =
+        let level1 = 
+          let level2 = 
+            let level3 = 
+              let level4 = 
+                let level5 = 10 in level5
+              in level4
+            in level3
+          in level2
+        in level1 in
+          let same_name_different_scopes =
+            let temp = 5 in
+              let inner = 
+                let temp = 10 in temp
+              in temp + inner in
+            let complex_arithmetic = 
+              let a = 7 in
+                let b = 6 in
+                  let c = a * b in
+                    let d = c - 3 in
+                      let e = d / 2 in
+                        e in
+              empty_let + single_char + deeply_nested + same_name_different_scopes + complex_arithmetic

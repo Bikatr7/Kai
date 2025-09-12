@@ -1,0 +1,7 @@
+// expect: 120
+let base = 10 in
+  let multiplier = 3 in
+    let f = \x -> x * multiplier in
+      let g = \y -> y + base in
+        let compose = \a -> f (g a) in
+          compose 30

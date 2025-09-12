@@ -1,4 +1,3 @@
 // expect: true
-print "Testing boolean operations..."
-print (not (true and false) or (false or true))
+not (true and false) or (false or true)
 

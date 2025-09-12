@@ -1,0 +1,4 @@
+// expect: 17
+let x = 5 in
+  let f = \y -> x + y in
+    f 12

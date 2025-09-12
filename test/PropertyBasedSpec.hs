@@ -28,7 +28,7 @@ arbitraryExpr n = oneof
   , liftM2 Mul (arbitraryExpr n') (arbitraryExpr n')
   , liftM2 And (arbitraryExpr n') (arbitraryExpr n')
   , liftM2 Or (arbitraryExpr n') (arbitraryExpr n')
-  , liftM Not (arbitraryExpr n')
+  , fmap Not (arbitraryExpr n')
   , liftM2 Eq (arbitraryExpr n') (arbitraryExpr n')
   , liftM2 Lt (arbitraryExpr n') (arbitraryExpr n')
   , liftM2 Gt (arbitraryExpr n') (arbitraryExpr n')
@@ -100,7 +100,7 @@ spec = describe "Property-Based Testing" $ do
         case (typeCheck expr, eval expr) of
           (Right TInt, Right (VInt _)) -> True
           (Right TBool, Right (VBool _)) -> True  
-          (Right (TFun _ _), Right (VFun _ _ _)) -> True
+          (Right (TFun _ _), Right VFun {}) -> True
           (Left _, _) -> True  -- Type errors are fine
           (_, Left _) -> True  -- Runtime errors are fine
           _ -> False

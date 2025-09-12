@@ -1,0 +1,10 @@
+// expect: 120
+// Test deep nesting with recursive factorial function
+letrec factorial = \n ->
+  if n == 0 then 1
+  else n * (factorial (n - 1)) in
+  let base = 5 in
+    let result = factorial base in
+      let message = "Result is: " in
+        let final_calc = result + 0 in
+          final_calc

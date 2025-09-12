@@ -1,2 +1,0 @@
-// expect: 84
-if 5 > 3 then 42 * 2 else 0

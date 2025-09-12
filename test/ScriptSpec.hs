@@ -9,6 +9,7 @@ import Control.Monad (forM, forM_)
 import Parser
 import Evaluator
 import TypeChecker
+import Syntax
 import Data.Maybe (listToMaybe)
 
 spec :: Spec
@@ -18,90 +19,67 @@ spec = do
     forM_ files $ \fp -> do
       it fp $ do
         content <- readFile fp
+        -- For multi-statement files, use parseStatements directly
+        -- Only use parseFileExpr for files that can't be parsed as multiple statements
         case parseStatements content of
-          Left perr -> expectationFailure ("Parse error: " ++ show perr)
-          Right stmts -> do
-            if null stmts then expectationFailure "No statements found" else do
-              let expr = last stmts  -- Last statement is the main expression to test
-              case parseExpect content of
-                Just (ExpectValue expStr) -> do
-                  case parseExpr expStr of
-                    Left perr -> expectationFailure ("Bad expect expr: " ++ show perr)
-                    Right eexp -> do
-                      case (eval expr, eval eexp) of
-                        (Right v, Right vexp) -> do
-                          if v == vexp
-                            then putStrLn $ "✅ PASS: Expected " ++ show vexp ++ ", got " ++ show v
-                            else expectationFailure $ "❌ FAIL: Expected " ++ show vexp ++ ", got " ++ show v
-                        (Left rerr, _) -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
-                        _ -> expectationFailure "❌ FAIL: Unexpected eval failure in expected expression"
-                Just (ExpectType tyStr) -> do
-                  let expectedTy = case tyStr of
-                        "TInt" -> Right TInt
-                        "TBool" -> Right TBool
-                        "TString" -> Right TString
-                        _ -> Left ("Unknown type in expect-type: " ++ tyStr)
-                  case expectedTy of
-                    Left msg -> expectationFailure msg
-                    Right ety -> case typeCheck expr of
-                      Right ty -> do
-                        if ty == ety
-                          then putStrLn $ "✅ PASS: Expected type " ++ show ety ++ ", got " ++ show ty
-                          else expectationFailure $ "❌ FAIL: Expected type " ++ show ety ++ ", got " ++ show ty
-                      Left err -> expectationFailure ("❌ FAIL: Type error: " ++ show err)
-                Just ExpectError -> do
-                  case eval expr of
-                    Left err -> putStrLn $ "✅ PASS: Expected error, got: " ++ show err
-                    Right v -> expectationFailure ("❌ FAIL: Expected error, got: " ++ show v)
-                Nothing -> do
-                  case eval expr of
-                    Left rerr -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
-                    Right v -> putStrLn $ "✅ PASS: Expression evaluated to: " ++ show v
+          Right stmts | length stmts > 1 -> do
+            let expr = last stmts  -- Last statement is the main expression to test
+            testExpr expr content
+          _ -> case parseFileExpr content of
+            Left perr -> expectationFailure ("Parse error: " ++ show perr)
+            Right expr -> testExpr expr content
 
   describe "Script files in test/" $ do
     files <- runIO $ kaiFilesIn "test"
     forM_ files $ \fp -> do
       it fp $ do
         content <- readFile fp
+        -- For multi-statement files, use parseStatements directly
+        -- Only use parseFileExpr for files that can't be parsed as multiple statements
         case parseStatements content of
-          Left perr -> expectationFailure ("Parse error: " ++ show perr)
-          Right stmts -> do
-            if null stmts then expectationFailure "No statements found" else do
-              let expr = last stmts  -- Last statement is the main expression to test
-              case parseExpect content of
-                Just (ExpectValue expStr) -> do
-                  case parseExpr expStr of
-                    Left perr -> expectationFailure ("Bad expect expr: " ++ show perr)
-                    Right eexp -> do
-                      case (eval expr, eval eexp) of
-                        (Right v, Right vexp) -> do
-                          if v == vexp
-                            then putStrLn $ "✅ PASS: Expected " ++ show vexp ++ ", got " ++ show v
-                            else expectationFailure $ "❌ FAIL: Expected " ++ show vexp ++ ", got " ++ show v
-                        (Left rerr, _) -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
-                        _ -> expectationFailure "❌ FAIL: Unexpected eval failure in expected expression"
-                Just (ExpectType tyStr) -> do
-                  let expectedTy = case tyStr of
-                        "TInt" -> Right TInt
-                        "TBool" -> Right TBool
-                        "TString" -> Right TString
-                        _ -> Left ("Unknown type in expect-type: " ++ tyStr)
-                  case expectedTy of
-                    Left msg -> expectationFailure msg
-                    Right ety -> case typeCheck expr of
-                      Right ty -> do
-                        if ty == ety
-                          then putStrLn $ "✅ PASS: Expected type " ++ show ety ++ ", got " ++ show ty
-                          else expectationFailure $ "❌ FAIL: Expected type " ++ show ety ++ ", got " ++ show ty
-                      Left err -> expectationFailure ("❌ FAIL: Type error: " ++ show err)
-                Just ExpectError -> do
-                  case eval expr of
-                    Left err -> putStrLn $ "✅ PASS: Expected error, got: " ++ show err
-                    Right v -> expectationFailure ("❌ FAIL: Expected error, got: " ++ show v)
-                Nothing -> do
-                  case eval expr of
-                    Left rerr -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
-                    Right v -> putStrLn $ "✅ PASS: Expression evaluated to: " ++ show v
+          Right stmts | length stmts > 1 -> do
+            let expr = last stmts  -- Last statement is the main expression to test
+            testExpr expr content
+          _ -> case parseFileExpr content of
+            Left perr -> expectationFailure ("Parse error: " ++ show perr)
+            Right expr -> testExpr expr content
+
+testExpr :: Expr -> String -> IO ()
+testExpr expr content = do
+  case parseExpect content of
+    Just (ExpectValue expStr) -> do
+      case parseExpr expStr of
+        Left perr -> expectationFailure ("Bad expect expr: " ++ show perr)
+        Right eexp -> do
+          case (eval expr, eval eexp) of
+            (Right v, Right vexp) -> do
+              if v == vexp
+                then putStrLn $ "✅ PASS: Expected " ++ show vexp ++ ", got " ++ show v
+                else expectationFailure $ "❌ FAIL: Expected " ++ show vexp ++ ", got " ++ show v
+            (Left rerr, _) -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
+            _ -> expectationFailure "❌ FAIL: Unexpected eval failure in expected expression"
+    Just (ExpectType tyStr) -> do
+      let expectedTy = case tyStr of
+            "TInt" -> Right TInt
+            "TBool" -> Right TBool
+            "TString" -> Right TString
+            _ -> Left ("Unknown type in expect-type: " ++ tyStr)
+      case expectedTy of
+        Left msg -> expectationFailure msg
+        Right ety -> case typeCheck expr of
+          Right ty -> do
+            if ty == ety
+              then putStrLn $ "✅ PASS: Expected type " ++ show ety ++ ", got " ++ show ty
+              else expectationFailure $ "❌ FAIL: Expected type " ++ show ety ++ ", got " ++ show ty
+          Left err -> expectationFailure ("❌ FAIL: Type error: " ++ show err)
+    Just ExpectError -> do
+      case eval expr of
+        Left err -> putStrLn $ "✅ PASS: Expected error, got: " ++ show err
+        Right v -> expectationFailure ("❌ FAIL: Expected error, got: " ++ show v)
+    Nothing -> do
+      case eval expr of
+        Left rerr -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
+        Right v -> putStrLn $ "✅ PASS: Expression evaluated to: " ++ show v
 
 -- Utilities
 kaiFilesIn :: FilePath -> IO [FilePath]

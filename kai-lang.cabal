@@ -5,7 +5,7 @@ cabal-version: 2.2
 -- see: https://github.com/sol/hpack
 
 name:           kai-lang
-version:        0.0.3
+version:        0.0.3.1
 description:    A minimal, typed expression language implemented in Haskell
 homepage:       https://github.com/bikatr7/kai
 author:         Kaden Bilyeu (Bikatr7)
@@ -118,6 +118,7 @@ test-suite kai-test
       EdgeCaseSpec
       IntegerOverflowSpec
       LambdaSpec
+      LetBindingSpec
       ParserSpec
       PropertyBasedSpec
       RuntimeErrorSpec

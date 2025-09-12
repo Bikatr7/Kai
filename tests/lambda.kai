@@ -1,3 +1,2 @@
 // expect: 17
-print "Testing lambda function..."
-print ((\x -> x * x + 1) 4)
+(\x -> x * x + 1) 4

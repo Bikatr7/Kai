@@ -4,6 +4,7 @@ data Expr
   = IntLit Int            -- Integer literals
   | BoolLit Bool          -- Boolean literals
   | StrLit String         -- String literals
+  | UnitLit               -- Unit literal ()
   | Var String            -- Variables
   | Add Expr Expr         -- Addition
   | Sub Expr Expr         -- Subtraction
@@ -17,7 +18,9 @@ data Expr
   | Lt Expr Expr          -- Less than
   | Gt Expr Expr          -- Greater than
   | If Expr Expr Expr     -- If-then-else
-  | Print Expr            -- Print expression (prints at runtime, returns value)
+  | Print Expr            -- Print expression (prints at runtime, returns ())
   | Lambda String Expr    -- Lambda function (\x -> expr)
   | App Expr Expr         -- Function application
+  | Let String Expr Expr  -- Let binding (let x = val in expr)
+  | LetRec String Expr Expr -- Recursive let binding (letrec x = val in expr)
   deriving (Show, Eq) 

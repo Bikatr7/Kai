@@ -9,6 +9,7 @@ data Value
   = VInt Int
   | VBool Bool
   | VStr String
+  | VUnit
   | VFun String Expr Env  -- parameter, body, captured environment
   deriving (Show, Eq)
 
@@ -30,6 +31,7 @@ evalWithEnv :: Env -> Expr -> Either RuntimeError Value
 evalWithEnv _ (IntLit n) = Right $ VInt n
 evalWithEnv _ (BoolLit b) = Right $ VBool b
 evalWithEnv _ (StrLit s) = Right $ VStr s
+evalWithEnv _ UnitLit = Right VUnit
 
 evalWithEnv env (Var x) = 
   case Map.lookup x env of
@@ -121,14 +123,15 @@ evalWithEnv env (If c t e) = do
     VBool False -> evalWithEnv env e
     _ -> Left $ TypeError "If condition must be a boolean"
 
--- Print: evaluate subexpr, print human-readable, return the same value
+-- Print: evaluate subexpr, print human-readable, return Unit
 evalWithEnv env (Print e) = do
   v <- evalWithEnv env e
   case v of
-    VInt n -> putStr (show n ++ "\n") `seq` hFlush stdout `seq` Right v
-    VBool b -> putStr (show b ++ "\n") `seq` hFlush stdout `seq` Right v
-    VStr s -> putStr (s ++ "\n") `seq` hFlush stdout `seq` Right v
-    VFun {} -> putStr ("<function>\n") `seq` hFlush stdout `seq` Right v
+    VInt n -> print n `seq` hFlush stdout `seq` Right VUnit
+    VBool b -> print b `seq` hFlush stdout `seq` Right VUnit
+    VStr s -> putStrLn s `seq` hFlush stdout `seq` Right VUnit
+    VUnit -> putStrLn "()" `seq` hFlush stdout `seq` Right VUnit
+    VFun {} -> putStr "<function>\n" `seq` hFlush stdout `seq` Right VUnit
 
 -- Lambda creates a closure capturing the current environment
 evalWithEnv env (Lambda param body) = 
@@ -144,6 +147,20 @@ evalWithEnv env (App fun arg) = do
       in evalWithEnv env' body
     _ -> Left $ TypeError "Cannot apply non-function value"
 
+-- Let binding: evaluate value, extend environment, evaluate body
+evalWithEnv env (Let var val body) = do
+  valResult <- evalWithEnv env val
+  let env' = Map.insert var valResult env
+  evalWithEnv env' body
+
+-- Recursive let binding: create recursive environment with fixed point
+evalWithEnv env (LetRec var val body) = do
+  let env' = Map.insert var recValue env
+      recValue = case evalWithEnv env' val of
+                   Right v -> v
+                   Left err -> error $ "LetRec evaluation failed: " ++ show err
+  evalWithEnv env' body
+
 -- IO-based evaluator for handling Print statements
 evalWithEnvIO :: Env -> Expr -> IO (Either RuntimeError Value)
 evalWithEnvIO env (Print e) = do
@@ -152,10 +169,26 @@ evalWithEnvIO env (Print e) = do
     Left err -> return $ Left err
     Right val -> do
       case val of
-        VInt n -> putStrLn (show n)
-        VBool b -> putStrLn (show b)
+        VInt n -> print n
+        VBool b -> print b
         VStr s -> putStrLn s
+        VUnit -> putStrLn "()"
         VFun {} -> putStrLn "<function>"
-      return $ Right val
+      return $ Right VUnit
+
+evalWithEnvIO env (Let var val body) = do
+  valResult <- evalWithEnvIO env val
+  case valResult of
+    Left err -> return $ Left err
+    Right valValue -> do
+      let env' = Map.insert var valValue env
+      evalWithEnvIO env' body
+
+evalWithEnvIO env (LetRec var val body) = do
+  let env' = Map.insert var recValue env
+      recValue = case evalWithEnv env' val of
+                   Right v -> v
+                   Left err -> error $ "LetRec evaluation failed: " ++ show err
+  evalWithEnvIO env' body
 
 evalWithEnvIO env expr = return $ evalWithEnv env expr

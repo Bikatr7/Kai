@@ -1,0 +1,17 @@
+// expect: 84
+// Test complex closure interactions with multiple environments
+let makeCounter = \start ->
+  let counter = start in
+    \increment ->
+      let newVal = counter + increment in
+        newVal in
+  let counter1 = makeCounter 10 in
+    let counter2 = makeCounter 20 in
+      let result1 = counter1 5 in
+        let result2 = counter2 7 in
+          let combiner = \a -> \b ->
+            let sum = a + b in
+              let doubled = sum * 2 in
+                let final = doubled + 0 in
+                  final in
+            combiner result1 result2

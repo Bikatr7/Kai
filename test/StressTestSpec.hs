@@ -128,7 +128,7 @@ spec = describe "Stress Tests" $ do
     it "handles complex boolean logic expression" $ do
       let boolExpr = "(true and (false or true)) and (not false or (true and not true))"
       case parseTypeCheckEval boolExpr of
-        Right (VBool result) -> result `shouldBe` ((True && (False || True)) && (not False || (True && not True)))
+        Right (VBool result) -> result `shouldBe` True
         Left err -> expectationFailure $ "Boolean expression should work: " ++ err
         Right _ -> expectationFailure "Should return VBool"
     
@@ -181,7 +181,7 @@ buildLargeArithmetic n = intercalate " + " (map show [1..n])
 buildCompositionChain :: Int -> String
 buildCompositionChain n = "(" ++ compose ++ ") 42"
   where
-    compose = foldl (\acc _ -> "(\\f -> \\g -> \\x -> f (g x)) (\\y -> y + 1) (" ++ acc ++ ")") "\\z -> z" [1..n]
+    compose = iterate (\acc -> "(\\f -> \\g -> \\x -> f (g x)) (\\y -> y + 1) (" ++ acc ++ ")") "\\z -> z" !! n
 
 buildRightAssociative :: Int -> String  
 buildRightAssociative 0 = "1"

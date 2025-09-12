@@ -44,42 +44,64 @@ runExpression input = do
       case typeCheck expr of
         Left err -> putStrLn $ "Type error: " ++ show err
         Right ty -> do
-          putStrLn $ show ty
+          print ty
           
           putStr "Evaluation: "
           case eval expr of
             Left err -> putStrLn $ "Runtime error: " ++ show err
-            Right val -> putStrLn $ show val
+            Right val -> print val
 
 runFile :: FilePath -> IO ()
 runFile filename = do
   putStrLn $ "Running file: " ++ filename
   content <- readFile filename
-  case parseStatements content of
-    Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr
-    Right stmts -> do
-      if null stmts then putStrLn "No statements found" else do
-        -- Execute all statements and show their output
-        mapM_ (\stmt -> do
-          result <- evalWithEnvIO Map.empty stmt
-          case result of
-            Left err -> putStrLn $ "Runtime error: " ++ show err
-            Right val -> return ()  -- Print statements handle their own output
-          ) stmts
+  -- Try single expression first, then fall back to multi-statement
+  case parseFileExpr content of
+    Left _ -> case parseStatements content of
+      Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr  
+      Right stmts -> runStatements stmts
+    Right expr -> runSingleExpression expr
+
+runSingleExpression :: Expr -> IO ()
+runSingleExpression expr = do
+  putStrLn $ "AST: " ++ show expr
+  
+  putStr "Type: "
+  case typeCheck expr of
+    Left err -> putStrLn $ "Type error: " ++ show err
+    Right ty -> do
+      print ty
+      
+      putStr "Evaluation: "
+      result <- evalWithEnvIO Map.empty expr
+      case result of
+        Left err -> putStrLn $ "Runtime error: " ++ show err
+        Right val -> print val
+
+runStatements :: [Expr] -> IO ()
+runStatements stmts = do
+  if null stmts then putStrLn "No statements found" else do
+    -- Execute all statements and show their output
+    mapM_ (\stmt -> do
+      result <- evalWithEnvIO Map.empty stmt
+      case result of
+        Left err -> putStrLn $ "Runtime error: " ++ show err
+        Right val -> return ()  -- Print statements handle their own output
+      ) stmts
+    
+    let expr = last stmts  -- Last statement is the main expression
+    putStrLn $ "AST: " ++ show expr
+    
+    putStr "Type: "
+    case typeCheck expr of
+      Left err -> putStrLn $ "Type error: " ++ show err
+      Right ty -> do
+        print ty
         
-        let expr = last stmts  -- Last statement is the main expression
-        putStrLn $ "AST: " ++ show expr
-        
-        putStr "Type: "
-        case typeCheck expr of
-          Left err -> putStrLn $ "Type error: " ++ show err
-          Right ty -> do
-            putStrLn $ show ty
-            
-            putStr "Evaluation: "
-            case eval expr of
-              Left err -> putStrLn $ "Runtime error: " ++ show err
-              Right val -> putStrLn $ show val
+        putStr "Evaluation: "
+        case eval expr of
+          Left err -> putStrLn $ "Runtime error: " ++ show err
+          Right val -> print val
 
 main :: IO ()
 main = do

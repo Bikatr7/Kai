@@ -1,3 +1,2 @@
 // expect: 10
-print "Testing nested conditionals..."
-print (if (3 < 5) then (if true then 10 else 20) else 0)
+if (3 < 5) then (if true then 10 else 20) else 0

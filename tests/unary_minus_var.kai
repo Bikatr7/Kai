@@ -1,3 +1,2 @@
 // expect: -5
-print "Testing unary minus on variable..."
-print ((\x -> -x) 5)
+(\x -> -x) 5

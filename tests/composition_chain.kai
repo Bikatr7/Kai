@@ -1,3 +1,2 @@
 // expect: 21
-print "Testing composition chain..."
-print (((\f -> \g -> \x -> f (g x)) (\y -> y + 1) (\z -> z * 2)) 10)
+((\f -> \g -> \x -> f (g x)) (\y -> y + 1) (\z -> z * 2)) 10

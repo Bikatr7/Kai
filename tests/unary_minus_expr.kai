@@ -1,3 +1,2 @@
 // expect: -3
-print "Testing unary minus on expression..."
-print (-(1 + 2))
+-(1 + 2)

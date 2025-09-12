@@ -1,10 +1,10 @@
 # Kai Language
 
-A minimal, statically typed expression language, implemented in Haskell.
+A functional-first scripting language with static typing, implemented in Haskell.
 
-Kai aims to combine a clean, understandable syntax with a solid static type system and a pleasant scripting experience.
+Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Status (v0.0.3)
+## Current Status (v0.0.3.1)
 
 The language currently supports a compact, expression‑only core with full test coverage.
 
@@ -14,31 +14,25 @@ Features available today:
 - **Arithmetic**: `+`, `-`, `*`, `/` (integer division, division by zero error)
 - **Booleans**: `and`, `or`, `not`
 - **Comparisons**: `==`, `<`, `>`
-- **Strings**: string literals (`"hello"`), concatenation (`++`)
-- **Print statements**: `print expr` for output
+- **Strings**: string literals (`"hello"`), concatenation (`++`), escapes (`\"`, `\\`, `\n`)
+- **Unit & printing**: `()` unit value; `print : a -> Unit` prints and returns `()`
 - **Conditionals**: `if cond then e1 else e2`
 - **Functions**: lambdas (`\x -> expr`), application (`f x`), closures
-- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TFun` with unification and occurs check
+- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TFun` with unification and occurs check
 - **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
 - **CLI**: parse and evaluate expressions or files with `--help` and `-e` options
-- **Tests**: Hspec + QuickCheck (221 examples) — all passing with clear pass/fail indicators
+- **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
+- **Tests**: Hspec + QuickCheck (238 examples) — all passing with clear pass/fail indicators
 
-Limitations (by design at this stage): 
+Current limitations: 
 
-- No top‑level bindings, modules, or imports
-- No lists, records, or user‑defined data types (yet)
-- No user annotations yet; inference covers ints, bools, strings, and functions with unification
-- Purely functional core; minimal I/O (only print statements for output)
+- Limited to single-file scripts (no modules or imports)
+- No data structures for complex data manipulation (lists, maps, records)
+- No user type annotations yet; inference covers ints, bools, strings, and functions
+- Limited I/O (only print statements, no input or file operations)
 - No REPL for interactive experimentation
 - No standard library (even basic functions like `length`, `head`)
 - No error recovery (one parse error stops execution)
-- No variables or let-bindings (expressions only)
-
-**Practical limitations for real-world use:**
-- Limited to single-file scripts (no multi-file projects)
-- No way to define reusable functions or constants
-- No data structures for complex data manipulation
-- No file I/O beyond print statements
 - No way to handle errors gracefully
 
 ## Quickstart
@@ -109,7 +103,7 @@ Strings and printing:
 
 ```kai
 "Hello, " ++ "World"
-print ("The answer is " ++ "42")
+print ("The answer is " ++ "42")  // returns ()
 print (if 5 > 3 then "yes" else "no")
 ```
 
@@ -131,8 +125,9 @@ if 5 then 1 else 2  // Type error: ExpectedBool TInt
 
 - Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`).
 - Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
-- String concatenation uses `++` and is left-associative: `"a" ++ "b" ++ "c"`.
-- Print statements evaluate their argument and display the result.
+- String concatenation uses `++` and is right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`.
+- Supported string escapes: `\"`, `\\`, `\n`. Unknown escapes are errors.
+- `print` evaluates its argument, prints it, and returns unit `()`.
 - Application binds tighter than infix operators (`f x + y` parses as `(f x) + y`).
 - Multi-statement files are supported: each line is parsed as a separate expression.
 
@@ -159,81 +154,89 @@ if 5 then 1 else 2  // Type error: ExpectedBool TInt
 └── README.md
 ```
 
-## Vision: Kai as a Clean, Typed Scripting Language
+## Vision: Kai as a Functional-First Scripting Language
 
-Design goals:
+Design philosophy:
 
-- Static first: strong, predictable types with great errors
-- Clean syntax: concise, readable, expression‑oriented
-- Scriptable: fast edit‑run loop, ergonomic CLI, shebang support
-- Practical: a small standard library and productive defaults
+- **Functional by default**: Immutable data, pure functions, expressions over statements
+- **Imperative when needed**: Escape hatches for I/O, performance, or when it's genuinely clearer
+- **Static first**: Strong, predictable types with great error messages and inference
+- **Scriptable**: Fast edit‑run cycle, ergonomic CLI, shebang support, no compilation step
+- **Practical**: Batteries-included standard library for real-world scripting tasks
 
-Planned language features:
+Planned functional-first features:
 
-- Bindings and modules
-  - Let‑bindings and top‑level definitions
-  - Module system and imports
+**Core Language**
+- ~~Let‑bindings and recursion~~ ✅ **DONE** (`let` and `letrec`)
+- ~~Hindley–Milner style type inference~~ ✅ **DONE**
+- Top‑level definitions and module system
+- Algebraic data types and pattern matching
+- Lists, maps, records with functional operations
 
-- Types and inference
-  - ~~Hindley–Milner style type inference with annotations when needed~~ ✅ **DONE**
-  - Algebraic data types, pattern matching, type aliases
-  - Parametric polymorphism; later, typeclasses/traits if justified
+**Functional-First Standard Library**
+- List operations: `map`, `filter`, `fold`, `zip` (immutable by default)
+- String utilities: `split`, `join`, `trim`, `replace`
+- Math functions: `abs`, `min`, `max`, `sqrt`
+- Option/Result types for error handling
+- Function composition and pipeline operators
 
-- Data and stdlib
-  - ~~Strings~~ ✅ **DONE** (literals, concatenation)
-  - Lists, maps/records, options/results
-  - A focused, batteries‑included standard library for scripting
-  - Interop/FFI for host system calls
+**I/O and Effects (Controlled Imperative)**
+- File I/O: `readFile`, `writeFile`, `appendFile`
+- Network operations: HTTP requests, JSON parsing
+- Process utilities: run external commands
+- Input mechanisms: `readLine`, command-line arguments
+- Mutable references when needed: `ref`, `var`
 
-- Effects and I/O
-  - ~~Simple, principled I/O model that keeps the core pure~~ ✅ **DONE** (print statements)
-  - File and process utilities; JSON and text handling
+**Scripting Conveniences**
+- REPL with multiline input and `:type` command
+- Better error messages with suggestions
+- Formatter and basic linter
+- Shebang support for executable scripts
+- Package/module system for reusable code
 
-- Tooling and UX
-  - REPL with multiline input, completion, and :type
-  - Formatter and linter
-  - Error messages with helpful suggestions
-  - Better error recovery and diagnostics
-  - Interactive debugging tools
+**Performance Escape Hatches**
+- Mutable arrays/buffers for hot paths
+- Imperative loops when performance matters
+- Lazy evaluation controls
 
-- Standard Library
-  - Basic list operations (`length`, `head`, `tail`, `map`, `filter`)
-  - String utilities (`split`, `join`, `trim`)
-  - Math functions (`abs`, `min`, `max`, `sqrt`)
-  - Type conversion utilities
-
-- Language Completeness
-  - Variables and let-bindings for code reuse
-  - Pattern matching and destructuring
-  - Error handling (Maybe/Either types)
-  - Recursive function definitions
-  - Multi-file projects and imports
-
-- Developer Experience
-  - Interactive REPL with history and completion
-  - Better error messages with suggestions
-  - Syntax highlighting and IDE support
-  - Package manager for libraries
-  - Debugging and profiling tools
-
-Example future script:
+Example future script (functional-first with imperative I/O):
 
 ```kai
 #!/usr/bin/env kai
 
 import System (args, readFile, writeFile)
+import List (map, filter)
+
+// Functional by default
+let processLines lines = 
+  lines |> filter (not . isEmpty) |> map trim
 
 let greet name =
-  if name == "" then "Hello, world!" else "Hello, " + name
+  if name == "" then "Hello, world!" else "Hello, " ++ name
 
-let main =
-  let input = if length args > 0 then head args else "Kai"
-  in print (greet input)
+// Imperative when needed (I/O)
+let main = do
+  input <- readFile "input.txt"
+  let processed = processLines (split "\n" input)
+  let greeting = greet (head processed)
+  writeFile "output.txt" greeting
+  print greeting
 ```
 
 ## Contributing
 
 You are more than welcome to contribute anything.
+
+## Developing
+
+See DEVELOPING.md for:
+- Architecture overview (modules and responsibilities)
+- Current language semantics (strict evaluation, Unit, print, escapes)
+- Operator precedence table (Haskell-aligned)
+- Build and test workflow, running subsets
+- Linting with HLint and style notes
+- Feature implementation playbook and testing guidance
+- Versioning/release and website update steps
 
 ## Local development
 

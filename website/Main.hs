@@ -36,19 +36,19 @@ getHomeR = defaultLayout $ do
     <div .container>
       <header>
         <h1>Kai
-        <p .tagline>A minimal, statically typed expression language
+        <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>221
+            <div .stat-number>238
             <div .stat-label>Tests Passing
           <div .stat-item>
-            <div .stat-number>4
+            <div .stat-number>5
             <div .stat-label>Core Types
           <div .stat-item>
-            <div .stat-number>29
+            <div .stat-number>46
             <div .stat-label>Script Tests
           <div .stat-item>
-            <div .stat-number>v0.0.3
+            <div .stat-number>v0.0.3.1
             <div .stat-label>Current Version
 
       <nav>
@@ -71,10 +71,10 @@ getHomeR = defaultLayout $ do
             <p>Haskell-like lambdas, precedence, keywords, and multi-statement files with expression-only core.
           <div .feature>
             <h3>String Support
-            <p>String literals, concatenation (++), and print statements for output with proper type checking.
+            <p>String literals, escapes (\", \\, \n), concatenation (++), and print statements (returning unit) with proper type checking.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>221 tests with clear pass/fail indicators, property-based testing, and script evaluation.
+            <p>238 tests with clear pass/fail indicators, property-based testing, and script evaluation.
           <div .feature>
             <h3>Developer Experience
             <p>CLI with help, inline evaluation, file execution, and comprehensive documentation.
@@ -115,6 +115,7 @@ getHomeR = defaultLayout $ do
             <code>true
             <code>false
             <code>"hi"
+            <code>()
 
         <div .element-block>
           <h3>Operators
@@ -139,14 +140,20 @@ getHomeR = defaultLayout $ do
         <div .element-block>
           <h3>Lambda Functions
           <div .code-example>
-            <code>lambda x -> x + 1
-            <code>lambda f -> f 42
+            <code>\\x -> x + 1
+            <code>\\f -> f 42
+
+        <div .element-block>
+          <h3>Let Bindings
+          <div .code-example>
+            <code>let x = 42 in x + 1
+            <code>letrec factorial = \\n -> if n == 0 then 1 else n * (factorial (n - 1)) in factorial 5
 
         <div .element-block>
           <h3>Print Statements
           <div .code-example>
-            <code>print "Hello"
-            <code>print (42 + 1)
+            <code>print "Hello"    <!-- returns () -->
+            <code>print (42 + 1)  <!-- returns () -->
 
       <section #examples>
         <h2>Example Expressions
@@ -171,12 +178,21 @@ getHomeR = defaultLayout $ do
         <div .element-block>
           <h3>Lambda Functions & Application
           <div .code-example>
-            <code>lambda x -> x + 1
+            <code>\\x -> x + 1
             <br>
-            <code>(lambda x -> x + 1) 5
-            <code>(lambda x -> x * x) 4
+            <code>(\\x -> x + 1) 5
+            <code>(\\x -> x * x) 4
             <br>
-            <code>(lambda f -> f 10) (lambda n -> n * 2)
+            <code>(\\f -> f 10) (\\n -> n * 2)
+
+        <div .element-block>
+          <h3>Let Bindings & Recursion
+          <div .code-example>
+            <code>let add = \\x -> \\y -> x + y in add 5 3
+            <br>
+            <code>letrec factorial = \\n -> if n == 0 then 1 else n * (factorial (n - 1)) in factorial 5
+            <br>
+            <code>let compose = \\f -> \\g -> \\x -> f (g x) in compose (\\x -> x * 2) (\\x -> x + 1) 10
 
         <div .element-block>
           <h3>Strings & Print
@@ -187,7 +203,7 @@ getHomeR = defaultLayout $ do
             <br>
             <code>print (if 5 > 3 then "yes" else "no")
             <br>
-            <code>(lambda x -> print (x ++ "!")) "Hi"
+            <code>(\\x -> print (x ++ "!")) "Hi"
 
         <div .element-block>
           <h3>Type Safety Examples
@@ -201,55 +217,31 @@ getHomeR = defaultLayout $ do
       <section #limitations>
         <h2>Current Limitations
         <div .element-block>
-          <h3>Language Completeness
+          <h3>Current Limitations
           <div .code-example>
             <span .limitation>×
-            <span>No variables or let-bindings (expressions only)
+            <span>Limited to single-file scripts (no modules or imports)
             <br>
             <span .limitation>×
-            <span>No lists, records, or user-defined data types
+            <span>No data structures for complex data manipulation (lists, maps, records)
             <br>
             <span .limitation>×
-            <span>No top-level bindings, modules, or imports
+            <span>Limited I/O (only print statements, no input or file operations)
             <br>
             <span .limitation>×
             <span>No REPL for interactive experimentation
-
-        <div .element-block>
-          <h3>Practical Limitations
-          <div .code-example>
-            <span .limitation>×
-            <span>Limited to single-file scripts (no multi-file projects)
             <br>
-            <span .limitation>×
-            <span>No way to define reusable functions or constants
-            <br>
-            <span .limitation>×
-            <span>No data structures for complex data manipulation
-            <br>
-            <span .limitation>×
-            <span>No file I/O beyond print statements
-            <br>
-            <span .limitation>×
-            <span>No error recovery (one parse error stops execution)
-
-        <div .element-block>
-          <h3>Developer Experience
-          <div .code-example>
             <span .limitation>×
             <span>No standard library (even basic functions like length, head)
             <br>
             <span .limitation>×
+            <span>No error recovery (one parse error stops execution)
+            <br>
+            <span .limitation>×
             <span>No way to handle errors gracefully
-            <br>
-            <span .limitation>×
-            <span>No syntax highlighting or IDE support
-            <br>
-            <span .limitation>×
-            <span>No package manager for libraries
 
       <section #roadmap>
-        <h2>Current Status (v0.0.3) & Roadmap
+        <h2>Current Status (v0.0.3.1) & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -271,24 +263,34 @@ getHomeR = defaultLayout $ do
             <div .timeline-content>
               <h3>Type System (Done)
               <p>Hindley-Milner inference with unification and occurs check
-          <div .timeline-item .current>
-            <div .timeline-marker .current data-step="5">
-            <div .timeline-content>
-              <h3>Variables & Data (Planned)
-              <p>Let-bindings, lists, records, pattern matching, error handling
           <div .timeline-item>
-            <div .timeline-marker data-step="6">
+            <div .timeline-marker data-step="5">
             <div .timeline-content>
-              <h3>Modules & Stdlib (Planned)
-              <p>Module system, standard library, file I/O, JSON handling
+              <h3>Let Bindings (Done)
+              <p>Variable bindings and recursive function definitions with letrec
+          <div .timeline-item .current>
+            <div .timeline-marker .current data-step="6">
+            <div .timeline-content>
+              <h3>Data Structures (Planned)
+              <p>Lists, records, pattern matching, error handling
           <div .timeline-item>
             <div .timeline-marker data-step="7">
+            <div .timeline-content>
+              <h3>I/O & Effects (Planned)
+              <p>File I/O, input mechanisms, controlled imperative features
+          <div .timeline-item>
+            <div .timeline-marker data-step="8">
+            <div .timeline-content>
+              <h3>Modules & Stdlib (Planned)
+              <p>Module system, standard library, functional-first operations
+          <div .timeline-item>
+            <div .timeline-marker data-step="9">
             <div .timeline-content>
               <h3>Developer Tools (Planned)
               <p>REPL, formatter, linter, IDE support, package manager
 
       <footer>
-        <p .copyright>Kai Language · Implemented in Haskell
+        <p .copyright>Kai Language · Functional-first scripting · Implemented in Haskell
   |]
 
 main :: IO ()

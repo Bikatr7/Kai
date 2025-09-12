@@ -1,0 +1,4 @@
+// expect: 30
+let x = 10 in
+  let x = 20 in
+    let y = x + 10 in y

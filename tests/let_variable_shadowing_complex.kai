@@ -1,0 +1,17 @@
+// expect: 53
+// Test complex variable shadowing scenarios
+let x = 100 in
+  let f = \y ->
+    let x = y + 10 in  // shadows outer x
+      x in
+  let g = \z ->
+    let x = z + 20 in  // shadows outer x
+      x in
+  let h = \w ->
+    let x = w + 30 in  // shadows outer x
+      x in
+  let outer_x = x in  // should be 100
+    let result1 = f 3 in   // should be 3 + 10 = 13
+      let result2 = g 2 in   // should be 2 + 20 = 22  
+        let result3 = h 1 in // should be 1 + 30 = 31
+          result1 + result2 + result3 - outer_x + 87

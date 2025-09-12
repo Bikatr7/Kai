@@ -1,0 +1,2 @@
+// expect: 20
+let double = \x -> x * 2 in double 10

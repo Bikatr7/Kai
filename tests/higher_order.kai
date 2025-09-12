@@ -1,3 +1,2 @@
 // expect: 20
-print "Testing higher-order functions..."
-print ((\f -> f 10) (\n -> n * 2))
+(\f -> f 10) (\n -> n * 2)

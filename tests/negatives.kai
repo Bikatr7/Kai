@@ -1,3 +1,2 @@
 // expect: -8
-print "Testing negative numbers..."
-print (-5 + (-3))
+-5 + (-3)

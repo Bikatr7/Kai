@@ -1,3 +1,2 @@
 // expect: 42
-print "Testing lambda increment..."
-print ((\x -> x + 1) 41)
+(\x -> x + 1) 41

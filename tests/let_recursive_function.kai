@@ -1,0 +1,4 @@
+// expect: 55
+let add = \x -> \y -> x + y in
+  let increment = add 1 in
+    let result = increment 54 in result

@@ -1,3 +1,2 @@
 // expect: 131
-print "Testing complex expression..."
-print ((\compose -> (\inc -> (\dbl -> (\choose -> (\sum3 -> (\x -> sum3 (compose inc dbl x) (choose ((x < 0) and (not false)) 100 200) ((\f -> f 42) (\r -> r - 2))) (-5)) (\a -> \b -> \c -> a + b + c)) (\cond -> \a -> \b -> if cond then a else b)) (\y -> y * 2)) (\z -> z + 1)) (\f -> \g -> \x -> f (g x)))
+(\compose -> (\inc -> (\dbl -> (\choose -> (\sum3 -> (\x -> sum3 (compose inc dbl x) (choose ((x < 0) and (not false)) 100 200) ((\f -> f 42) (\r -> r - 2))) (-5)) (\a -> \b -> \c -> a + b + c)) (\cond -> \a -> \b -> if cond then a else b)) (\y -> y * 2)) (\z -> z + 1)) (\f -> \g -> \x -> f (g x))

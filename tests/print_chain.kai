@@ -1,3 +1,2 @@
 // expect: "Hi!"
-print ((\x -> print (x ++ "!")) "Hi")
-
+let u = print ((\x -> print (x ++ "!")) "Hi") in "Hi!"
