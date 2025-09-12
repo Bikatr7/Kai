@@ -49,7 +49,7 @@ jobs:
     if: needs.check-version.outputs.should-release == 'true'
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,14 +74,21 @@ jobs:
           key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock') }}
 
       - name: Build CLI binary
+        shell: bash
         run: |
           stack --no-terminal build :kai
           mkdir -p dist
-          # Locate the built binary
-          BIN_PATH=$(stack path --local-install-root)/bin/kai || true
-          if [ ! -x "$BIN_PATH" ]; then
-            # fallback attempt
-            BIN_PATH=$(stack path --local-bin)/kai || true
+          # Locate the built binary (Windows adds .exe extension)
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            BIN_PATH=$(stack path --local-install-root)/bin/kai.exe || true
+            if [ ! -x "$BIN_PATH" ]; then
+              BIN_PATH=$(stack path --local-bin)/kai.exe || true
+            fi
+          else
+            BIN_PATH=$(stack path --local-install-root)/bin/kai || true
+            if [ ! -x "$BIN_PATH" ]; then
+              BIN_PATH=$(stack path --local-bin)/kai || true
+            fi
           fi
           if [ ! -x "$BIN_PATH" ]; then
             echo "Binary not found" >&2; exit 1
@@ -90,9 +97,38 @@ jobs:
           # Name artifact according to platform
           if [ "${{ runner.os }}" = "macOS" ]; then
             mv dist/kai dist/kai-macos-amd64
+            BINARY_NAME="kai-macos-amd64"
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            mv dist/kai.exe dist/kai-windows-amd64.exe
+            BINARY_NAME="kai-windows-amd64.exe"
           else
             mv dist/kai dist/kai-linux-amd64
+            BINARY_NAME="kai-linux-amd64"
           fi
+          
+          # Test the binary on all .kai test files
+          echo "Testing binary functionality on all test files..."
+          FAILED_TESTS=0
+          TOTAL_TESTS=0
+          for test_file in tests/*.kai; do
+            if [ -f "$test_file" ]; then
+              TOTAL_TESTS=$((TOTAL_TESTS + 1))
+              echo "Running test: $test_file"
+              if ! ./dist/$BINARY_NAME "$test_file" >/dev/null 2>&1; then
+                echo "❌ FAILED: $test_file"
+                FAILED_TESTS=$((FAILED_TESTS + 1))
+              else
+                echo "✅ PASSED: $test_file"
+              fi
+            fi
+          done
+          
+          echo "Test Results: $((TOTAL_TESTS - FAILED_TESTS))/$TOTAL_TESTS passed"
+          if [ $FAILED_TESTS -gt 0 ]; then
+            echo "❌ $FAILED_TESTS test(s) failed. Aborting release."
+            exit 1
+          fi
+          echo "✅ All binary tests passed!"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

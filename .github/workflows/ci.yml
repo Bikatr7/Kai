@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Setup Haskell
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: '9.4.8'
+        enable-stack: true
+        stack-version: 'latest'
+    
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.stack
+          .stack-work
+        key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock') }}
+    
+    - name: Run Haskell test suite
+      run: stack test
+    
+    - name: Build binary
+      run: |
+        stack build :kai
+        mkdir -p dist
+        BIN_PATH=$(stack path --local-install-root)/bin/kai
+        cp "$BIN_PATH" dist/kai-ci
+    
+    - name: Test binary on all .kai test files
+      run: |
+        echo "Testing binary functionality on all test files..."
+        FAILED_TESTS=0
+        TOTAL_TESTS=0
+        for test_file in tests/*.kai; do
+          if [ -f "$test_file" ]; then
+            TOTAL_TESTS=$((TOTAL_TESTS + 1))
+            echo "Running test: $test_file"
+            if ! ./dist/kai-ci "$test_file" >/dev/null 2>&1; then
+              echo "❌ FAILED: $test_file"
+              FAILED_TESTS=$((FAILED_TESTS + 1))
+            else
+              echo "✅ PASSED: $test_file"
+            fi
+          fi
+        done
+        
+        echo "Test Results: $((TOTAL_TESTS - FAILED_TESTS))/$TOTAL_TESTS passed"
+        if [ $FAILED_TESTS -gt 0 ]; then
+          echo "❌ $FAILED_TESTS test(s) failed."
+          exit 1
+        fi
+        echo "✅ All tests passed!"
