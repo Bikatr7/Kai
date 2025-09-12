@@ -4,7 +4,7 @@ A minimal, statically typed expression language, implemented in Haskell.
 
 Kai aims to combine a clean, understandable syntax with a solid static type system and a pleasant scripting experience.
 
-## Current Status (v0.0.2)
+## Current Status (v0.0.3)
 
 The language currently supports a compact, expression‑only core with full test coverage.
 
