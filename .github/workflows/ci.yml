@@ -44,22 +44,39 @@ jobs:
         echo "Testing binary functionality on all test files..."
         FAILED_TESTS=0
         TOTAL_TESTS=0
+
         for test_file in tests/*.kai; do
           if [ -f "$test_file" ]; then
             TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
             echo "Running test: $test_file"
-            if ! ./dist/kai-ci "$test_file" >/dev/null 2>&1; then
-              echo "❌ FAILED: $test_file"
-              FAILED_TESTS=$((FAILED_TESTS + 1))
+
+            if [[ "$test_file" == tests/input* ]]; then
+              TEST_INPUT="test_input"
+              if ! echo "$TEST_INPUT" | ./dist/kai-ci "$test_file" >/dev/null 2>&1; then
+                echo "❌ FAILED: $test_file (with input: '$TEST_INPUT')"
+                FAILED_TESTS=$((FAILED_TESTS + 1))
+              else
+                echo "✅ PASSED: $test_file (with input: '$TEST_INPUT')"
+              fi
             else
-              echo "✅ PASSED: $test_file"
+              if ! ./dist/kai-ci "$test_file" >/dev/null 2>&1; then
+                echo "❌ FAILED: $test_file"
+                FAILED_TESTS=$((FAILED_TESTS + 1))
+              else
+                echo "✅ PASSED: $test_file"
+              fi
             fi
           fi
         done
-        
-        echo "Test Results: $((TOTAL_TESTS - FAILED_TESTS))/$TOTAL_TESTS passed"
+
+        PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS))
+
+        echo "Test Results: $PASSED_TESTS/$TOTAL_TESTS passed"
+
         if [ $FAILED_TESTS -gt 0 ]; then
           echo "❌ $FAILED_TESTS test(s) failed."
           exit 1
         fi
-        echo "✅ All tests passed!"
+
+        echo "✅ All tests passed! (Input tests provided with 'test_input')"

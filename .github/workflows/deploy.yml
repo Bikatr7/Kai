@@ -39,12 +39,25 @@ jobs:
     
     - name: Build project
       run: stack build --system-ghc
-    
+
+    - name: Test website binary
+      run: |
+        # Test that the website binary works
+        stack exec kai-website -- --help >/dev/null 2>&1
+        echo "✅ Website binary is functional"
+
     - name: Export static site
       run: |
         chmod +x scripts/export-site.sh
         ./scripts/export-site.sh
         rm -rf _site && mv dist-site _site
+
+        # Verify the site was generated successfully
+        if [ ! -f "_site/index.html" ]; then
+          echo "❌ Website generation failed - index.html not found"
+          exit 1
+        fi
+        echo "✅ Website generated successfully"
     
     - name: Setup Pages
       uses: actions/configure-pages@v4
