@@ -1,0 +1,9 @@
+// Test input in deeply nested structure
+// expect-type: TString
+
+let process = \x -> 
+  let step1 = \y -> "Step1(" ++ y ++ ")" in
+    let step2 = \z -> "Step2(" ++ z ++ ")" in
+      let step3 = \w -> "Final(" ++ w ++ ")" in
+        step3 (step2 (step1 x))
+in process input

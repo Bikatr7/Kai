@@ -1,5 +1,5 @@
 name: kai-lang
-version: 0.0.3.1
+version: 0.0.3.2
 description: A minimal, typed expression language implemented in Haskell
 homepage: https://github.com/bikatr7/kai
 license: AGPL-3.0-only
@@ -60,6 +60,7 @@ tests:
       - -threaded
       - -rtsopts
       - -with-rtsopts=-N
+      - -with-rtsopts=-K64M
     dependencies:
       - hspec
       - QuickCheck
@@ -67,5 +68,6 @@ tests:
       - directory
       - filepath
       - containers
+      - unix
     build-tools:
       - hspec-discover

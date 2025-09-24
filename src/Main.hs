@@ -10,6 +10,7 @@ import Data.List (intercalate)
 import qualified Data.Map as Map
 import Paths_kai_lang (version)
 import Data.Version (showVersion)
+import Control.Monad (when)
 
 versionString :: String
 versionString = "Kai v" ++ showVersion version
@@ -31,77 +32,79 @@ examples =
   , "(\\f -> f 42) (\\x -> x + 1)"
   ]
 
-runExpression :: String -> IO ()
-runExpression input = do
-  putStrLn $ "\nExpression: " ++ input
+runExpression :: Bool -> String -> IO ()
+runExpression debug input = do
+  when debug $ putStrLn $ "\nExpression: " ++ input
   
   case parseExpr input of
     Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr
     Right expr -> do
-      putStrLn $ "AST: " ++ show expr
+      when debug $ putStrLn $ "AST: " ++ show expr
       
-      putStr "Type: "
+      when debug $ putStr "Type: "
       case typeCheck expr of
         Left err -> putStrLn $ "Type error: " ++ show err
         Right ty -> do
-          print ty
+          when debug $ print ty
           
-          putStr "Evaluation: "
-          case eval expr of
+          when debug $ putStr "Evaluation: "
+          result <- eval expr
+          case result of
             Left err -> putStrLn $ "Runtime error: " ++ show err
-            Right val -> print val
+            Right val -> if debug then print val else return ()
 
-runFile :: FilePath -> IO ()
-runFile filename = do
-  putStrLn $ "Running file: " ++ filename
+runFile :: Bool -> FilePath -> IO ()
+runFile debug filename = do
+  when debug $ putStrLn $ "Running file: " ++ filename
   content <- readFile filename
   -- Try single expression first, then fall back to multi-statement
   case parseFileExpr content of
     Left _ -> case parseStatements content of
       Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr  
-      Right stmts -> runStatements stmts
-    Right expr -> runSingleExpression expr
+      Right stmts -> runStatements debug stmts
+    Right expr -> runSingleExpression debug expr
 
-runSingleExpression :: Expr -> IO ()
-runSingleExpression expr = do
-  putStrLn $ "AST: " ++ show expr
+runSingleExpression :: Bool -> Expr -> IO ()
+runSingleExpression debug expr = do
+  when debug $ putStrLn $ "AST: " ++ show expr
   
-  putStr "Type: "
+  when debug $ putStr "Type: "
   case typeCheck expr of
     Left err -> putStrLn $ "Type error: " ++ show err
     Right ty -> do
-      print ty
+      when debug $ print ty
       
-      putStr "Evaluation: "
-      result <- evalWithEnvIO Map.empty expr
+      when debug $ putStr "Evaluation: "
+      result <- evalWithEnv Map.empty expr
       case result of
         Left err -> putStrLn $ "Runtime error: " ++ show err
-        Right val -> print val
+        Right val -> when debug $ print val
 
-runStatements :: [Expr] -> IO ()
-runStatements stmts = do
+runStatements :: Bool -> [Expr] -> IO ()
+runStatements debug stmts = do
   if null stmts then putStrLn "No statements found" else do
     -- Execute all statements and show their output
     mapM_ (\stmt -> do
-      result <- evalWithEnvIO Map.empty stmt
+      result <- evalWithEnv Map.empty stmt
       case result of
         Left err -> putStrLn $ "Runtime error: " ++ show err
         Right val -> return ()  -- Print statements handle their own output
       ) stmts
     
     let expr = last stmts  -- Last statement is the main expression
-    putStrLn $ "AST: " ++ show expr
+    when debug $ putStrLn $ "AST: " ++ show expr
     
-    putStr "Type: "
+    when debug $ putStr "Type: "
     case typeCheck expr of
       Left err -> putStrLn $ "Type error: " ++ show err
       Right ty -> do
-        print ty
+        when debug $ print ty
         
-        putStr "Evaluation: "
-        case eval expr of
+        when debug $ putStr "Evaluation: "
+        result <- eval expr
+        case result of
           Left err -> putStrLn $ "Runtime error: " ++ show err
-          Right val -> print val
+          Right val -> when debug $ print val
 
 main :: IO ()
 main = do
@@ -113,7 +116,9 @@ main = do
         , "Usage:"
         , "  kai                      # show help and examples"
         , "  kai FILE.kai             # run a script file"
+        , "  kai --debug FILE.kai     # run a script file with debug output"
         , "  kai -e 'EXPR'            # evaluate a one-liner expression"
+        , "  kai --debug -e 'EXPR'    # evaluate with debug output"
         , "  kai --help               # this message"
         ])
     ["-h"] -> do
@@ -122,11 +127,15 @@ main = do
         , "Usage:"
         , "  kai                      # show help and examples"
         , "  kai FILE.kai             # run a script file"
+        , "  kai --debug FILE.kai     # run a script file with debug output"
         , "  kai -e 'EXPR'            # evaluate a one-liner expression"
+        , "  kai --debug -e 'EXPR'    # evaluate with debug output"
         , "  kai --help               # this message"
         ])
-    ["-e", exprStr] -> runExpression exprStr
+    ["-e", exprStr] -> runExpression False exprStr
+    ["--debug", "-e", exprStr] -> runExpression True exprStr
     [] -> do
       putStrLn $ versionString ++ " — pass a file, -e 'expr', or --help for usage."
-    [filename] -> runFile filename
-    _ -> putStrLn "Usage: kai [filename]" 
+    [filename] -> runFile False filename
+    ["--debug", filename] -> runFile True filename
+    _ -> putStrLn "Usage: kai [filename] or kai --debug [filename]" 

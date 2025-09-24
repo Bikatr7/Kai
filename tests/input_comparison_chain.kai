@@ -1,0 +1,4 @@
+// Test input in comparison chains
+// expect-type: TBool
+
+(input == "a") or (input == "b")

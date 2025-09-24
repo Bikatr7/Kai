@@ -1,0 +1,9 @@
+// Test complex workflow with input, let, and functions
+// expect-type: TString
+
+let userInput = input in
+  let validator = \text -> if text == "" then "empty" else text in
+    let formatter = \validated -> 
+      if validated == "empty" then "No input provided"
+      else "Welcome, " ++ validated
+    in formatter (validator userInput)

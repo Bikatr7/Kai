@@ -1,0 +1,4 @@
+// Test input with special characters and escapes
+// expect-type: TString
+
+"Input was: \"" ++ input ++ "\""

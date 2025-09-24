@@ -1,0 +1,4 @@
+// Test input with higher-order functions
+// expect-type: TString
+
+(\processor -> processor input) (\text -> "Transformed: " ++ text)

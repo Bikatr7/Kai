@@ -1,0 +1,4 @@
+// Test input with print statements
+// expect-type: TUnit
+
+print ("You entered: " ++ input)

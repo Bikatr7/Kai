@@ -8,7 +8,13 @@ install:
 	@cp -f scripts/kai "$(BIN_DIR)/kai"
 	@chmod +x "$(BIN_DIR)/kai"
 	@echo "Installed runner to $(BIN_DIR)/kai"
-	@echo "Ensure $(BIN_DIR) is on your PATH."
+	@if ! grep -qxF 'export PATH="$(BIN_DIR):$$PATH"' ~/.bashrc; then \
+		echo "Adding $(BIN_DIR) to PATH in ~/.bashrc..."; \
+		echo 'export PATH="$(BIN_DIR):$$PATH"' >> ~/.bashrc; \
+	else \
+		echo "$(BIN_DIR) is already in PATH in ~/.bashrc."; \
+	fi
+	@echo "Please restart your shell or run 'source ~/.bashrc' for changes to take effect."
 
 build-install:
 	stack install
@@ -22,4 +28,3 @@ test:
 
 site:
 	bash scripts/export-site.sh
-

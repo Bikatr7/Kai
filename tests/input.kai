@@ -1,0 +1,7 @@
+// To test this file manually, run:
+// stack exec kai tests/input.kai
+// Then type your name and press enter.
+// It should print "Hello, <your_name>!"
+// expect-type: TUnit
+
+print ("Hello, " ++ input ++ "!")

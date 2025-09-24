@@ -74,14 +74,14 @@ parseEvaluate input = case parseExpr input of
   Left _ -> Left (TypeError "Parse error")
   Right expr -> case typeCheck expr of
     Left _ -> Left (TypeError "Type error")
-    Right _ -> eval expr
+    Right _ -> evalPure expr
 
--- Helper function for testing arithmetic with proper error handling  
+-- Helper function for testing arithmetic with proper error handling
 testParseTypeCheckEval :: String -> Either String Value
 testParseTypeCheckEval input = case parseExpr input of
   Left parseErr -> Left $ "Parse error: " ++ show parseErr
   Right expr -> case typeCheck expr of
-    Left typeErr -> Left $ "Type error: " ++ show typeErr  
-    Right _ -> case eval expr of
+    Left typeErr -> Left $ "Type error: " ++ show typeErr
+    Right _ -> case evalPure expr of
       Left runtimeErr -> Left $ "Runtime error: " ++ show runtimeErr
       Right value -> Right value

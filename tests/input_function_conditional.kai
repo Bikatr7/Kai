@@ -1,0 +1,4 @@
+// Test input with function returning conditional
+// expect-type: TString
+
+(\userInput -> if userInput == "admin" then "Welcome admin" else "Welcome user") input

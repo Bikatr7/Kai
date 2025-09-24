@@ -36,4 +36,4 @@ spec = describe "Runtime Errors" $ do
 parseAndEvaluate :: String -> Either RuntimeError Value
 parseAndEvaluate input = case parseExpr input of
   Left _ -> Left (TypeError "Parse error")
-  Right expr -> eval expr
+  Right expr -> evalPure expr

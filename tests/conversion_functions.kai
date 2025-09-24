@@ -1,0 +1,3 @@
+// Test conversion functions
+// expect: "123"
+case parseInt "123" of Just x -> show x | Nothing -> "0"

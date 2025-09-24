@@ -1,0 +1,7 @@
+// Test input in nested conditional expressions
+// expect-type: TString
+
+if input == "admin" then 
+  "admin access" 
+else 
+  if input == "user" then "user access" else "denied"

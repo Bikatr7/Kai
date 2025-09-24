@@ -29,7 +29,7 @@ spec = describe "String Support" $ do
   describe "Evaluation" $ do
     it "evaluates concatenation" $ do
       case parseExpr "\"foo\" ++ \"bar\"" of
-        Right e -> eval e `shouldBe` Right (VStr "foobar")
+        Right e -> evalPure e `shouldBe` Right (VStr "foobar")
         Left _ -> expectationFailure "parse"
 
   describe "Invalid" $ do

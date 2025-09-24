@@ -1,0 +1,4 @@
+// Test input in deeply nested expressions
+// expect-type: TString
+
+((("prefix-" ++ input) ++ "-middle") ++ "-suffix")

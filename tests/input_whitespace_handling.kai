@@ -1,0 +1,4 @@
+// Test input with whitespace and trimming patterns
+// expect-type: TString
+
+"[" ++ input ++ "]"

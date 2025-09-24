@@ -39,16 +39,16 @@ getHomeR = defaultLayout $ do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>238
+            <div .stat-number>266
             <div .stat-label>Tests Passing
           <div .stat-item>
-            <div .stat-number>5
+            <div .stat-number>7
             <div .stat-label>Core Types
           <div .stat-item>
-            <div .stat-number>46
+            <div .stat-number>27
             <div .stat-label>Script Tests
           <div .stat-item>
-            <div .stat-number>v0.0.3.1
+            <div .stat-number>v0.0.3.2
             <div .stat-label>Current Version
 
       <nav>
@@ -70,14 +70,14 @@ getHomeR = defaultLayout $ do
             <h3>Clean Syntax
             <p>Haskell-like lambdas, precedence, keywords, and multi-statement files with expression-only core.
           <div .feature>
-            <h3>String Support
-            <p>String literals, escapes (\", \\, \n), concatenation (++), and print statements (returning unit) with proper type checking.
+            <h3>Interactive I/O & Conversions
+            <p>User input with `input`, type conversions (`parseInt`, `toString`, `show`), and interactive calculator example.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>238 tests with clear pass/fail indicators, property-based testing, and script evaluation.
+            <p>266 tests with clear pass/fail indicators, property-based testing, and script evaluation including 27 test files.
           <div .feature>
             <h3>Developer Experience
-            <p>CLI with help, inline evaluation, file execution, and comprehensive documentation.
+            <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
           <div .feature>
             <h3>Type Safety
             <p>All expressions type-checked before evaluation with descriptive error messages.
@@ -93,7 +93,11 @@ getHomeR = defaultLayout $ do
             <br>
             <code>stack exec kai -- -e "print (42 + 1)"
             <br>
+            <code>stack exec kai -- --debug -e "42 + 1"
+            <br>
             <code>stack exec kai path/to/script.kai
+            <br>
+            <code>stack exec kai examples/calculator.kai
 
         <div .element-block>
           <h3>Install CLI
@@ -150,10 +154,19 @@ getHomeR = defaultLayout $ do
             <code>letrec factorial = \\n -> if n == 0 then 1 else n * (factorial (n - 1)) in factorial 5
 
         <div .element-block>
-          <h3>Print Statements
+          <h3>Type Annotations & Conversions
           <div .code-example>
-            <code>print "Hello"    <!-- returns () -->
-            <code>print (42 + 1)  <!-- returns () -->
+            <code>let add : Int -> Int -> Int = \\x : Int -> \\y : Int -> x + y
+            <code>parseInt "42"     <!-- String to Maybe Int -->
+            <code>toString 100      <!-- Int to String -->
+            <code>show (42 + 3)     <!-- Any type to String -->
+
+        <div .element-block>
+          <h3>Interactive I/O
+          <div .code-example>
+            <code>input             <!-- Read line from stdin -->
+            <code>print "Hello"     <!-- Print and return () -->
+            <code>print (42 + 1)    <!-- Print and return () -->
 
       <section #examples>
         <h2>Example Expressions
@@ -206,6 +219,22 @@ getHomeR = defaultLayout $ do
             <code>(\\x -> print (x ++ "!")) "Hi"
 
         <div .element-block>
+          <h3>Interactive I/O & Conversions
+          <div .code-example>
+            <code>let name = input in print ("Hello, " ++ name)
+            <br>
+            <code>let numStr = input in case parseInt numStr of Just num -> toString (num * 2) | Nothing -> "Invalid number"
+            <br>
+            <code>show (42 + 3)   <!-- Returns "45" -->
+
+        <div .element-block>
+          <h3>Type Annotations
+          <div .code-example>
+            <code>let add : Int -> Int -> Int = \\x : Int -> \\y : Int -> x + y
+            <br>
+            <code>(\\x : String -> case parseInt x of Just n -> n | Nothing -> 0) "42"
+
+        <div .element-block>
           <h3>Type Safety Examples
           <div .code-example>
             <code>1 + true
@@ -226,7 +255,7 @@ getHomeR = defaultLayout $ do
             <span>No data structures for complex data manipulation (lists, maps, records)
             <br>
             <span .limitation>×
-            <span>Limited I/O (only print statements, no input or file operations)
+            <span>Limited I/O (no file operations, only stdin/stdout)
             <br>
             <span .limitation>×
             <span>No REPL for interactive experimentation
@@ -241,7 +270,7 @@ getHomeR = defaultLayout $ do
             <span>No way to handle errors gracefully
 
       <section #roadmap>
-        <h2>Current Status (v0.0.3.1) & Roadmap
+        <h2>Current Status (v0.0.3.2) & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -268,23 +297,28 @@ getHomeR = defaultLayout $ do
             <div .timeline-content>
               <h3>Let Bindings (Done)
               <p>Variable bindings and recursive function definitions with letrec
+          <div .timeline-item>
+            <div .timeline-marker data-step="6">
+            <div .timeline-content>
+              <h3>Type Annotations & Conversions (Done)
+              <p>Optional type annotations, parseInt/toString/show functions, interactive I/O
           <div .timeline-item .current>
-            <div .timeline-marker .current data-step="6">
+            <div .timeline-marker .current data-step="7">
             <div .timeline-content>
               <h3>Data Structures (Planned)
               <p>Lists, records, pattern matching, error handling
           <div .timeline-item>
-            <div .timeline-marker data-step="7">
-            <div .timeline-content>
-              <h3>I/O & Effects (Planned)
-              <p>File I/O, input mechanisms, controlled imperative features
-          <div .timeline-item>
             <div .timeline-marker data-step="8">
+            <div .timeline-content>
+              <h3>File I/O & Effects (Planned)
+              <p>File operations, controlled imperative features
+          <div .timeline-item>
+            <div .timeline-marker data-step="9">
             <div .timeline-content>
               <h3>Modules & Stdlib (Planned)
               <p>Module system, standard library, functional-first operations
           <div .timeline-item>
-            <div .timeline-marker data-step="9">
+            <div .timeline-marker data-step="10">
             <div .timeline-content>
               <h3>Developer Tools (Planned)
               <p>REPL, formatter, linter, IDE support, package manager

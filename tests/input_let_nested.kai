@@ -1,0 +1,7 @@
+// Test input with nested let bindings
+// expect-type: TString
+
+let userInput = input in 
+  let processed = "Processed: " ++ userInput in 
+    let final = processed ++ " (done)" in 
+      final

@@ -1,0 +1,7 @@
+// Test input with recursive let binding
+// expect-type: TString
+
+letrec greet = \name -> 
+  if name == "" then "Hello, stranger!" 
+  else "Hello, " ++ name ++ "!"
+in greet input

@@ -4,7 +4,7 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Status (v0.0.3.1)
+## Current Status (v0.0.3.2)
 
 The language currently supports a compact, expression‑only core with full test coverage.
 
@@ -15,25 +15,28 @@ Features available today:
 - **Booleans**: `and`, `or`, `not`
 - **Comparisons**: `==`, `<`, `>`
 - **Strings**: string literals (`"hello"`), concatenation (`++`), escapes (`\"`, `\\`, `\n`)
-- **Unit & printing**: `()` unit value; `print : a -> Unit` prints and returns `()`
+- **Unit & printing**: `()` unit value; `print : a -> Unit` prints and returns `()`; `input` reads a line of stdin and returns a string
 - **Conditionals**: `if cond then e1 else e2`
 - **Functions**: lambdas (`\x -> expr`), application (`f x`), closures
 - **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TFun` with unification and occurs check
+- **Type annotations**: Optional type annotations (`let x : Int = 42`, `\x : String -> expr`)
+- **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
+- **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`
+- **Pattern matching**: Case expressions for handling Maybe/Either and other data types
 - **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
-- **CLI**: parse and evaluate expressions or files with `--help` and `-e` options
+- **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default)
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
-- **Tests**: Hspec + QuickCheck (238 examples) — all passing with clear pass/fail indicators
+- **Tests**: Hspec + QuickCheck (266 examples) — all passing with comprehensive coverage including 27 input/conversion test files
+- **Working examples**: Interactive calculator demonstrating input, conversion functions, and tail recursion
 
-Current limitations: 
+Current limitations:
 
 - Limited to single-file scripts (no modules or imports)
 - No data structures for complex data manipulation (lists, maps, records)
-- No user type annotations yet; inference covers ints, bools, strings, and functions
-- Limited I/O (only print statements, no input or file operations)
+- Limited I/O (only print statements and stdin, no file operations)
 - No REPL for interactive experimentation
 - No standard library (even basic functions like `length`, `head`)
 - No error recovery (one parse error stops execution)
-- No way to handle errors gracefully
 
 ## Quickstart
 
@@ -49,9 +52,13 @@ stack test
 stack exec kai -- --help
 stack exec kai -- -e "\"hi\" ++ \"!\""
 stack exec kai -- -e "print (42 + 1)"
+stack exec kai -- --debug -e "42 + 1"
 
 ## Run a file
 stack exec kai path/to/script.kai
+
+## Try the interactive calculator
+stack exec kai examples/calculator.kai
 
 ## Website demo (intro page)
 stack exec kai-website  # visit http://localhost:3000
@@ -114,6 +121,28 @@ Lambdas and application:
 (\f -> f 10) (\n -> n * 2)  // => 20
 ```
 
+Interactive input and conversions:
+
+```kai
+let name = input in
+print ("Hello, " ++ name)
+
+let numStr = input in
+let num = parseInt numStr in
+print ("Double: " ++ toString (num * 2))
+```
+
+Type annotations and conversions:
+
+```kai
+let add : Int -> Int -> Int = \x : Int -> \y : Int -> x + y in
+add 5 (parseInt "10")
+
+show (42 + 3)        // => "45"
+toString 100         // => "100"
+parseInt "42"        // => 42
+```
+
 Type safety (checked before evaluation):
 
 ```kai
@@ -123,7 +152,7 @@ if 5 then 1 else 2  // Type error: ExpectedBool TInt
 
 ## Language Notes
 
-- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`).
+- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`).
 - Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
 - String concatenation uses `++` and is right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`.
 - Supported string escapes: `\"`, `\\`, `\n`. Unknown escapes are errors.

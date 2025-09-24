@@ -1,0 +1,7 @@
+// Test input with complex let binding expressions
+// expect-type: TString
+
+let name = input in
+  let greeting = "Hello" in
+    let punctuation = "!" in
+      greeting ++ ", " ++ name ++ punctuation

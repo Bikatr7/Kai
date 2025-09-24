@@ -1,0 +1,4 @@
+// Test input with function composition
+// expect-type: TString
+
+(\x -> (\y -> x ++ " and " ++ y) "world") input

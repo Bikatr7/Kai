@@ -8,6 +8,7 @@ import qualified ComparisonSpec
 import qualified ConditionalSpec
 import qualified EdgeCaseSpec
 import qualified IntegerOverflowSpec
+import qualified InputSpec
 import qualified LambdaSpec
 import qualified ParserSpec
 import qualified PropertyBasedSpec
@@ -26,6 +27,7 @@ main = hspec $ do
   ConditionalSpec.spec
   EdgeCaseSpec.spec
   IntegerOverflowSpec.spec
+  InputSpec.spec
   LambdaSpec.spec
   ParserSpec.spec
   PropertyBasedSpec.spec

@@ -1,0 +1,4 @@
+// Test input in conditional expressions
+// expect-type: TString
+
+if input == "yes" then "confirmed" else "denied"

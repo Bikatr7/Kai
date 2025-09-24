@@ -70,7 +70,7 @@ spec = describe "Boolean Logic Operations" $ do
       forAll (arbitrary :: Gen Int) $ \y ->
         let e1 = Eq (IntLit x) (IntLit y)
             e2 = Not e1
-        in case (eval e1, eval e2) of
+        in case (evalPure e1, evalPure e2) of
              (Right (VBool b1), Right (VBool b2)) -> b1 /= b2
              _ -> False
   
@@ -98,4 +98,4 @@ spec = describe "Boolean Logic Operations" $ do
 parseEvaluate :: String -> Either RuntimeError Value
 parseEvaluate input = case parseExpr input of
   Left _ -> Left (TypeError "Parse error")
-  Right expr -> eval expr
+  Right expr -> evalPure expr

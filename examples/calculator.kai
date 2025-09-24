@@ -1,0 +1,44 @@
+// Interactive Calculator with Tail Recursion - Kai v0.0.3.2
+// Loops until user chooses to exit
+
+letrec calculator = \dummy ->
+  let d1 = print "=== Kai Calculator ===" in
+  let d2 = print "1. Addition" in
+  let d3 = print "2. Subtraction" in  
+  let d4 = print "3. Multiplication" in
+  let d5 = print "4. Division" in
+  let d6 = print "5. Exit" in
+  let d7 = print "Choose option (1-5): " in
+  let choice = input in
+
+  if choice == "5" then
+    print "Goodbye! Thanks for using Kai Calculator!"
+  else
+    let d8 = print "Enter first number: " in
+    let num1 = parseInt input in
+    let d9 = print "Enter second number: " in
+    let num2 = parseInt input in
+    
+    let result = 
+      if choice == "1" then num1 + num2
+      else if choice == "2" then num1 - num2
+      else if choice == "3" then num1 * num2
+      else if choice == "4" then num1 / num2
+      else 0
+    in
+    
+    let operation = 
+      if choice == "1" then "Addition"
+      else if choice == "2" then "Subtraction"
+      else if choice == "3" then "Multiplication"  
+      else if choice == "4" then "Division"
+      else "Unknown Operation"
+    in
+    
+    let d10 = print ("" ++ operation ++ " Result: " ++ toString result) in
+    let d11 = print "Press Enter to continue..." in
+    let dummy = input in
+    calculator ()
+in
+
+calculator ()

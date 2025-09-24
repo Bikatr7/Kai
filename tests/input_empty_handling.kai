@@ -1,0 +1,4 @@
+// Test input with empty string and special handling
+// expect-type: TString
+
+if input == "" then "empty input detected" else input

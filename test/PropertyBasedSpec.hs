@@ -33,7 +33,7 @@ arbitraryExpr n = oneof
   , liftM2 Lt (arbitraryExpr n') (arbitraryExpr n')
   , liftM2 Gt (arbitraryExpr n') (arbitraryExpr n')
   , liftM3 If (arbitraryExpr n') (arbitraryExpr n') (arbitraryExpr n')
-  , Lambda <$> arbitraryVar <*> arbitraryExpr n'
+  , Lambda <$> arbitraryVar <*> pure Nothing <*> arbitraryExpr n'
   , liftM2 App (arbitraryExpr n') (arbitraryExpr n')
   ]
   where 
@@ -90,16 +90,16 @@ spec = describe "Property-Based Testing" $ do
     it "well-typed expressions don't crash evaluator" $ do
       property $ \(ValidExpr expr) ->
         case typeCheck expr of
-          Right _ -> case eval expr of
+          Right _ -> case evalPure expr of
             Right _ -> True
             Left _ -> True  -- Runtime errors are OK (like div by zero)
           Left _ -> True  -- Type errors are expected for some random expressions
     
     it "type preservation: evaluation preserves types" $ do
       property $ forAll (resize 3 arbitrary) $ \(ValidExpr expr) ->
-        case (typeCheck expr, eval expr) of
+        case (typeCheck expr, evalPure expr) of
           (Right TInt, Right (VInt _)) -> True
-          (Right TBool, Right (VBool _)) -> True  
+          (Right TBool, Right (VBool _)) -> True
           (Right (TFun _ _), Right VFun {}) -> True
           (Left _, _) -> True  -- Type errors are fine
           (_, Left _) -> True  -- Runtime errors are fine
@@ -107,10 +107,10 @@ spec = describe "Property-Based Testing" $ do
 
   describe "Arithmetic Properties" $ do
     it "addition is commutative" $ do
-      property $ \x y -> 
+      property $ \x y ->
         let expr1 = Add (IntLit x) (IntLit y)
             expr2 = Add (IntLit y) (IntLit x)
-        in case (eval expr1, eval expr2) of
+        in case (evalPure expr1, evalPure expr2) of
              (Right v1, Right v2) -> v1 == v2
              _ -> True  -- Errors are fine (overflow etc)
     
@@ -118,14 +118,14 @@ spec = describe "Property-Based Testing" $ do
       property $ \x y z ->
         let expr1 = Add (Add (IntLit x) (IntLit y)) (IntLit z)
             expr2 = Add (IntLit x) (Add (IntLit y) (IntLit z))
-        in case (eval expr1, eval expr2) of
+        in case (evalPure expr1, evalPure expr2) of
              (Right v1, Right v2) -> v1 == v2
              _ -> True
     
     it "multiplication by zero gives zero" $ do
       property $ \x ->
         let expr = Mul (IntLit x) (IntLit 0)
-        in case eval expr of
+        in case evalPure expr of
              Right (VInt 0) -> True
              _ -> False
 
@@ -133,20 +133,20 @@ spec = describe "Property-Based Testing" $ do
       property $ \x y ->
         let lhs = Sub (IntLit 0) (Add (IntLit x) (IntLit y))
             rhs = Add (Sub (IntLit 0) (IntLit x)) (Sub (IntLit 0) (IntLit y))
-        in eval lhs == eval rhs
+        in evalPure lhs == evalPure rhs
 
   describe "String Properties" $ do
     it "concatenation is associative" $ do
       property $ \(a :: String) (b :: String) (c :: String) ->
         let e1 = Concat (Concat (StrLit a) (StrLit b)) (StrLit c)
             e2 = Concat (StrLit a) (Concat (StrLit b) (StrLit c))
-        in eval e1 == eval e2
+        in evalPure e1 == evalPure e2
   describe "Boolean Logic Properties" $ do
     it "boolean logic follows De Morgan's laws" $ do
       property $ \p q ->
         let notPAndNotQ = And (Not (BoolLit p)) (Not (BoolLit q))
             notPOrQ = Not (Or (BoolLit p) (BoolLit q))
-        in case (eval notPAndNotQ, eval notPOrQ) of
+        in case (evalPure notPAndNotQ, evalPure notPOrQ) of
              (Right v1, Right v2) -> v1 == v2
              _ -> False
     
@@ -154,42 +154,42 @@ spec = describe "Property-Based Testing" $ do
       property $ \p q ->
         let expr1 = And (BoolLit p) (BoolLit q)
             expr2 = And (BoolLit q) (BoolLit p)
-        in case (eval expr1, eval expr2) of
+        in case (evalPure expr1, evalPure expr2) of
              (Right v1, Right v2) -> v1 == v2
              _ -> False
     
     it "double negation elimination" $ do
       property $ \p ->
         let expr = Not (Not (BoolLit p))
-        in case eval expr of
+        in case evalPure expr of
              Right (VBool result) -> result == p
              _ -> False
 
   describe "Function Properties" $ do
     it "identity function returns input" $ do
       property $ \(x :: Int) ->
-        let identity = Lambda "x" (Var "x")
+        let identity = Lambda "x" Nothing (Var "x")
             application = App identity (IntLit x)
-        in case eval application of
+        in case evalPure application of
              Right (VInt result) -> result == x
              _ -> False
     
     it "constant function ignores second argument" $ do
       property $ \x y ->
-        let constFunc = Lambda "x" (Lambda "y" (Var "x"))
+        let constFunc = Lambda "x" Nothing (Lambda "y" Nothing (Var "x"))
             application = App (App constFunc (IntLit x)) (IntLit y)
-        in case eval application of
+        in case evalPure application of
              Right (VInt result) -> result == x
              _ -> False
     
     it "function composition works correctly" $ do
       property $ \(x :: Int) ->
-        let f = Lambda "x" (Add (Var "x") (IntLit 1))  -- x + 1
-            g = Lambda "x" (Mul (Var "x") (IntLit 2))  -- x * 2
-            compose = Lambda "f" (Lambda "g" (Lambda "x" (App (Var "f") (App (Var "g") (Var "x")))))
+        let f = Lambda "x" Nothing (Add (Var "x") (IntLit 1))  -- x + 1
+            g = Lambda "x" Nothing (Mul (Var "x") (IntLit 2))  -- x * 2
+            compose = Lambda "f" Nothing (Lambda "g" Nothing (Lambda "x" Nothing (App (Var "f") (App (Var "g") (Var "x")))))
             composed = App (App compose f) g
             result = App composed (IntLit x)
-        in case eval result of
+        in case evalPure result of
              Right (VInt n) -> n == (x * 2) + 1
              _ -> False
 
@@ -197,14 +197,14 @@ spec = describe "Property-Based Testing" $ do
     it "if-then-else selects correct branch" $ do
       property $ \condition x y ->
         let expr = If (BoolLit condition) (IntLit x) (IntLit y)
-        in case eval expr of
+        in case evalPure expr of
              Right (VInt result) -> result == if condition then x else y
              _ -> False
     
     it "conditional with same branches returns that value" $ do
       property $ \condition (x :: Int) ->
         let expr = If (BoolLit condition) (IntLit x) (IntLit x)
-        in case eval expr of
+        in case evalPure expr of
              Right (VInt result) -> result == x
              _ -> False
 
@@ -218,8 +218,8 @@ spec = describe "Property-Based Testing" $ do
     
     it "evaluation errors are deterministic" $ do
       property $ forAll (resize 2 arbitrary) $ \(ValidExpr expr) ->
-        let result1 = eval expr
-            result2 = eval expr  
+        let result1 = evalPure expr
+            result2 = evalPure expr
         in result1 == result2
 
 -- Helper function to normalize expressions for comparison
@@ -242,5 +242,5 @@ prettyExpr (Eq a b)  = "(" ++ prettyExpr a ++ " == " ++ prettyExpr b ++ ")"
 prettyExpr (Lt a b)  = "(" ++ prettyExpr a ++ " < " ++ prettyExpr b ++ ")"
 prettyExpr (Gt a b)  = "(" ++ prettyExpr a ++ " > " ++ prettyExpr b ++ ")"
 prettyExpr (If c t e) = "(if " ++ prettyExpr c ++ " then " ++ prettyExpr t ++ " else " ++ prettyExpr e ++ ")"
-prettyExpr (Lambda p b) = "(\\" ++ p ++ " -> " ++ prettyExpr b ++ ")"
+prettyExpr (Lambda p _ b) = "(\\" ++ p ++ " -> " ++ prettyExpr b ++ ")"
 prettyExpr (App f x) = "(" ++ prettyExpr f ++ " " ++ prettyExpr x ++ ")"

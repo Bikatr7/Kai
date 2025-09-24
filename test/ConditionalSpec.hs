@@ -31,4 +31,4 @@ spec = describe "Conditional Expressions (if-then-else)" $ do
 parseEvaluate :: String -> Either RuntimeError Value
 parseEvaluate input = case parseExpr input of
   Left _ -> Left (TypeError "Parse error")
-  Right expr -> eval expr
+  Right expr -> evalPure expr

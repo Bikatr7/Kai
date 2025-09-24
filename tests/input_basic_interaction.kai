@@ -1,0 +1,4 @@
+// Test basic input reading and immediate use
+// expect-type: TString
+
+input

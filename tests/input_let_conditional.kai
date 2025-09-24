@@ -1,0 +1,5 @@
+// Test input with let binding in conditional
+// expect-type: TString
+
+let response = input in 
+  if response == "quit" then "Goodbye!" else "Hello, " ++ response

@@ -1,0 +1,4 @@
+// Test input with function application
+// expect-type: TString
+
+(\x -> "Processed: " ++ x) input

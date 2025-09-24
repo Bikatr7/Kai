@@ -36,7 +36,7 @@ parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
 keywords :: [String]
-keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print", "let", "letrec", "in"]
+keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print", "let", "letrec", "in", "input", "Int", "Bool", "String", "Unit", "parseInt", "toString", "show", "Maybe", "Either", "Just", "Nothing", "Left", "Right", "case", "of"]
 
 stringLit :: Parser String
 stringLit = lexeme $ char '"' *> many charChunk <* char '"'
@@ -86,6 +86,32 @@ identifier = lexeme $ do
     then fail $ "keyword " ++ show name ++ " cannot be used as identifier"
     else return name
 
+syntaxType :: Parser SyntaxType
+syntaxType = makeExprParser atomType typeOperatorTable
+  where
+    atomType = choice
+      [ STInt <$ symbol "Int"
+      , STBool <$ symbol "Bool"
+      , STString <$ symbol "String"
+      , STUnit <$ symbol "Unit"
+      , maybeType
+      , eitherType
+      , parens syntaxType
+      ]
+
+    maybeType = do
+      symbol "Maybe"
+      STMaybe <$> atomType
+
+    eitherType = do
+      symbol "Either"
+      t1 <- atomType
+      STEither t1 <$> atomType
+
+    typeOperatorTable =
+      [ [ InfixR (STFun <$ symbol "->") ]
+      ]
+
 -- Main expression parser
 expr :: Parser Expr
 expr = makeExprParser appExpr operatorTable
@@ -101,17 +127,27 @@ appExpr = do
 atom :: Parser Expr
 atom = choice
   [ IntLit <$> integer
-  , BoolLit <$> boolean  
+  , parens expr
+  , BoolLit <$> boolean
   , StrLit <$> stringLit
   , UnitLit <$ unit
   , printExpr
+  , inputExpr
+  , parseIntExpr
+  , toStringExpr
+  , showExpr
   , lambdaExpr
   , ifExpr
   , letRecExpr
   , letExpr
+  , caseExpr
+  , justExpr
+  , nothingExpr
+  , leftExpr
+  , rightExpr
   -- Use try so keywords like 'then', 'and', 'or' don't cause a consuming failure maybe?
   , try (Var <$> identifier)
-  , parens expr
+  , try typeAnnotationExpr
   ]
 
 -- Print expression: print expr
@@ -120,13 +156,47 @@ printExpr = do
   symbol "print"
   Print <$> expr
 
--- Lambda expression: \x -> expr
+-- Input expression: input
+inputExpr :: Parser Expr
+inputExpr = symbol "input" >> return Input
+
+-- Built-in conversion functions
+parseIntExpr :: Parser Expr
+parseIntExpr = do
+  symbol "parseInt"
+  ParseInt <$> expr
+
+toStringExpr :: Parser Expr
+toStringExpr = do
+  symbol "toString"
+  ToString <$> expr
+
+showExpr :: Parser Expr
+showExpr = do
+  symbol "show"
+  Show <$> expr
+
+-- Type annotation expression: (expr : Type)
+typeAnnotationExpr :: Parser Expr
+typeAnnotationExpr = do
+  symbol "("
+  e <- expr
+  symbol ":"
+  t <- syntaxType
+  symbol ")"
+  return $ TypeAnnotation e t
+
+-- Lambda expression: \x -> expr or \x : Type -> expr
 lambdaExpr :: Parser Expr
 lambdaExpr = do
   symbol "\\"
   param <- identifier
+  maybeType <- optional $ do
+    symbol ":"
+    syntaxType
   symbol "->"
-  Lambda param <$> expr
+  Lambda param maybeType <$> expr
+
 
 -- If-then-else expression
 ifExpr :: Parser Expr
@@ -138,25 +208,31 @@ ifExpr = do
   symbol "else"
   If cond thenExpr <$> expr
 
--- Let expression: let x = val in expr
+-- Let expression: let x = val in expr or let x : Type = val in expr
 letExpr :: Parser Expr
 letExpr = do
   symbol "let"
   var <- identifier
+  maybeType <- optional $ do
+    symbol ":"
+    syntaxType
   symbol "="
   val <- expr
   symbol "in"
-  Let var val <$> expr
+  Let var maybeType val <$> expr
 
--- LetRec expression: letrec x = val in expr
+-- LetRec expression: letrec x = val in expr or letrec x : Type = val in expr
 letRecExpr :: Parser Expr
 letRecExpr = do
   symbol "letrec"
   var <- identifier
+  maybeType <- optional $ do
+    symbol ":"
+    syntaxType
   symbol "="
   val <- expr
   symbol "in"
-  LetRec var val <$> expr
+  LetRec var maybeType val <$> expr
 
 -- Operator precedence table (Haskell-aligned, function application handled separately)
 operatorTable :: [[Operator Parser Expr]]
@@ -219,3 +295,71 @@ parseFile = parse (sc *> expr <* eof)
 -- Parse statements from file
 parseFileStatements :: String -> String -> Either (ParseErrorBundle String Void) [Expr]
 parseFileStatements = parse (sc *> statements <* eof)
+
+-- Maybe/Either constructors
+justExpr :: Parser Expr
+justExpr = do
+  symbol "Just"
+  MJust <$> expr
+
+nothingExpr :: Parser Expr
+nothingExpr = symbol "Nothing" >> return MNothing
+
+leftExpr :: Parser Expr
+leftExpr = do
+  symbol "Left"
+  ELeft <$> expr
+
+rightExpr :: Parser Expr
+rightExpr = do
+  symbol "Right"
+  ERight <$> expr
+
+-- Case expression: case expr of pattern -> expr | pattern -> expr
+caseExpr :: Parser Expr
+caseExpr = do
+  symbol "case"
+  scrutinee <- expr
+  symbol "of"
+  patterns <- sepBy1 casePattern (symbol "|")
+  return $ Case scrutinee patterns
+
+-- Pattern in case expression
+casePattern :: Parser (Pattern, Expr)
+casePattern = do
+  pat <- pattern
+  symbol "->"
+  expr <- expr
+  return (pat, expr)
+
+-- Pattern parser
+pattern :: Parser Pattern
+pattern = choice
+  [ PInt <$> integer
+  , PBool <$> boolean
+  , PStr <$> stringLit
+  , PUnit <$ unit
+  , justPattern
+  , nothingPattern
+  , leftPattern
+  , rightPattern
+  , PVar <$> identifier
+  ]
+
+justPattern :: Parser Pattern
+justPattern = do
+  symbol "Just"
+  PJust <$> pattern
+
+nothingPattern :: Parser Pattern
+nothingPattern = symbol "Nothing" >> return PNothing
+
+leftPattern :: Parser Pattern
+leftPattern = do
+  symbol "Left"
+  PLeft <$> pattern
+
+rightPattern :: Parser Pattern
+rightPattern = do
+  symbol "Right"
+  PRight <$> pattern

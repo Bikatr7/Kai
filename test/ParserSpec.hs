@@ -79,17 +79,17 @@ spec = describe "Parser Tests" $ do
   
   describe "Lambda Parsing" $ do
     it "parses simple lambda" $ do
-      parseExpr "\\x -> x" `shouldBe` Right (Lambda "x" (Var "x"))
+      parseExpr "\\x -> x" `shouldBe` Right (Lambda "x" Nothing (Var "x"))
     
     it "parses lambda with expression body" $ do
-      parseExpr "\\x -> x + 1" `shouldBe` Right (Lambda "x" (Add (Var "x") (IntLit 1)))
+      parseExpr "\\x -> x + 1" `shouldBe` Right (Lambda "x" Nothing (Add (Var "x") (IntLit 1)))
   
   describe "Function Application Parsing" $ do
     it "parses simple application" $ do
       parseExpr "f x" `shouldBe` Right (App (Var "f") (Var "x"))
     
     it "parses lambda application" $ do
-      parseExpr "(\\x -> x) 5" `shouldBe` Right (App (Lambda "x" (Var "x")) (IntLit 5))
+      parseExpr "(\\x -> x) 5" `shouldBe` Right (App (Lambda "x" Nothing (Var "x")) (IntLit 5))
   
   describe "Conditional Parsing" $ do
     it "parses if-then-else" $ do

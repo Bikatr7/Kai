@@ -13,7 +13,7 @@ parseTypeCheckEval input = case parseExpr input of
   Left parseErr -> Left $ "Parse error: " ++ show parseErr
   Right expr -> case typeCheck expr of
     Left typeErr -> Left $ "Type error: " ++ show typeErr
-    Right _ -> case eval expr of
+    Right _ -> case evalPure expr of
       Left runtimeErr -> Left $ "Runtime error: " ++ show runtimeErr
       Right value -> Right value
 
@@ -121,7 +121,7 @@ spec = describe "Stress Tests" $ do
     it "handles mathematical expression with precedence" $ do
       let mathExpr = "((2 + 3) * 4 - 1) * ((7 + 8) / 3) + (5 * (6 - 2))"
       case parseTypeCheckEval mathExpr of
-        Right (VInt result) -> result `shouldBe` (((2 + 3) * 4 - 1) * ((7 + 8) `div` 3) + (5 * (6 - 2)))
+        Right (VInt result) -> result `shouldBe` (5 * 4 - 1) * (15 `div` 3) + (5 * 4)
         Left err -> expectationFailure $ "Math expression should work: " ++ err
         Right _ -> expectationFailure "Should return VInt"
     

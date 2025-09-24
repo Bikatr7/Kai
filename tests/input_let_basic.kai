@@ -1,0 +1,4 @@
+// Test input with basic let binding
+// expect-type: TString
+
+let userInput = input in "You said: " ++ userInput

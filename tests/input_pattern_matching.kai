@@ -1,0 +1,8 @@
+// Test input with pattern-like matching using nested conditionals
+// expect-type: TString
+
+let command = input in
+  if command == "help" then "Available commands: help, quit, status"
+  else if command == "quit" then "Goodbye!"
+  else if command == "status" then "System OK"
+  else "Unknown command: " ++ command

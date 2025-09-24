@@ -1,0 +1,4 @@
+// Test input with various string operations
+// expect-type: TString
+
+"User typed: " ++ input ++ " (end)"

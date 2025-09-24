@@ -1,0 +1,4 @@
+// Test input with complex boolean logic
+// expect-type: TBool
+
+(input == "yes") and not (input == "no")

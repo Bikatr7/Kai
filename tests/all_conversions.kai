@@ -1,0 +1,3 @@
+// Test all conversion functions together
+// expect: "20"
+case parseInt "10" of Just a -> case parseInt "10" of Just b -> toString (a + b) | Nothing -> "0" | Nothing -> "0"
