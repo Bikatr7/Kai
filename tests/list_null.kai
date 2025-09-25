@@ -1,0 +1,2 @@
+// expect: false
+null([1, 2, 3])

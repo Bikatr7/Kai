@@ -35,8 +35,14 @@ symbol = L.symbol sc
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
+braces :: Parser a -> Parser a
+braces = between (symbol "{") (symbol "}")
+
+brackets :: Parser a -> Parser a
+brackets = between (symbol "[") (symbol "]")
+
 keywords :: [String]
-keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print", "let", "letrec", "in", "input", "Int", "Bool", "String", "Unit", "parseInt", "toString", "show", "Maybe", "Either", "Just", "Nothing", "Left", "Right", "case", "of"]
+keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print", "let", "letrec", "in", "input", "Int", "Bool", "String", "Unit", "parseInt", "toString", "show", "Maybe", "Either", "Just", "Nothing", "Left", "Right", "case", "of", "head", "tail", "null"]
 
 stringLit :: Parser String
 stringLit = lexeme $ char '"' *> many charChunk <* char '"'
@@ -96,6 +102,8 @@ syntaxType = makeExprParser atomType typeOperatorTable
       , STUnit <$ symbol "Unit"
       , maybeType
       , eitherType
+      , listType
+      , recordType
       , parens syntaxType
       ]
 
@@ -108,34 +116,56 @@ syntaxType = makeExprParser atomType typeOperatorTable
       t1 <- atomType
       STEither t1 <$> atomType
 
-    typeOperatorTable =
-      [ [ InfixR (STFun <$ symbol "->") ]
-      ]
+    listType = STList <$> brackets syntaxType
+
+    recordType = STRecord <$> braces (sepBy recordTypeField (symbol ","))
+
+    recordTypeField = do
+      name <- identifier
+      symbol ":"
+      ty <- syntaxType
+      return (name, ty)
+
+    typeOperatorTable = [ [ InfixR (STFun <$ symbol "->") ] ]
 
 -- Main expression parser
 expr :: Parser Expr
 expr = makeExprParser appExpr operatorTable
 
--- Function application (higher precedence than operators)
+-- Function application and record access (higher precedence than operators)
 appExpr :: Parser Expr
 appExpr = do
   first <- atom
-  rest <- many atom
-  return $ foldl App first rest
+  rest <- many (recordAccess <|> application)
+  return $ foldl (flip ($)) first rest
+
+recordAccess :: Parser (Expr -> Expr)
+recordAccess = do
+  symbol "."
+  field <- identifier
+  return (\e -> RecordAccess e field)
+
+application :: Parser (Expr -> Expr)
+application = do
+  arg <- atom
+  return (\e -> App e arg)
 
 -- Atomic expressions
 atom :: Parser Expr
 atom = choice
-  [ IntLit <$> integer
-  , parens expr
+  [ UnitLit <$ unit
+  , IntLit <$> integer
+  , try (parens expr)
   , BoolLit <$> boolean
   , StrLit <$> stringLit
-  , UnitLit <$ unit
   , printExpr
   , inputExpr
   , parseIntExpr
   , toStringExpr
   , showExpr
+  , headExpr
+  , tailExpr
+  , nullExpr
   , lambdaExpr
   , ifExpr
   , letRecExpr
@@ -145,7 +175,8 @@ atom = choice
   , nothingExpr
   , leftExpr
   , rightExpr
-  -- Use try so keywords like 'then', 'and', 'or' don't cause a consuming failure maybe?
+  , try listLitExpr
+  , try recordLitExpr
   , try (Var <$> identifier)
   , try typeAnnotationExpr
   ]
@@ -175,6 +206,31 @@ showExpr :: Parser Expr
 showExpr = do
   symbol "show"
   Show <$> expr
+
+-- List functions
+headExpr :: Parser Expr
+headExpr = symbol "head" >> Head <$> expr
+
+tailExpr :: Parser Expr
+tailExpr = symbol "tail" >> Tail <$> expr
+
+nullExpr :: Parser Expr
+nullExpr = symbol "null" >> Null <$> expr
+
+-- List literal
+listLitExpr :: Parser Expr
+listLitExpr = ListLit <$> brackets (sepBy expr (symbol ","))
+
+-- Record literal
+recordLitExpr :: Parser Expr
+recordLitExpr = RecordLit <$> braces (sepBy recordField (symbol ","))
+
+recordField :: Parser (String, Expr)
+recordField = do
+  name <- identifier
+  symbol "="
+  e <- expr
+  return (name, e)
 
 -- Type annotation expression: (expr : Type)
 typeAnnotationExpr :: Parser Expr
@@ -248,14 +304,14 @@ operatorTable =
   , [ InfixL (Add <$ try (char '+' <* notFollowedBy (char '+') <* sc))
     , InfixL (Sub <$ symbol "-")
     ]
-  , [ InfixR (symbol "++" >> return Concat)  -- right-assoc like Haskell
-    ]
+  , [ InfixR (Cons <$ symbol "::") ]
+  , [ InfixR (Concat <$ symbol "++") ]
   , [ InfixN (Lt <$ symbol "<")
     , InfixN (Gt <$ symbol ">")
     , InfixN (Eq <$ symbol "==")
     ]
-  , [ InfixR (And <$ symbol "and") ]  -- right-assoc like Haskell &&
-  , [ InfixR (Or <$ symbol "or") ]    -- right-assoc like Haskell ||
+  , [ InfixR (And <$ symbol "and") ]
+  , [ InfixR (Or <$ symbol "or") ]
   ]
 
 -- Parse expression from string
@@ -334,7 +390,10 @@ casePattern = do
 
 -- Pattern parser
 pattern :: Parser Pattern
-pattern = choice
+pattern = makeExprParser patternTerm patternOperatorTable
+
+patternTerm :: Parser Pattern
+patternTerm = choice
   [ PInt <$> integer
   , PBool <$> boolean
   , PStr <$> stringLit
@@ -344,12 +403,16 @@ pattern = choice
   , leftPattern
   , rightPattern
   , PVar <$> identifier
+  , parens pattern
   ]
+
+patternOperatorTable :: [[Operator Parser Pattern]]
+patternOperatorTable = [ [ InfixR (PCons <$ symbol "::") ] ]
 
 justPattern :: Parser Pattern
 justPattern = do
   symbol "Just"
-  PJust <$> pattern
+  PJust <$> patternTerm
 
 nothingPattern :: Parser Pattern
 nothingPattern = symbol "Nothing" >> return PNothing
@@ -357,9 +420,22 @@ nothingPattern = symbol "Nothing" >> return PNothing
 leftPattern :: Parser Pattern
 leftPattern = do
   symbol "Left"
-  PLeft <$> pattern
+  PLeft <$> patternTerm
 
 rightPattern :: Parser Pattern
 rightPattern = do
   symbol "Right"
-  PRight <$> pattern
+  PRight <$> patternTerm
+
+listPattern :: Parser Pattern
+listPattern = PList <$> brackets (sepBy pattern (symbol ","))
+
+recordPattern :: Parser Pattern
+recordPattern = PRecord <$> braces (sepBy recordPatternField (symbol ","))
+
+recordPatternField :: Parser (String, Pattern)
+recordPatternField = do
+  name <- identifier
+  symbol "="
+  p <- pattern
+  return (name, p)

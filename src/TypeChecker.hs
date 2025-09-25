@@ -16,6 +16,8 @@ data Type
   | TVar String  -- Type variables for inference
   | TMaybe Type  -- Maybe type for optional values
   | TEither Type Type  -- Either type for error handling
+  | TList Type
+  | TRecord (Map.Map String Type)
   deriving (Show, Eq)
 
 type TypeEnv = Map.Map String Type
@@ -31,6 +33,8 @@ syntaxTypeToType STUnit = TUnit
 syntaxTypeToType (STFun t1 t2) = TFun (syntaxTypeToType t1) (syntaxTypeToType t2)
 syntaxTypeToType (STMaybe t) = TMaybe (syntaxTypeToType t)
 syntaxTypeToType (STEither t1 t2) = TEither (syntaxTypeToType t1) (syntaxTypeToType t2)
+syntaxTypeToType (STList t) = TList (syntaxTypeToType t)
+syntaxTypeToType (STRecord fields) = TRecord (Map.fromList (map (\(s, t) -> (s, syntaxTypeToType t)) fields))
 
 data TypeError
   = TypeMismatch Type Type
@@ -40,6 +44,7 @@ data TypeError
   | UnboundVariable String
   | InfiniteType String Type
   | UnificationError Type Type
+  | RecordFieldMismatch String
   deriving (Show, Eq)
 
 -- Type inference monad
@@ -60,6 +65,8 @@ applySubst sub (TVar name) = case Map.lookup name sub of
 applySubst sub (TFun t1 t2) = TFun (applySubst sub t1) (applySubst sub t2)
 applySubst sub (TMaybe t) = TMaybe (applySubst sub t)
 applySubst sub (TEither t1 t2) = TEither (applySubst sub t1) (applySubst sub t2)
+applySubst sub (TList t) = TList (applySubst sub t)
+applySubst sub (TRecord fields) = TRecord (Map.map (applySubst sub) fields)
 applySubst _ t = t
 
 -- Apply substitution to type environment
@@ -86,6 +93,8 @@ freeTypeVars (TVar name) = Set.singleton name
 freeTypeVars (TFun t1 t2) = freeTypeVars t1 `Set.union` freeTypeVars t2
 freeTypeVars (TMaybe t) = freeTypeVars t
 freeTypeVars (TEither t1 t2) = freeTypeVars t1 `Set.union` freeTypeVars t2
+freeTypeVars (TList t) = freeTypeVars t
+freeTypeVars (TRecord fields) = Set.unions (map freeTypeVars (Map.elems fields))
 freeTypeVars _ = Set.empty
 
 -- Get free type variables in type environment
@@ -98,6 +107,8 @@ occurs name (TVar name') = name == name'
 occurs name (TFun t1 t2) = occurs name t1 || occurs name t2
 occurs name (TMaybe t) = occurs name t
 occurs name (TEither t1 t2) = occurs name t1 || occurs name t2
+occurs name (TList t) = occurs name t
+occurs name (TRecord fields) = any (occurs name) (Map.elems fields)
 occurs _ _ = False
 
 -- Unification algorithm
@@ -120,6 +131,18 @@ unify (TEither a1 b1) (TEither a2 b2) = do
   s1 <- unify a1 a2
   s2 <- unify (applySubst s1 b1) (applySubst s1 b2)
   return $ composeSubst s2 s1
+unify (TList t1) (TList t2) = unify t1 t2
+unify (TRecord f1) (TRecord f2) = do
+    if Map.keys f1 /= Map.keys f2
+        then Left $ UnificationError (TRecord f1) (TRecord f2)
+        else do
+            let subs = Map.intersectionWith unify f1 f2
+            let errors = [e | Left e <- Map.elems subs]
+            if not (null errors)
+                then Left (head errors)
+                else do
+                    let successes = [s | Right s <- Map.elems subs]
+                    return $ composeSubstList successes
 unify t1 t2 = Left $ UnificationError t1 t2
 
 -- Main type inference function
@@ -169,10 +192,15 @@ infer env (Div e1 e2) = do
 infer env (Concat e1 e2) = do
   (s1, t1) <- infer env e1
   (s2, t2) <- infer env e2
-  s3 <- lift $ unify (applySubst s2 t1) TString
-  s4 <- lift $ unify (applySubst s3 t2) TString
-  let finalSubst = composeSubstList [s1, s2, s3, s4]
-  return (finalSubst, TString)
+  -- Check if both types are strings
+  s3 <- lift $ unify (applySubst s2 t1) (applySubst s2 t2)
+  case applySubst s3 t1 of
+    -- String concatenation
+    TString -> return (s3, TString)
+    -- List concatenation
+    TList _ -> return (s3, applySubst s3 t1)
+    -- Other types not supported
+    _ -> lift $ throwError $ UnificationError (applySubst s3 t1) (applySubst s3 t2)
 
 infer env (Print e) = do
   (s, _) <- infer env e
@@ -324,6 +352,58 @@ infer env (ERight e) = do
   tyVar <- freshTVar
   return (s, TEither tyVar eType)
 
+infer env (ListLit es) = do
+    elemType <- freshTVar
+    subs <- forM es (\e -> do
+        (s, t) <- infer env e
+        s' <- lift $ unify t elemType
+        return (composeSubst s' s))
+    let finalSubst = composeSubstList subs
+    return (finalSubst, TList (applySubst finalSubst elemType))
+
+infer env (Cons h t) = do
+    (s1, hType) <- infer env h
+    (s2, tType) <- infer env t
+    s3 <- lift $ unify (applySubst s2 tType) (TList (applySubst s2 hType))
+    let finalSubst = composeSubstList [s1, s2, s3]
+    return (finalSubst, applySubst s3 tType)
+
+infer env (Head e) = do
+    (s, eType) <- infer env e
+    elemType <- freshTVar
+    s' <- lift $ unify eType (TList elemType)
+    let finalSubst = composeSubst s' s
+    return (finalSubst, applySubst finalSubst elemType)
+
+infer env (Tail e) = do
+    (s, eType) <- infer env e
+    elemType <- freshTVar
+    s' <- lift $ unify eType (TList elemType)
+    let finalSubst = composeSubst s' s
+    return (finalSubst, applySubst finalSubst eType)
+
+infer env (Null e) = do
+    (s, eType) <- infer env e
+    elemType <- freshTVar
+    s' <- lift $ unify eType (TList elemType)
+    let finalSubst = composeSubst s' s
+    return (finalSubst, TBool)
+
+infer env (RecordLit fields) = do
+    let inferField (name, e) = do
+            (s, t) <- infer env e
+            return (s, (name, t))
+    (subs, typedFields) <- unzip <$> mapM inferField fields
+    let finalSubst = composeSubstList subs
+    return (finalSubst, TRecord (Map.fromList (map (\(n, t) -> (n, applySubst finalSubst t)) typedFields)))
+
+infer env (RecordAccess r field) = do
+    (s, rType) <- infer env r
+    fieldType <- freshTVar
+    s' <- lift $ unify rType (TRecord (Map.singleton field fieldType))
+    let finalSubst = composeSubst s' s
+    return (finalSubst, applySubst finalSubst fieldType)
+
 -- Case expression
 infer env (Case scrutinee patterns) = do
   (s1, scrutType) <- infer env scrutinee
@@ -378,6 +458,30 @@ inferPattern (PRight pat) ty = do
   s1 <- lift $ unify ty (TEither tyVar1 tyVar2)
   (s2, env) <- inferPattern pat (applySubst s1 tyVar2)
   return (composeSubst s2 s1, env)
+inferPattern (PList []) ty = do
+    elemType <- freshTVar
+    s <- lift $ unify ty (TList elemType)
+    return (s, Map.empty)
+inferPattern (PList pats) ty = do
+    elemType <- freshTVar
+    s1 <- lift $ unify ty (TList elemType)
+    let inferPat p = inferPattern p elemType
+    (subs, envs) <- unzip <$> mapM inferPat pats
+    return (composeSubstList (s1:subs), Map.unions envs)
+inferPattern (PCons h t) ty = do
+    elemType <- freshTVar
+    s1 <- lift $ unify ty (TList elemType)
+    (s2, hEnv) <- inferPattern h elemType
+    (s3, tEnv) <- inferPattern t (TList elemType)
+    return (composeSubstList [s1, s2, s3], Map.union hEnv tEnv)
+inferPattern (PRecord fields) ty = do
+    let inferField (name, p) = do
+            fieldType <- freshTVar
+            (s, env) <- inferPattern p fieldType
+            return (s, env, (name, fieldType))
+    (subs, envs, typedFields) <- unzip3 <$> mapM inferField fields
+    s' <- lift $ unify ty (TRecord (Map.fromList typedFields))
+    return (composeSubstList (s':subs), Map.unions envs)
 
 -- Public interface
 typeCheck :: Expr -> Either TypeError Type

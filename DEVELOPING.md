@@ -4,10 +4,10 @@ This document helps contributors work on Kai’s codebase efficiently.
 
 ## Architecture Overview
 
-- `src/Syntax.hs`: AST for expressions (`Expr`) with optional type annotations. Includes literals, variables, arithmetic, booleans, comparisons, strings, `print`, `input`, conversion functions, lambdas, application, `let`, and `letrec`, plus type annotation expressions.
+- `src/Syntax.hs`: AST for expressions (`Expr`) with optional type annotations. Includes literals, variables, arithmetic, booleans, comparisons, strings, lists, records, Maybe/Either types, `print`, `input`, conversion functions, lambdas, application, `let`, `letrec`, case expressions, and type annotation expressions.
 - `src/Parser.hs`: Megaparsec parser with performance optimizations for deeply nested expressions. Handles comments, precedence/associativity, unary minus, string escapes (`\"`, `\\`, `\n`), type annotations, and multi-statement parsing.
-- `src/TypeChecker.hs`: Hindley–Milner type inference with unification, occurs check, and substitution composition optimization. Core types: `TInt`, `TBool`, `TString`, `TUnit`, and `TFun`.
-- `src/Evaluator.hs`: Strict evaluator with closures and IO support. Runtime values: `VInt`, `VBool`, `VStr`, `VUnit`, `VFun`. Supports `print`, `input`, and conversion functions.
+- `src/TypeChecker.hs`: Hindley–Milner type inference with unification, occurs check, and substitution composition optimization. Core types: `TInt`, `TBool`, `TString`, `TUnit`, `TFun`, `TList`, `TRecord`, `TMaybe`, and `TEither`.
+- `src/Evaluator.hs`: Strict evaluator with closures and IO support. Runtime values: `VInt`, `VBool`, `VStr`, `VUnit`, `VFun`, `VList`, `VRecord`, `VMaybe`, `VEither`. Supports `print`, `input`, conversion functions, and list operations.
 - `src/Main.hs`: CLI entry (`kai`). Parses input, type-checks, and evaluates; supports `-e`, `--debug` flag, and file execution with clean output by default.
 - `website/`: Yesod-based static site generator used for the project website/demo.
 
@@ -23,13 +23,15 @@ This document helps contributors work on Kai’s codebase efficiently.
 - Strings: escapes `\"`, `\\`, `\n`. Unknown escapes are errors with a helpful message.
 - Precedence (highest to lowest):
   1) application (left)
-  2) prefix `not`, unary `-`
-  3) `*`, `/` (left)
-  4) `+`, `-` (left)
-  5) `++` (right)
-  6) `<`, `>`, `==` (non)
-  7) `and` (right)
-  8) `or` (right)
+  2) field access `.field` (left)
+  3) prefix `not`, unary `-`
+  4) `*`, `/` (left)
+  5) `+`, `-` (left)
+  6) `::` cons (right)
+  7) `++` concatenation (right)
+  8) `<`, `>`, `==` (non)
+  9) `and` (right)
+  10) `or` (right)
 
 Notes:
 - `+` is disambiguated from `++` in the lexer to ensure `++` parses correctly at its precedence.
@@ -40,7 +42,7 @@ Notes:
 Prereqs: Stack + GHC.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 263 tests including 24 input test files)
+- Tests: `stack test --fast` (all 284 tests including 27 input test files)
 - Run CLI: `stack exec kai -- --help`
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
 - Try interactive calculator: `stack exec kai examples/calculator.kai`

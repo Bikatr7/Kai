@@ -3,7 +3,7 @@
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
 **Version**: 0.0.3.2
-**Last Updated**: 2025-01-24
+**Last Updated**: 2025-09-24
 
 ## Table of Contents
 
@@ -59,7 +59,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - Cannot be reserved keywords
 
 ### Reserved Keywords
-`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`
+`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`
 
 ## Types
 
@@ -70,6 +70,10 @@ Kai has a static type system with the following base types:
 - `Bool`: Boolean values (`true` or `false`)
 - `String`: String values with escape sequence support
 - `Unit`: Unit type with single value `()`
+
+### Composite Types
+- `[T]`: List of type T (e.g., `[Int]`, `[String]`)
+- `{field1: T1, field2: T2, ...}`: Record with named fields
 
 ### Error Handling Types
 - `Maybe T`: Optional values: `Just value` or `Nothing`
@@ -107,6 +111,19 @@ All constructs in Kai are expressions that evaluate to values.
 ### String Operations
 - `++` (concatenation, right-associative)
 
+### List Operations
+- `[elem1, elem2, ...]` - list literals
+- `++` - list concatenation (right-associative)
+- `::` - cons operator (right-associative): `elem :: list`
+- `head list` - first element
+- `tail list` - list without first element
+- `null list` - check if list is empty
+
+### Record Operations
+- `{field1 = val1, field2 = val2, ...}` - record literals
+- `record.field` - field access
+- `==` - structural equality
+
 ### Conditional Expressions
 ```kai
 if condition then expr1 else expr2
@@ -122,6 +139,9 @@ case expression of pattern -> expr | pattern -> expr
 - `Nothing` - matches empty Maybe
 - `Left x` - matches Either left values
 - `Right x` - matches Either right values
+- `[]` - matches empty list
+- `x :: xs` - matches non-empty list (head and tail)
+- `{field1 = pattern1, field2 = pattern2, ...}` - matches records
 
 **Example**:
 ```kai
@@ -195,9 +215,16 @@ Kai uses Hindley-Milner type inference:
 
 ### Type Conversion Functions
 ```kai
-parseInt : String -> Int     // "42" -> 42
-toString : Int -> String     // 42 -> "42"
-show : a -> String          // Any value to string representation
+parseInt : String -> Maybe Int  // "42" -> Just 42, "abc" -> Nothing
+toString : Int -> String        // 42 -> "42"
+show : a -> String             // Any value to string representation
+```
+
+### List Functions
+```kai
+head : [a] -> a            // First element (runtime error if empty)
+tail : [a] -> [a]          // List without first element
+null : [a] -> Bool         // Check if list is empty
 ```
 
 ### I/O Functions
@@ -271,23 +298,25 @@ print ("Hello, " ++ name)
 From highest to lowest precedence:
 
 1. **Function Application** (left-associative)
-2. **Prefix Operators**: `not`, unary `-`
-3. **Multiplicative**: `*`, `/` (left-associative)
-4. **Additive**: `+`, `-` (left-associative)
-5. **Concatenation**: `++` (right-associative)
-6. **Comparison**: `==`, `<`, `>` (non-associative)
-7. **Logical AND**: `and` (right-associative)
-8. **Logical OR**: `or` (right-associative)
+2. **Field Access**: `.field` (left-associative)
+3. **Prefix Operators**: `not`, unary `-`
+4. **Multiplicative**: `*`, `/` (left-associative)
+5. **Additive**: `+`, `-` (left-associative)
+6. **Cons**: `::` (right-associative)
+7. **Concatenation**: `++` (right-associative)
+8. **Comparison**: `==`, `<`, `>` (non-associative)
+9. **Logical AND**: `and` (right-associative)
+10. **Logical OR**: `or` (right-associative)
 
 ## Language Limitations (Current)
 
 - **Single-file scripts**: No module system or imports
-- **Limited data structures**: No lists, records, or algebraic data types
-- **No pattern matching**: Only conditional expressions
 - **Basic I/O**: No file operations, only stdin/stdout
 - **No error recovery**: Single parse/type error stops execution
 - **No REPL**: Command-line only execution
-- **No standard library**: Only built-in conversion functions
+- **Limited standard library**: Only built-in conversion and list functions
+- **No custom data types**: Only built-in lists, records, Maybe, Either
+- **No polymorphic recursion**: Type inference limitations with complex recursive types
 
 ## Grammar Summary
 
@@ -297,6 +326,7 @@ Program ::= Expr
 Expr ::= 'let' Ident (':' Type)? '=' Expr 'in' Expr
        | 'letrec' Ident (':' Type)? '=' Expr 'in' Expr
        | 'if' Expr 'then' Expr 'else' Expr
+       | 'case' Expr 'of' Pattern '->' Expr ('|' Pattern '->' Expr)*
        | '\' Ident (':' Type)? '->' Expr
        | '(' Expr ':' Type ')'
        | OrExpr
@@ -304,17 +334,31 @@ Expr ::= 'let' Ident (':' Type)? '=' Expr 'in' Expr
 OrExpr ::= OrExpr 'or' AndExpr | AndExpr
 AndExpr ::= AndExpr 'and' CmpExpr | CmpExpr
 CmpExpr ::= AddExpr ('==' | '<' | '>') AddExpr | AddExpr
-AddExpr ::= AddExpr ('+' | '-') ConcatExpr | ConcatExpr
+AddExpr ::= AddExpr ('+' | '-') ConsExpr | ConsExpr
+ConsExpr ::= ConcatExpr ('::' ConsExpr)? | ConcatExpr
 ConcatExpr ::= ConcatExpr '++' MulExpr | MulExpr
 MulExpr ::= MulExpr ('*' | '/') UnaryExpr | UnaryExpr
 UnaryExpr ::= ('not' | '-') UnaryExpr | AppExpr
-AppExpr ::= AppExpr Atom | Atom
+AppExpr ::= AppExpr ('.' Ident | Atom) | Atom
 
-Atom ::= Integer | Boolean | String | '(' Expr ')'
-       | Ident | '()' | 'input'
+Atom ::= Integer | Boolean | String | ListLit | RecordLit
+       | '(' Expr ')' | Ident | '()' | 'input'
        | 'print' | 'parseInt' | 'toString' | 'show'
+       | 'head' | 'tail' | 'null'
+       | 'Just' | 'Nothing' | 'Left' | 'Right'
+
+ListLit ::= '[' (Expr (',' Expr)*)? ']'
+RecordLit ::= '{' (Ident '=' Expr (',' Ident '=' Expr)*)? '}'
+
+Pattern ::= Integer | Boolean | String | '()' | Ident
+          | 'Just' Pattern | 'Nothing'
+          | 'Left' Pattern | 'Right' Pattern
+          | '[' ']' | Pattern '::' Pattern
+          | '{' (Ident '=' Pattern (',' Ident '=' Pattern)*)? '}'
 
 Type ::= 'Int' | 'Bool' | 'String' | 'Unit'
+       | '[' Type ']' | '{' (Ident ':' Type (',' Ident ':' Type)*)? '}'
+       | 'Maybe' Type | 'Either' Type Type
        | Type '->' Type | '(' Type ')'
 
 Ident ::= [a-zA-Z][a-zA-Z0-9_]*

@@ -18,6 +18,7 @@ import qualified StressTestSpec
 import qualified TypeErrorSpec
 import qualified TypeInferenceSpec
 import qualified UnificationSpec
+import qualified DataStructureSpec
 
 main :: IO ()
 main = hspec $ do
@@ -38,3 +39,4 @@ main = hspec $ do
   TypeErrorSpec.spec
   TypeInferenceSpec.spec
   UnificationSpec.spec
+  DataStructureSpec.spec

@@ -1,0 +1,2 @@
+// expect: true
+let r = {a = 1, b = true} in r.b

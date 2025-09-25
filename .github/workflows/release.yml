@@ -118,12 +118,43 @@ jobs:
               echo "Running test: $test_file"
 
               if [[ "$test_file" == tests/input* ]]; then
-                TEST_INPUT="test_input"
-                if ! echo "$TEST_INPUT" | ./dist/$BINARY_NAME "$test_file" >/dev/null 2>&1; then
-                  echo "❌ FAILED: $test_file (with input: '$TEST_INPUT')"
-                  FAILED_TESTS=$((FAILED_TESTS + 1))
+                case "$test_file" in
+                  "tests/input_boolean_logic.kai")
+                    # This test has two input calls: (input == "yes") and not (input == "no")
+                    TEST_INPUT="yes\nyes"
+                    ;;
+                  "tests/input_comparison_chain.kai")
+                    # This test has two input calls: (input == "a") or (input == "b")
+                    TEST_INPUT="a\na"
+                    ;;
+                  "tests/input_empty_handling.kai")
+                    # This test needs an empty line, not empty string
+                    TEST_INPUT=""
+                    ;;
+                  "tests/input_nested_conditionals.kai")
+                    # This test has two input calls in nested conditionals
+                    TEST_INPUT="admin\nadmin"
+                    ;;
+                  *)
+                    TEST_INPUT="test_input"
+                    ;;
+                esac
+
+                if [[ "$test_file" == "tests/input_empty_handling.kai" ]]; then
+                  # Special handling for empty input test
+                  if ! echo | ./dist/$BINARY_NAME "$test_file" >/dev/null 2>&1; then
+                    echo "❌ FAILED: $test_file (with empty input)"
+                    FAILED_TESTS=$((FAILED_TESTS + 1))
+                  else
+                    echo "✅ PASSED: $test_file (with empty input)"
+                  fi
                 else
-                  echo "✅ PASSED: $test_file (with input: '$TEST_INPUT')"
+                  if ! printf "$TEST_INPUT" | ./dist/$BINARY_NAME "$test_file" >/dev/null 2>&1; then
+                    echo "❌ FAILED: $test_file (with input: '$TEST_INPUT')"
+                    FAILED_TESTS=$((FAILED_TESTS + 1))
+                  else
+                    echo "✅ PASSED: $test_file (with input: '$TEST_INPUT')"
+                  fi
                 fi
               else
                 if ! ./dist/$BINARY_NAME "$test_file" >/dev/null 2>&1; then

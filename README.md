@@ -15,10 +15,12 @@ Features available today:
 - **Booleans**: `and`, `or`, `not`
 - **Comparisons**: `==`, `<`, `>`
 - **Strings**: string literals (`"hello"`), concatenation (`++`), escapes (`\"`, `\\`, `\n`)
+- **Lists**: `[1, 2, 3]`, concatenation (`++`), equality (`==`), cons (`::`), operations (`head`, `tail`, `null`)
+- **Records**: `{a = 1, b = true}`, field access (`record.field`), equality (`==`)
 - **Unit & printing**: `()` unit value; `print : a -> Unit` prints and returns `()`; `input` reads a line of stdin and returns a string
 - **Conditionals**: `if cond then e1 else e2`
 - **Functions**: lambdas (`\x -> expr`), application (`f x`), closures
-- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TFun` with unification and occurs check
+- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TList`, `TRecord`, `TFun` with unification and occurs check
 - **Type annotations**: Optional type annotations (`let x : Int = 42`, `\x : String -> expr`)
 - **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
 - **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`
@@ -26,16 +28,15 @@ Features available today:
 - **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
 - **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default)
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
-- **Tests**: Hspec + QuickCheck (266 examples) — all passing with comprehensive coverage including 27 input/conversion test files
+- **Tests**: Hspec + QuickCheck (284 examples) — all passing with comprehensive coverage including 27 input/conversion test files
 - **Working examples**: Interactive calculator demonstrating input, conversion functions, and tail recursion
 
 Current limitations:
 
 - Limited to single-file scripts (no modules or imports)
-- No data structures for complex data manipulation (lists, maps, records)
 - Limited I/O (only print statements and stdin, no file operations)
 - No REPL for interactive experimentation
-- No standard library (even basic functions like `length`, `head`)
+- No standard library (beyond basic list/record operations)
 - No error recovery (one parse error stops execution)
 
 ## Quickstart
@@ -143,6 +144,18 @@ toString 100         // => "100"
 parseInt "42"        // => 42
 ```
 
+Lists and records:
+
+```kai
+[1, 2] ++ [3, 4]        // => [1, 2, 3, 4]
+head([1, 2, 3])         // => 1
+tail([1, 2, 3])         // => [2, 3]
+null([])                // => true
+1 :: [2, 3]             // => [1, 2, 3]
+{a = 1, b = true}.a    // => 1
+{a = 1} == {a = 1}      // => true
+```
+
 Type safety (checked before evaluation):
 
 ```kai
@@ -152,9 +165,9 @@ if 5 then 1 else 2  // Type error: ExpectedBool TInt
 
 ## Language Notes
 
-- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`).
+- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `List`, `Record`, `parseInt`, `toString`, `show`, `head`, `tail`, `null`).
 - Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
-- String concatenation uses `++` and is right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`.
+- Concatenation (`++`) works for both strings and lists, right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`, `[1, 2] ++ [3, 4]` parses as `[1, 2] ++ [3, 4]`.
 - Supported string escapes: `\"`, `\\`, `\n`. Unknown escapes are errors.
 - `print` evaluates its argument, prints it, and returns unit `()`.
 - Application binds tighter than infix operators (`f x + y` parses as `(f x) + y`).

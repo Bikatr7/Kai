@@ -115,6 +115,7 @@ test-suite kai-test
       BooleanSpec
       ComparisonSpec
       ConditionalSpec
+      DataStructureSpec
       EdgeCaseSpec
       InputSpec
       IntegerOverflowSpec
