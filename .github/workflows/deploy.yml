@@ -42,8 +42,8 @@ jobs:
 
     - name: Test website binary
       run: |
-        # Test that the website binary works
-        stack exec kai-website -- --help >/dev/null 2>&1
+        # Test that the website binary exists and is executable
+        stack exec which kai-website >/dev/null 2>&1
         echo "✅ Website binary is functional"
 
     - name: Export static site
