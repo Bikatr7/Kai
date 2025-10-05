@@ -1,5 +1,5 @@
 name: kai-lang
-version: 0.0.3.2
+version: 0.0.3.3
 description: A minimal, typed expression language implemented in Haskell
 homepage: https://github.com/bikatr7/kai
 license: AGPL-3.0-only

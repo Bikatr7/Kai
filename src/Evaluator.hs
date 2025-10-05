@@ -3,6 +3,7 @@ module Evaluator where
 import Syntax
 import qualified Data.Map as Map
 import System.IO (hFlush, stdout, getLine)
+import Data.IORef
 
 -- Values include functions (closures)
 data Value
@@ -17,7 +18,36 @@ data Value
   | VRight Value          -- Right constructor
   | VList [Value]
   | VRecord (Map.Map String Value)
-  deriving (Show, Eq)
+  | VRef (IORef Value)    -- Mutable reference for recursive bindings
+
+instance Show Value where
+  show (VInt n) = show n
+  show (VBool b) = show b
+  show (VStr s) = show s
+  show VUnit = "()"
+  show (VFun param body env) = "<function " ++ param ++ ">"
+  show (VJust v) = "Just (" ++ show v ++ ")"
+  show VNothing = "Nothing"
+  show (VLeft v) = "Left (" ++ show v ++ ")"
+  show (VRight v) = "Right (" ++ show v ++ ")"
+  show (VList vs) = show vs
+  show (VRecord m) = show m
+  show (VRef _) = "<ref>"
+
+instance Eq Value where
+  (VInt n1) == (VInt n2) = n1 == n2
+  (VBool b1) == (VBool b2) = b1 == b2
+  (VStr s1) == (VStr s2) = s1 == s2
+  VUnit == VUnit = True
+  (VJust v1) == (VJust v2) = v1 == v2
+  VNothing == VNothing = True
+  (VLeft v1) == (VLeft v2) = v1 == v2
+  (VRight v1) == (VRight v2) = v1 == v2
+  (VList vs1) == (VList vs2) = vs1 == vs2
+  (VRecord m1) == (VRecord m2) = m1 == m2
+  (VRef _) == (VRef _) = False  -- References are never equal
+  (VFun {}) == (VFun {}) = False  -- Functions are never equal
+  _ == _ = False
 
 -- Runtime environment for variables
 type Env = Map.Map String Value
@@ -91,6 +121,10 @@ evalPureWithEnv env (Or e1 e2) = do
   case (v1, v2) of
     (VBool b1, VBool b2) -> Right $ VBool (b1 || b2)
     _ -> Left $ TypeError "OR requires boolean operands"
+-- Sequencing: evaluate e1, discard result, return e2's value
+evalPureWithEnv env (Seq e1 e2) = do
+  _ <- evalPureWithEnv env e1  -- Evaluate first expression but discard result
+  evalPureWithEnv env e2       -- Return second expression's result
 evalPureWithEnv env (Not e) = do
   v <- evalPureWithEnv env e
   case v of
@@ -144,7 +178,7 @@ evalPureWithEnv env (App fun arg) = do
     _ -> Left $ TypeError "Cannot apply non-function value"
 evalPureWithEnv env (Let var _maybeType val body) = do
   valResult <- evalPureWithEnv env val
-  let env' = Map.insert var valResult env
+  let env' = if var == "_" then env else Map.insert var valResult env
   evalPureWithEnv env' body
 evalPureWithEnv env (LetRec var _maybeType val body) = do
   let testEnv = Map.insert var (VFun "_placeholder" (IntLit 0) env) env
@@ -241,10 +275,13 @@ evalWithEnv _ (StrLit s) = return $ Right $ VStr s
 evalWithEnv _ UnitLit = return $ Right VUnit
 evalWithEnv _ Input = Right . VStr <$> getLine
 
-evalWithEnv env (Var x) =
-  return $ case Map.lookup x env of
-    Just v -> Right v
-    Nothing -> Left $ UnboundVariable x
+evalWithEnv env (Var x) = do
+  case Map.lookup x env of
+    Just (VRef ref) -> do
+      val <- readIORef ref
+      return $ Right val
+    Just v -> return $ Right v
+    Nothing -> return $ Left $ UnboundVariable x
 
 evalWithEnv env (Add e1 e2) = do
   r1 <- evalWithEnv env e1
@@ -317,6 +354,14 @@ evalWithEnv env (Or e1 e2) = do
     case (v1, v2) of
       (VBool b1, VBool b2) -> Right $ VBool (b1 || b2)
       _ -> Left $ TypeError "OR requires boolean operands"
+
+-- Sequencing with IO: evaluate e1 for side effects, discard result, return e2's value
+evalWithEnv env (Seq e1 e2) = do
+  r1 <- evalWithEnv env e1  -- Evaluate first for side effects
+  r2 <- evalWithEnv env e2  -- Evaluate second
+  return $ do
+    _ <- r1  -- Check first succeeded but discard result
+    r2       -- Return second's result
 
 evalWithEnv env (Not e) = do
   r <- evalWithEnv env e
@@ -413,18 +458,26 @@ evalWithEnv env (Let var _maybeType val body) = do
   case valResult of
     Left err -> return $ Left err
     Right valValue ->
-      let env' = Map.insert var valValue env
+      -- Don't add wildcard variables to the environment
+      let env' = if var == "_" then env else Map.insert var valValue env
       in evalWithEnv env' body
 
 -- Recursive let binding: create recursive environment with fixed point (ignore type annotation)
 evalWithEnv env (LetRec var _maybeType val body) = do
-  let env' = Map.insert var (VFun "_placeholder" val env) env
-  valResult <- evalWithEnv env' val
-  case valResult of
-    Left err -> return $ Left err
-    Right recValue ->
-      let finalEnv = Map.insert var recValue env
-      in evalWithEnv finalEnv body
+  let testEnv = Map.insert var (VFun "_placeholder" (IntLit 0) env) env
+  testResult <- evalWithEnv testEnv val
+  case testResult of
+    Left err -> return $ Left $ TypeError $ "LetRec definition failed: " ++ show err
+    Right _ -> do
+      recValueRef <- newIORef (VFun "_placeholder" (IntLit 0) env)
+      let env' = Map.insert var (VRef recValueRef) env
+
+      valResult <- evalWithEnv env' val
+      case valResult of
+        Right recValue -> do
+          writeIORef recValueRef recValue
+          evalWithEnv env' body
+        Left err -> return $ Left err
 
 -- Type annotation: just evaluate the expression (ignore type)
 evalWithEnv env (TypeAnnotation e _type) = evalWithEnv env e
@@ -600,5 +653,5 @@ showValue (VJust v) = "Just " ++ showValue v
 showValue VNothing = "Nothing"
 showValue (VLeft v) = "Left " ++ showValue v
 showValue (VRight v) = "Right " ++ showValue v
-showValue (VList l) = "[" ++ (concat $ map showValue l) ++ "]"
-showValue (VRecord r) = "{" ++ (concat $ map (\(k,v) -> k ++ ": " ++ showValue v) (Map.toList r)) ++ "}"
+showValue (VList l) = "[" ++ concatMap showValue l ++ "]"
+showValue (VRecord r) = "{" ++ concatMap (\(k,v) -> k ++ ": " ++ showValue v) (Map.toList r) ++ "}"

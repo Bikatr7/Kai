@@ -84,13 +84,15 @@ boolean = choice
 unit :: Parser ()
 unit = void (symbol "()")
 
--- Parse identifiers (excluding keywords)
 identifier :: Parser String
 identifier = lexeme $ do
-  name <- (:) <$> letterChar <*> many (alphaNumChar <|> char '_')
+  name <- wildcard <|> regularIdentifier
   if name `elem` keywords
     then fail $ "keyword " ++ show name ++ " cannot be used as identifier"
     else return name
+  where
+    wildcard = string "_"
+    regularIdentifier = (:) <$> letterChar <*> many (alphaNumChar <|> char '_')
 
 syntaxType :: Parser SyntaxType
 syntaxType = makeExprParser atomType typeOperatorTable
@@ -143,12 +145,12 @@ recordAccess :: Parser (Expr -> Expr)
 recordAccess = do
   symbol "."
   field <- identifier
-  return (\e -> RecordAccess e field)
+  return (`RecordAccess` field)
 
 application :: Parser (Expr -> Expr)
 application = do
   arg <- atom
-  return (\e -> App e arg)
+  return (`App` arg)
 
 -- Atomic expressions
 atom :: Parser Expr
@@ -312,6 +314,7 @@ operatorTable =
     ]
   , [ InfixR (And <$ symbol "and") ]
   , [ InfixR (Or <$ symbol "or") ]
+  , [ InfixR (Seq <$ symbol ";") ]  -- Lowest precedence for sequencing
   ]
 
 -- Parse expression from string
@@ -383,14 +386,14 @@ caseExpr = do
 -- Pattern in case expression
 casePattern :: Parser (Pattern, Expr)
 casePattern = do
-  pat <- pattern
+  pat <- patternParser
   symbol "->"
   expr <- expr
   return (pat, expr)
 
 -- Pattern parser
-pattern :: Parser Pattern
-pattern = makeExprParser patternTerm patternOperatorTable
+patternParser :: Parser Pattern
+patternParser = makeExprParser patternTerm patternOperatorTable
 
 patternTerm :: Parser Pattern
 patternTerm = choice
@@ -403,7 +406,7 @@ patternTerm = choice
   , leftPattern
   , rightPattern
   , PVar <$> identifier
-  , parens pattern
+  , parens patternParser
   ]
 
 patternOperatorTable :: [[Operator Parser Pattern]]
@@ -428,7 +431,7 @@ rightPattern = do
   PRight <$> patternTerm
 
 listPattern :: Parser Pattern
-listPattern = PList <$> brackets (sepBy pattern (symbol ","))
+listPattern = PList <$> brackets (sepBy patternParser (symbol ","))
 
 recordPattern :: Parser Pattern
 recordPattern = PRecord <$> braces (sepBy recordPatternField (symbol ","))
@@ -437,5 +440,5 @@ recordPatternField :: Parser (String, Pattern)
 recordPatternField = do
   name <- identifier
   symbol "="
-  p <- pattern
+  p <- patternParser
   return (name, p)

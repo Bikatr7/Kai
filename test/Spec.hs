@@ -19,6 +19,8 @@ import qualified TypeErrorSpec
 import qualified TypeInferenceSpec
 import qualified UnificationSpec
 import qualified DataStructureSpec
+import qualified WildcardSpec
+import qualified SequencingSpec
 
 main :: IO ()
 main = hspec $ do
@@ -40,3 +42,5 @@ main = hspec $ do
   TypeInferenceSpec.spec
   UnificationSpec.spec
   DataStructureSpec.spec
+  WildcardSpec.spec
+  SequencingSpec.spec

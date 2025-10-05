@@ -1,9 +1,9 @@
-# Kai Language Specification (v0.0.3.2)
+# Kai Language Specification (v0.0.3.3)
 
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
-**Version**: 0.0.3.2
-**Last Updated**: 2025-09-24
+**Version**: 0.0.3.3
+**Last Updated**: 2025-10-05
 
 ## Table of Contents
 
@@ -57,9 +57,12 @@ Kai is a functional-first scripting language with static typing, implemented in 
 ### Identifiers
 - Start with letter, followed by letters, digits, or underscores
 - Cannot be reserved keywords
+- Special identifier: `_` (wildcard) can be used in let bindings to discard values
 
 ### Reserved Keywords
 `true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`
+
+**Note**: `_` is not a keyword but has special meaning as a wildcard identifier in let bindings.
 
 ## Types
 
@@ -111,6 +114,9 @@ All constructs in Kai are expressions that evaluate to values.
 ### String Operations
 - `++` (concatenation, right-associative)
 
+### Expression Sequencing
+- `;` (sequencing, right-associative) - evaluates first expression for side effects, returns second expression
+
 ### List Operations
 - `[elem1, elem2, ...]` - list literals
 - `++` - list concatenation (right-associative)
@@ -152,12 +158,21 @@ case parseInt "42" of Just x -> x | Nothing -> 0
 ```kai
 let var = value in body
 let var : Type = value in body
+let _ = value in body    -- Wildcard binding (discards value)
 ```
 
 ### Recursive Binding
 ```kai
 letrec var = value in body
 letrec var : Type = value in body
+```
+
+**Note**: Wildcards (`_`) are not allowed in `letrec` bindings as they cannot be meaningfully recursive.
+
+### Expression Sequencing
+```kai
+expr1; expr2         -- Evaluate expr1, discard result, return expr2
+expr1; expr2; expr3  -- Right-associative: expr1; (expr2; expr3)
 ```
 
 ### Lambda Expressions
@@ -307,6 +322,7 @@ From highest to lowest precedence:
 8. **Comparison**: `==`, `<`, `>` (non-associative)
 9. **Logical AND**: `and` (right-associative)
 10. **Logical OR**: `or` (right-associative)
+11. **Sequencing**: `;` (right-associative, lowest precedence)
 
 ## Language Limitations (Current)
 
@@ -317,6 +333,7 @@ From highest to lowest precedence:
 - **Limited standard library**: Only built-in conversion and list functions
 - **No custom data types**: Only built-in lists, records, Maybe, Either
 - **No polymorphic recursion**: Type inference limitations with complex recursive types
+- **Wildcard limitations**: `_` only allowed in `let` bindings, not in `letrec` or pattern matching
 
 ## Grammar Summary
 
@@ -329,8 +346,9 @@ Expr ::= 'let' Ident (':' Type)? '=' Expr 'in' Expr
        | 'case' Expr 'of' Pattern '->' Expr ('|' Pattern '->' Expr)*
        | '\' Ident (':' Type)? '->' Expr
        | '(' Expr ':' Type ')'
-       | OrExpr
+       | SeqExpr
 
+SeqExpr ::= SeqExpr ';' OrExpr | OrExpr
 OrExpr ::= OrExpr 'or' AndExpr | AndExpr
 AndExpr ::= AndExpr 'and' CmpExpr | CmpExpr
 CmpExpr ::= AddExpr ('==' | '<' | '>') AddExpr | AddExpr
@@ -361,7 +379,7 @@ Type ::= 'Int' | 'Bool' | 'String' | 'Unit'
        | 'Maybe' Type | 'Either' Type Type
        | Type '->' Type | '(' Type ')'
 
-Ident ::= [a-zA-Z][a-zA-Z0-9_]*
+Ident ::= [a-zA-Z][a-zA-Z0-9_]* | '_'
 Integer ::= [+-]?[0-9]+
 Boolean ::= 'true' | 'false'
 String ::= '"' StringChar* '"'

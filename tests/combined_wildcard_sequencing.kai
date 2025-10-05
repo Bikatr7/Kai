@@ -1,0 +1,2 @@
+// expect: 999
+let _ = 10 + 5 in let x = 100 in 1; 2; let _ = x * 2 in 999

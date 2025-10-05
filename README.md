@@ -4,7 +4,7 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Status (v0.0.3.2)
+## Current Status (v0.0.3.3)
 
 The language currently supports a compact, expression‑only core with full test coverage.
 
@@ -25,11 +25,13 @@ Features available today:
 - **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
 - **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`
 - **Pattern matching**: Case expressions for handling Maybe/Either and other data types
+- **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
+- **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
 - **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
 - **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default)
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
-- **Tests**: Hspec + QuickCheck (284 examples) — all passing with comprehensive coverage including 27 input/conversion test files
-- **Working examples**: Interactive calculator demonstrating input, conversion functions, and tail recursion
+- **Tests**: Hspec + QuickCheck (318 examples) — all passing with comprehensive coverage including 27 input/conversion test files
+- **Working examples**: Interactive calculator demonstrating input, conversion functions, tail recursion, wildcard variables, and expression sequencing
 
 Current limitations:
 
@@ -115,6 +117,21 @@ print ("The answer is " ++ "42")  // returns ()
 print (if 5 > 3 then "yes" else "no")
 ```
 
+Wildcard variables and expression sequencing:
+
+```kai
+let _ = print "Setting up..." in
+let _ = print "Processing..." in
+42  // Result: prints setup messages, returns 42
+
+print "First"; print "Second"; print "Done"
+// Prints all three messages in sequence
+
+let x = 10 in
+let _ = print ("x is " ++ toString x) in
+x * 2  // Prints message, returns 20
+```
+
 Lambdas and application:
 
 ```kai
@@ -129,19 +146,22 @@ let name = input in
 print ("Hello, " ++ name)
 
 let numStr = input in
-let num = parseInt numStr in
-print ("Double: " ++ toString (num * 2))
+case parseInt numStr of
+  Just num -> print ("Double: " ++ toString (num * 2))
+  | Nothing -> print "Invalid number"
 ```
 
 Type annotations and conversions:
 
 ```kai
 let add : Int -> Int -> Int = \x : Int -> \y : Int -> x + y in
-add 5 (parseInt "10")
+case parseInt "10" of
+  Just n -> add 5 n
+  | Nothing -> 0
 
 show (42 + 3)        // => "45"
 toString 100         // => "100"
-parseInt "42"        // => 42
+parseInt "42"        // => Just 42
 ```
 
 Lists and records:
@@ -166,6 +186,8 @@ if 5 then 1 else 2  // Type error: ExpectedBool TInt
 ## Language Notes
 
 - Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `List`, `Record`, `parseInt`, `toString`, `show`, `head`, `tail`, `null`).
+- Wildcard variable `_` can be used in let bindings to discard values: `let _ = expression in body`.
+- Expression sequencing with `;` has lowest precedence and is right-associative: `a; b; c` = `a; (b; c)`.
 - Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
 - Concatenation (`++`) works for both strings and lists, right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`, `[1, 2] ++ [3, 4]` parses as `[1, 2] ++ [3, 4]`.
 - Supported string escapes: `\"`, `\\`, `\n`. Unknown escapes are errors.
@@ -211,9 +233,13 @@ Planned functional-first features:
 **Core Language**
 - ~~Let‑bindings and recursion~~ ✅ **DONE** (`let` and `letrec`)
 - ~~Hindley–Milner style type inference~~ ✅ **DONE**
+- ~~Basic pattern matching~~ ✅ **DONE** (`case` expressions for Maybe/Either)
+- ~~Lists and records~~ ✅ **DONE** (with basic operations)
 - Top‑level definitions and module system
-- Algebraic data types and pattern matching
-- Lists, maps, records with functional operations
+- Enhanced pattern matching (tuple destructuring, guards)
+- Do-notation or block syntax for I/O sequencing
+- Match expressions as alternative to nested conditionals
+- Maps and advanced data structures
 
 **Functional-First Standard Library**
 - List operations: `map`, `filter`, `fold`, `zip` (immutable by default)
@@ -223,6 +249,9 @@ Planned functional-first features:
 - Function composition and pipeline operators
 
 **I/O and Effects (Controlled Imperative)**
+- ~~Wildcard variables (`_`) for unused bindings in let expressions~~ ✅ **DONE**
+- ~~Statement blocks with semicolon syntax for imperative-style code~~ ✅ **DONE** (expression sequencing)
+- Do-notation for clean I/O sequencing (addressing calculator verbosity)
 - File I/O: `readFile`, `writeFile`, `appendFile`
 - Network operations: HTTP requests, JSON parsing
 - Process utilities: run external commands
@@ -256,13 +285,23 @@ let processLines lines =
 let greet name =
   if name == "" then "Hello, world!" else "Hello, " ++ name
 
-// Imperative when needed (I/O)
-let main = do
+// Imperative when needed (I/O) - proposed do-notation
+let main = do {
   input <- readFile "input.txt"
   let processed = processLines (split "\n" input)
   let greeting = greet (head processed)
   writeFile "output.txt" greeting
   print greeting
+}
+
+// Alternative: expression sequencing for imperative style
+let main =
+  let input = readFile "input.txt" in
+  let processed = processLines (split "\n" input) in
+  let greeting = greet (head processed) in
+  let _ = writeFile "output.txt" greeting in
+  let _ = print greeting in
+  ()
 ```
 
 ## Contributing

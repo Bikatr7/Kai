@@ -5,6 +5,9 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Control.Monad.State
 import Control.Monad.Except
+import Control.Monad (mapAndUnzipM)
+import Data.Bifunctor (second)
+import Data.Either (lefts, rights)
 
 -- Types with type variables for proper inference
 data Type
@@ -34,7 +37,7 @@ syntaxTypeToType (STFun t1 t2) = TFun (syntaxTypeToType t1) (syntaxTypeToType t2
 syntaxTypeToType (STMaybe t) = TMaybe (syntaxTypeToType t)
 syntaxTypeToType (STEither t1 t2) = TEither (syntaxTypeToType t1) (syntaxTypeToType t2)
 syntaxTypeToType (STList t) = TList (syntaxTypeToType t)
-syntaxTypeToType (STRecord fields) = TRecord (Map.fromList (map (\(s, t) -> (s, syntaxTypeToType t)) fields))
+syntaxTypeToType (STRecord fields) = TRecord (Map.fromList (map (second syntaxTypeToType) fields))
 
 data TypeError
   = TypeMismatch Type Type
@@ -45,6 +48,7 @@ data TypeError
   | InfiniteType String Type
   | UnificationError Type Type
   | RecordFieldMismatch String
+  | InvalidWildcard String
   deriving (Show, Eq)
 
 -- Type inference monad
@@ -137,11 +141,11 @@ unify (TRecord f1) (TRecord f2) = do
         then Left $ UnificationError (TRecord f1) (TRecord f2)
         else do
             let subs = Map.intersectionWith unify f1 f2
-            let errors = [e | Left e <- Map.elems subs]
+            let errors = lefts (Map.elems subs)
             if not (null errors)
                 then Left (head errors)
                 else do
-                    let successes = [s | Right s <- Map.elems subs]
+                    let successes = rights (Map.elems subs)
                     return $ composeSubstList successes
 unify t1 t2 = Left $ UnificationError t1 t2
 
@@ -222,6 +226,12 @@ infer env (Or e1 e2) = do
   let finalSubst = composeSubstList [s1, s2, s3, s4]
   return (finalSubst, TBool)
 
+infer env (Seq e1 e2) = do
+  (s1, _) <- infer env e1 
+  (s2, t2) <- infer (applySubstEnv s1 env) e2
+  let finalSubst = composeSubst s2 s1
+  return (finalSubst, t2)
+
 infer env (Not e) = do
   (s1, t1) <- infer env e
   s2 <- lift $ unify t1 TBool
@@ -288,13 +298,14 @@ infer env (Let var maybeType val body) = do
       s2 <- lift $ unify valType annotatedType
       return $ applySubst s2 annotatedType
     Nothing -> return valType
-  let env' = Map.insert var finalValType env
+  let env' = if var == "_" then env else Map.insert var finalValType env
   (s2, bodyType) <- infer env' body
   let finalSubst = composeSubst s2 s1
   return (finalSubst, bodyType)
 
 -- Recursive let binding: letrec x = val in body (with optional type annotation)
 infer env (LetRec var maybeType val body) = do
+  when (var == "_") $ throwError (InvalidWildcard "Wildcard variables (_) cannot be used in recursive definitions")
   -- Create a fresh type variable for the recursive binding
   recType <- case maybeType of
     Just sType -> return $ syntaxTypeToType sType
@@ -393,9 +404,9 @@ infer env (RecordLit fields) = do
     let inferField (name, e) = do
             (s, t) <- infer env e
             return (s, (name, t))
-    (subs, typedFields) <- unzip <$> mapM inferField fields
+    (subs, typedFields) <- mapAndUnzipM inferField fields
     let finalSubst = composeSubstList subs
-    return (finalSubst, TRecord (Map.fromList (map (\(n, t) -> (n, applySubst finalSubst t)) typedFields)))
+    return (finalSubst, TRecord (Map.fromList (map (second (applySubst finalSubst)) typedFields)))
 
 infer env (RecordAccess r field) = do
     (s, rType) <- infer env r
@@ -466,7 +477,7 @@ inferPattern (PList pats) ty = do
     elemType <- freshTVar
     s1 <- lift $ unify ty (TList elemType)
     let inferPat p = inferPattern p elemType
-    (subs, envs) <- unzip <$> mapM inferPat pats
+    (subs, envs) <- mapAndUnzipM inferPat pats
     return (composeSubstList (s1:subs), Map.unions envs)
 inferPattern (PCons h t) ty = do
     elemType <- freshTVar

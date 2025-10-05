@@ -32,6 +32,7 @@ This document helps contributors work on Kai’s codebase efficiently.
   8) `<`, `>`, `==` (non)
   9) `and` (right)
   10) `or` (right)
+  11) `;` sequencing (right, lowest)
 
 Notes:
 - `+` is disambiguated from `++` in the lexer to ensure `++` parses correctly at its precedence.
@@ -42,7 +43,7 @@ Notes:
 Prereqs: Stack + GHC.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 284 tests including 27 input test files)
+- Tests: `stack test --fast` (all 318 tests including 27 input test files)
 - Run CLI: `stack exec kai -- --help`
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
 - Try interactive calculator: `stack exec kai examples/calculator.kai`
@@ -105,10 +106,13 @@ Run subsets:
 - **Error handling system**: Full Maybe/Either types with pattern matching for graceful error handling instead of runtime crashes
 - **Safe conversion functions**: `parseInt : String -> Maybe Int` returns `Nothing` for invalid input instead of crashing
 - **Case expressions**: Pattern matching for handling Maybe/Either and other data types safely
+- **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
+- **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
 - **Interactive I/O**: `input` function reads from stdin, enabling interactive applications like the calculator example
+- **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
 - **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels) through parser and type checker optimizations
 - **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed for development
-- **Comprehensive testing**: 24 new input test files covering edge cases and integration scenarios
+- **Comprehensive testing**: 318 tests including 28 new tests for wildcard variables and expression sequencing
 
 ## Notes / TODOs
 

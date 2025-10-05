@@ -1,0 +1,2 @@
+// expect: "final"
+42; true; "final"

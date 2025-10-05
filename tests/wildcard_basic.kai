@@ -1,0 +1,2 @@
+// expect: 42
+let _ = 10 in let _ = 20 in 42

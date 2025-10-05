@@ -51,7 +51,7 @@ runExpression debug input = do
           result <- eval expr
           case result of
             Left err -> putStrLn $ "Runtime error: " ++ show err
-            Right val -> if debug then print val else return ()
+            Right val -> when debug $ print val
 
 runFile :: Bool -> FilePath -> IO ()
 runFile debug filename = do

@@ -27,6 +27,7 @@ data Expr
   | And Expr Expr
   | Or Expr Expr
   | Not Expr
+  | Seq Expr Expr
   | Eq Expr Expr
   | Lt Expr Expr
   | Gt Expr Expr

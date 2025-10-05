@@ -6,7 +6,7 @@ import Test.QuickCheck
 import Syntax
 import Parser
 import TypeChecker
-import Evaluator
+import Evaluator (Value(VInt, VBool, VFun, VRef), evalPure)
 import Control.Monad (liftM, liftM2, liftM3)
 
 -- Generator for valid Kai expressions
@@ -220,7 +220,15 @@ spec = describe "Property-Based Testing" $ do
       property $ forAll (resize 2 arbitrary) $ \(ValidExpr expr) ->
         let result1 = evalPure expr
             result2 = evalPure expr
-        in result1 == result2
+        in case (result1, result2) of
+             (Left err1, Left err2) -> err1 == err2  -- Errors should be identical
+             (Right val1, Right val2) -> comparableValues val1 val2 -- Values should be identical if comparable
+             _ -> False  -- Different result types shouldn't happen
+      where
+        -- Check if two values can be meaningfully compared for equality
+        comparableValues (VFun {}) (VFun {}) = True  -- Functions are deterministic but not comparable
+        comparableValues (VRef _) (VRef _) = True        -- References are deterministic but not comparable
+        comparableValues v1 v2 = v1 == v2                -- Everything else should be equal
 
 -- Helper function to normalize expressions for comparison
 normalizeExpr :: Expr -> Expr

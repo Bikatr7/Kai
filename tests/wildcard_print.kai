@@ -1,0 +1,2 @@
+// expect: 100
+let _ = print "testing wildcard" in 100

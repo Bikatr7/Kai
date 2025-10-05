@@ -82,6 +82,9 @@ case parseEvaluate "5 / 0" of
 - **Error handling system**: Full Maybe/Either types with pattern matching for graceful error handling
 - **Safe conversion functions**: `parseInt : String -> Maybe Int` returns `Nothing` for invalid input
 - **Case expressions**: Pattern matching for handling Maybe/Either and other data types safely
+- **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
+- **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
+- **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
 - **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels)
 - **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed
-- **Interactive examples**: Working calculator demonstrating language features
+- **Interactive examples**: Working calculator demonstrating language features including new wildcard and sequencing features

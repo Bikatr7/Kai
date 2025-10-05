@@ -48,7 +48,7 @@ getHomeR = defaultLayout $ do
             <div .stat-number>27
             <div .stat-label>Script Tests
           <div .stat-item>
-            <div .stat-number>v0.0.3.2
+            <div .stat-number>v0.0.3.3
             <div .stat-label>Current Version
 
       <nav>
@@ -74,7 +74,7 @@ getHomeR = defaultLayout $ do
             <p>User input with `input`, type conversions (`parseInt`, `toString`, `show`), and interactive calculator example.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>266 tests with clear pass/fail indicators, property-based testing, and script evaluation including 27 test files.
+            <p>318 tests with clear pass/fail indicators, property-based testing, and script evaluation including 27 test files.
           <div .feature>
             <h3>Developer Experience
             <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
@@ -148,9 +148,10 @@ getHomeR = defaultLayout $ do
             <code>\\f -> f 42
 
         <div .element-block>
-          <h3>Let Bindings
+          <h3>Let Bindings & Wildcards
           <div .code-example>
             <code>let x = 42 in x + 1
+            <code>let _ = print "hello" in 42  <!-- Wildcard variable -->
             <code>letrec factorial = \\n -> if n == 0 then 1 else n * (factorial (n - 1)) in factorial 5
 
         <div .element-block>
@@ -162,11 +163,12 @@ getHomeR = defaultLayout $ do
             <code>show (42 + 3)     <!-- Any type to String -->
 
         <div .element-block>
-          <h3>Interactive I/O
+          <h3>Interactive I/O & Sequencing
           <div .code-example>
             <code>input             <!-- Read line from stdin -->
             <code>print "Hello"     <!-- Print and return () -->
             <code>print (42 + 1)    <!-- Print and return () -->
+            <code>print "A"; print "B"; 42  <!-- Sequence expressions -->
 
       <section #examples>
         <h2>Example Expressions
@@ -228,6 +230,15 @@ getHomeR = defaultLayout $ do
             <code>show (42 + 3)   <!-- Returns "45" -->
 
         <div .element-block>
+          <h3>Wildcard Variables & Sequencing
+          <div .code-example>
+            <code>let _ = print "Setup" in let _ = print "Process" in 42
+            <br>
+            <code>print "First"; print "Second"; print "Done"
+            <br>
+            <code>let x = 10 in let _ = print ("x is " ++ toString x) in x * 2
+
+        <div .element-block>
           <h3>Type Annotations
           <div .code-example>
             <code>let add : Int -> Int -> Int = \\x : Int -> \\y : Int -> x + y
@@ -270,7 +281,7 @@ getHomeR = defaultLayout $ do
             <span>No way to handle errors gracefully
 
       <section #roadmap>
-        <h2>Current Status (v0.0.3.2) & Roadmap
+        <h2>Current Status (v0.0.3.3) & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
