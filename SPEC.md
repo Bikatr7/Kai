@@ -1,9 +1,9 @@
-# Kai Language Specification (v0.0.3.3)
+# Kai Language Specification (v0.0.4)
 
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
-**Version**: 0.0.3.3
-**Last Updated**: 2025-10-05
+**Version**: 0.0.4
+**Last Updated**: 2025-10-08
 
 ## Table of Contents
 
@@ -60,7 +60,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - Special identifier: `_` (wildcard) can be used in let bindings to discard values
 
 ### Reserved Keywords
-`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`
+`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`
 
 **Note**: `_` is not a keyword but has special meaning as a wildcard identifier in let bindings.
 
@@ -76,6 +76,7 @@ Kai has a static type system with the following base types:
 
 ### Composite Types
 - `[T]`: List of type T (e.g., `[Int]`, `[String]`)
+- `(T1, T2, ...)`: Tuple of types (e.g., `(Int, String)`, `(Bool, Int, String)`)
 - `{field1: T1, field2: T2, ...}`: Record with named fields
 
 ### Error Handling Types
@@ -130,6 +131,14 @@ All constructs in Kai are expressions that evaluate to values.
 - `record.field` - field access
 - `==` - structural equality
 
+### Tuple Operations
+- `(val1, val2, ...)` - tuple literals (2 or more elements)
+- `fst tuple` - first element of a 2-tuple
+- `snd tuple` - second element of a 2-tuple
+- `==` - structural equality
+
+**Note**: Empty tuples `()` are the Unit value, and single-element tuples like `(x)` are just parenthesized expressions.
+
 ### Conditional Expressions
 ```kai
 if condition then expr1 else expr2
@@ -148,6 +157,7 @@ case expression of pattern -> expr | pattern -> expr
 - `[]` - matches empty list
 - `x :: xs` - matches non-empty list (head and tail)
 - `{field1 = pattern1, field2 = pattern2, ...}` - matches records
+- `(pattern1, pattern2, ...)` - matches tuples
 
 **Example**:
 ```kai
@@ -237,15 +247,51 @@ show : a -> String             // Any value to string representation
 
 ### List Functions
 ```kai
+// Basic operations
 head : [a] -> a            // First element (runtime error if empty)
 tail : [a] -> [a]          // List without first element
 null : [a] -> Bool         // Check if list is empty
+length : [a] -> Int        // Number of elements in list
+
+// Higher-order functions
+map : (a -> b) -> [a] -> [b]                    // Apply function to each element
+filter : (a -> Bool) -> [a] -> [a]              // Keep elements matching predicate
+foldl : (b -> a -> b) -> b -> [a] -> b          // Left fold over list
+
+// List manipulation
+reverse : [a] -> [a]       // Reverse list order
+take : Int -> [a] -> [a]   // Take first n elements
+drop : Int -> [a] -> [a]   // Drop first n elements
+zip : [a] -> [b] -> [(a, b)]  // Combine two lists into list of tuples
+```
+
+### String Functions
+```kai
+split : String -> String -> [String]       // Split string by delimiter
+join : String -> [String] -> String        // Join strings with delimiter
+trim : String -> String                     // Remove leading/trailing whitespace
+replace : String -> String -> String -> String  // replace pattern replacement string
+strLength : String -> Int                   // Length of string
+```
+
+### Tuple Functions
+```kai
+fst : (a, b) -> a          // First element of pair
+snd : (a, b) -> b          // Second element of pair
 ```
 
 ### I/O Functions
 ```kai
+// Console I/O
 print : a -> Unit           // Print value and return ()
 input : String              // Read line from stdin
+
+// File I/O
+readFile : String -> String              // Read entire file as string
+writeFile : String -> String -> Unit     // Write string to file
+
+// Command-line arguments
+args : [String]             // List of command-line arguments passed to script
 ```
 
 ## I/O Operations
@@ -258,6 +304,39 @@ input : String              // Read line from stdin
 ### Standard Output
 - `print expr` evaluates expr, prints its value, returns `()`
 - Output format matches value representation
+
+### File I/O
+- `readFile path` reads entire file as string
+  - Returns file contents as a string
+  - Runtime error if file cannot be read
+- `writeFile path content` writes string to file
+  - Creates file if it doesn't exist, overwrites if it does
+  - Returns `()` (Unit)
+  - Runtime error if file cannot be written
+
+**Example**:
+```kai
+let content = "Hello, world!" in
+let _ = writeFile "output.txt" content in
+let read = readFile "output.txt" in
+print read
+```
+
+### Command-Line Arguments
+- `args` evaluates to list of command-line arguments
+- Arguments passed after script filename
+- Empty list if no arguments provided
+
+**Example**:
+```bash
+$ kai script.kai foo bar baz
+```
+
+```kai
+let firstArg = head args in  // "foo"
+let numArgs = length args in  // 3
+print (show args)  // ["foo", "bar", "baz"]
+```
 
 ### Interactive Programs
 Programs can combine input/output for interaction:

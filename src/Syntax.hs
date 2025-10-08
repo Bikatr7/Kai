@@ -10,6 +10,7 @@ data SyntaxType
   | STEither SyntaxType SyntaxType
   | STList SyntaxType
   | STRecord [(String, SyntaxType)]
+  | STTuple [SyntaxType]
   deriving (Show, Eq)
 
 data Expr
@@ -58,6 +59,30 @@ data Expr
   -- Records
   | RecordLit [(String, Expr)]
   | RecordAccess Expr String
+  -- Tuples
+  | TupleLit [Expr]
+  | Fst Expr
+  | Snd Expr
+  -- List functions
+  | Map Expr Expr
+  | Filter Expr Expr
+  | Foldl Expr Expr Expr
+  | Length Expr
+  | Reverse Expr
+  | Take Expr Expr
+  | Drop Expr Expr
+  | Zip Expr Expr
+  -- String functions
+  | Split Expr Expr
+  | Join Expr Expr
+  | Trim Expr
+  | Replace Expr Expr Expr
+  | StrLength Expr
+  -- File I/O
+  | ReadFile Expr
+  | WriteFile Expr Expr
+  -- Command-line arguments
+  | Args
   deriving (Show, Eq)
 
 -- Patterns for case expressions
@@ -74,4 +99,5 @@ data Pattern
   | PList [Pattern]
   | PCons Pattern Pattern
   | PRecord [(String, Pattern)]
+  | PTuple [Pattern]
   deriving (Show, Eq) 

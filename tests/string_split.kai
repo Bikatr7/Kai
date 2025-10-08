@@ -1,0 +1,3 @@
+// Test: split function splits string by delimiter
+// Expected: ["hello","world","test"]
+split " " "hello world test"

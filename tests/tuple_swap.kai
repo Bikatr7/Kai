@@ -1,0 +1,2 @@
+// expect: (2, 1)
+let swap = \p -> case p of (x, y) -> (y, x) in swap (1, 2)

@@ -32,6 +32,11 @@ lexeme = L.lexeme sc
 symbol :: String -> Parser String
 symbol = L.symbol sc
 
+keyword :: String -> Parser ()
+keyword kw = lexeme $ try $ do
+  _ <- string kw
+  notFollowedBy (alphaNumChar <|> char '_')
+
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
@@ -42,7 +47,7 @@ brackets :: Parser a -> Parser a
 brackets = between (symbol "[") (symbol "]")
 
 keywords :: [String]
-keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print", "let", "letrec", "in", "input", "Int", "Bool", "String", "Unit", "parseInt", "toString", "show", "Maybe", "Either", "Just", "Nothing", "Left", "Right", "case", "of", "head", "tail", "null"]
+keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print", "let", "letrec", "in", "input", "Int", "Bool", "String", "Unit", "parseInt", "toString", "show", "Maybe", "Either", "Just", "Nothing", "Left", "Right", "case", "of", "head", "tail", "null", "fst", "snd", "map", "filter", "foldl", "length", "reverse", "take", "drop", "zip", "split", "join", "trim", "replace", "strLength", "readFile", "writeFile", "args"]
 
 stringLit :: Parser String
 stringLit = lexeme $ char '"' *> many charChunk <* char '"'
@@ -157,17 +162,35 @@ atom :: Parser Expr
 atom = choice
   [ UnitLit <$ unit
   , IntLit <$> integer
-  , try (parens expr)
+  , try parensOrTuple
   , BoolLit <$> boolean
   , StrLit <$> stringLit
   , printExpr
   , inputExpr
+  , argsExpr
   , parseIntExpr
   , toStringExpr
   , showExpr
   , headExpr
   , tailExpr
   , nullExpr
+  , fstExpr
+  , sndExpr
+  , mapExpr
+  , filterExpr
+  , foldlExpr
+  , lengthExpr
+  , reverseExpr
+  , takeExpr
+  , dropExpr
+  , zipExpr
+  , splitExpr
+  , joinExpr
+  , trimExpr
+  , replaceExpr
+  , strLengthExpr
+  , readFileExpr
+  , writeFileExpr
   , lambdaExpr
   , ifExpr
   , letRecExpr
@@ -186,38 +209,138 @@ atom = choice
 -- Print expression: print expr
 printExpr :: Parser Expr
 printExpr = do
-  symbol "print"
+  keyword "print"
   Print <$> expr
 
 -- Input expression: input
 inputExpr :: Parser Expr
-inputExpr = symbol "input" >> return Input
+inputExpr = keyword "input" >> return Input
+
+-- Command-line arguments: args
+argsExpr :: Parser Expr
+argsExpr = keyword "args" >> return Args
 
 -- Built-in conversion functions
 parseIntExpr :: Parser Expr
 parseIntExpr = do
-  symbol "parseInt"
+  keyword "parseInt"
   ParseInt <$> expr
 
 toStringExpr :: Parser Expr
 toStringExpr = do
-  symbol "toString"
+  keyword "toString"
   ToString <$> expr
 
 showExpr :: Parser Expr
 showExpr = do
-  symbol "show"
+  keyword "show"
   Show <$> expr
 
 -- List functions
 headExpr :: Parser Expr
-headExpr = symbol "head" >> Head <$> expr
+headExpr = keyword "head" >> Head <$> expr
 
 tailExpr :: Parser Expr
-tailExpr = symbol "tail" >> Tail <$> expr
+tailExpr = keyword "tail" >> Tail <$> expr
 
 nullExpr :: Parser Expr
-nullExpr = symbol "null" >> Null <$> expr
+nullExpr = keyword "null" >> Null <$> expr
+
+fstExpr :: Parser Expr
+fstExpr = keyword "fst" >> Fst <$> expr
+
+sndExpr :: Parser Expr
+sndExpr = keyword "snd" >> Snd <$> expr
+
+-- Advanced list functions
+mapExpr :: Parser Expr
+mapExpr = do
+  keyword "map"
+  f <- atom
+  Map f <$> atom
+
+filterExpr :: Parser Expr
+filterExpr = do
+  keyword "filter"
+  f <- atom
+  Filter f <$> atom
+
+foldlExpr :: Parser Expr
+foldlExpr = do
+  keyword "foldl"
+  f <- atom
+  acc <- atom
+  Foldl f acc <$> atom
+
+lengthExpr :: Parser Expr
+lengthExpr = keyword "length" >> Length <$> atom
+
+reverseExpr :: Parser Expr
+reverseExpr = keyword "reverse" >> Reverse <$> atom
+
+takeExpr :: Parser Expr
+takeExpr = do
+  keyword "take"
+  n <- atom
+  Take n <$> atom
+
+dropExpr :: Parser Expr
+dropExpr = do
+  keyword "drop"
+  n <- atom
+  Drop n <$> atom
+
+zipExpr :: Parser Expr
+zipExpr = do
+  keyword "zip"
+  l1 <- atom
+  Zip l1 <$> atom
+
+-- String functions
+splitExpr :: Parser Expr
+splitExpr = do
+  keyword "split"
+  delim <- atom
+  Split delim <$> atom
+
+joinExpr :: Parser Expr
+joinExpr = do
+  keyword "join"
+  delim <- atom
+  Join delim <$> atom
+
+trimExpr :: Parser Expr
+trimExpr = keyword "trim" >> Trim <$> atom
+
+replaceExpr :: Parser Expr
+replaceExpr = do
+  keyword "replace"
+  old <- atom
+  new <- atom
+  Replace old new <$> atom
+
+strLengthExpr :: Parser Expr
+strLengthExpr = keyword "strLength" >> StrLength <$> atom
+
+-- File I/O functions
+readFileExpr :: Parser Expr
+readFileExpr = keyword "readFile" >> ReadFile <$> atom
+
+writeFileExpr :: Parser Expr
+writeFileExpr = do
+  keyword "writeFile"
+  path <- atom
+  WriteFile path <$> atom
+
+-- Parenthesized expression or tuple literal
+parensOrTuple :: Parser Expr
+parensOrTuple = do
+  symbol "("
+  exprs <- sepBy expr (symbol ",")
+  symbol ")"
+  case exprs of
+    [e] -> return e  -- Single expression in parens
+    _   -> return (TupleLit exprs)  -- Tuple (including empty tuple if needed)
 
 -- List literal
 listLitExpr :: Parser Expr
@@ -401,13 +524,24 @@ patternTerm = choice
   , PBool <$> boolean
   , PStr <$> stringLit
   , PUnit <$ unit
+  , try listPattern
+  , try recordPattern
   , justPattern
   , nothingPattern
   , leftPattern
   , rightPattern
   , PVar <$> identifier
-  , parens patternParser
+  , try parensOrTuplePattern
   ]
+
+parensOrTuplePattern :: Parser Pattern
+parensOrTuplePattern = do
+  symbol "("
+  pats <- sepBy patternParser (symbol ",")
+  symbol ")"
+  case pats of
+    [p] -> return p
+    _   -> return (PTuple pats)  -- Tuple pattern
 
 patternOperatorTable :: [[Operator Parser Pattern]]
 patternOperatorTable = [ [ InfixR (PCons <$ symbol "::") ] ]

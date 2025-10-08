@@ -39,16 +39,16 @@ getHomeR = defaultLayout $ do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>266
+            <div .stat-number>435
             <div .stat-label>Tests Passing
           <div .stat-item>
-            <div .stat-number>7
+            <div .stat-number>8
             <div .stat-label>Core Types
           <div .stat-item>
-            <div .stat-number>27
-            <div .stat-label>Script Tests
+            <div .stat-number>23
+            <div .stat-label>Built-in Functions
           <div .stat-item>
-            <div .stat-number>v0.0.3.3
+            <div .stat-number>v0.0.4
             <div .stat-label>Current Version
 
       <nav>
@@ -74,7 +74,7 @@ getHomeR = defaultLayout $ do
             <p>User input with `input`, type conversions (`parseInt`, `toString`, `show`), and interactive calculator example.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>318 tests with clear pass/fail indicators, property-based testing, and script evaluation including 27 test files.
+            <p>435 tests with clear pass/fail indicators, property-based testing, and script evaluation for robust quality.
           <div .feature>
             <h3>Developer Experience
             <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
@@ -163,11 +163,30 @@ getHomeR = defaultLayout $ do
             <code>show (42 + 3)     <!-- Any type to String -->
 
         <div .element-block>
-          <h3>Interactive I/O & Sequencing
+          <h3>Data Structures
+          <div .code-example>
+            <code>[1, 2, 3]         <!-- Lists -->
+            <code>(1, "hi", true)   <!-- Tuples -->
+            <code>{a = 1, b = true} <!-- Records -->
+            <code>Just 42           <!-- Maybe values -->
+            <code>Left "error"      <!-- Either values -->
+
+        <div .element-block>
+          <h3>List & String Functions
+          <div .code-example>
+            <code>map filter foldl
+            <code>length reverse take drop zip
+            <code>split join trim replace strLength
+            <code>head tail null fst snd
+
+        <div .element-block>
+          <h3>Interactive I/O & File Operations
           <div .code-example>
             <code>input             <!-- Read line from stdin -->
             <code>print "Hello"     <!-- Print and return () -->
-            <code>print (42 + 1)    <!-- Print and return () -->
+            <code>readFile "path"   <!-- Read file contents -->
+            <code>writeFile "path" "content"  <!-- Write to file -->
+            <code>args              <!-- Command-line arguments -->
             <code>print "A"; print "B"; 42  <!-- Sequence expressions -->
 
       <section #examples>
@@ -246,6 +265,51 @@ getHomeR = defaultLayout $ do
             <code>(\\x : String -> case parseInt x of Just n -> n | Nothing -> 0) "42"
 
         <div .element-block>
+          <h3>Lists & Tuples
+          <div .code-example>
+            <code>[1, 2, 3] ++ [4, 5]
+            <br>
+            <code>head([1, 2, 3])
+            <code>tail([1, 2, 3])
+            <br>
+            <code>(1, "hello", true)
+            <code>fst((42, "world"))
+
+        <div .element-block>
+          <h3>List Functions
+          <div .code-example>
+            <code>map (\\x -> x * 2) [1, 2, 3]
+            <span .comment>// [2, 4, 6]
+            <br>
+            <code>filter (\\x -> x > 2) [1, 2, 3, 4]
+            <span .comment>// [3, 4]
+            <br>
+            <code>zip [1, 2, 3] ["a", "b", "c"]
+            <span .comment>// [(1, "a"), (2, "b"), (3, "c")]
+
+        <div .element-block>
+          <h3>String Functions
+          <div .code-example>
+            <code>split " " "hello world"
+            <span .comment>// ["hello", "world"]
+            <br>
+            <code>join ", " ["apple", "banana"]
+            <span .comment>// "apple, banana"
+            <br>
+            <code>trim "  hello  "
+            <span .comment>// "hello"
+
+        <div .element-block>
+          <h3>File I/O & Arguments
+          <div .code-example>
+            <code>let content = readFile "input.txt" in print content
+            <br>
+            <code>let _ = writeFile "output.txt" "Hello!" in print "Done"
+            <br>
+            <code>let firstArg = head args in print firstArg
+            <span .comment>// Access command-line arguments
+
+        <div .element-block>
           <h3>Type Safety Examples
           <div .code-example>
             <code>1 + true
@@ -263,25 +327,19 @@ getHomeR = defaultLayout $ do
             <span>Limited to single-file scripts (no modules or imports)
             <br>
             <span .limitation>×
-            <span>No data structures for complex data manipulation (lists, maps, records)
-            <br>
-            <span .limitation>×
-            <span>Limited I/O (no file operations, only stdin/stdout)
-            <br>
-            <span .limitation>×
             <span>No REPL for interactive experimentation
-            <br>
-            <span .limitation>×
-            <span>No standard library (even basic functions like length, head)
             <br>
             <span .limitation>×
             <span>No error recovery (one parse error stops execution)
             <br>
             <span .limitation>×
-            <span>No way to handle errors gracefully
+            <span>Integer-only arithmetic (no floating-point)
+            <br>
+            <span .limitation>×
+            <span>No custom data types (only built-in types)
 
       <section #roadmap>
-        <h2>Current Status (v0.0.3.3) & Roadmap
+        <h2>Current Status (v0.0.4) & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -312,24 +370,29 @@ getHomeR = defaultLayout $ do
             <div .timeline-marker data-step="6">
             <div .timeline-content>
               <h3>Type Annotations & Conversions (Done)
-              <p>Optional type annotations, parseInt/toString/show functions, interactive I/O
-          <div .timeline-item .current>
-            <div .timeline-marker .current data-step="7">
+              <p>Optional type annotations, parseInt/toString/show functions, interactive I/O, wildcards, sequencing
+          <div .timeline-item>
+            <div .timeline-marker data-step="7">
             <div .timeline-content>
-              <h3>Data Structures (Planned)
-              <p>Lists, records, pattern matching, error handling
+              <h3>Data Structures (Done)
+              <p>Lists, tuples, records, pattern matching, Maybe/Either error handling
           <div .timeline-item>
             <div .timeline-marker data-step="8">
             <div .timeline-content>
-              <h3>File I/O & Effects (Planned)
-              <p>File operations, controlled imperative features
-          <div .timeline-item>
-            <div .timeline-marker data-step="9">
+              <h3>Standard Library (Done)
+              <p>List functions (map, filter, fold, zip), string functions (split, join, trim), 26 built-ins
+          <div .timeline-item .current>
+            <div .timeline-marker .current data-step="9">
             <div .timeline-content>
-              <h3>Modules & Stdlib (Planned)
-              <p>Module system, standard library, functional-first operations
+              <h3>File I/O & Scripting (Done)
+              <p>readFile, writeFile, command-line arguments, practical scripting capabilities
           <div .timeline-item>
             <div .timeline-marker data-step="10">
+            <div .timeline-content>
+              <h3>Modules & Advanced Stdlib (Planned)
+              <p>Module system, imports/exports, math functions, more list/string operations
+          <div .timeline-item>
+            <div .timeline-marker data-step="11">
             <div .timeline-content>
               <h3>Developer Tools (Planned)
               <p>REPL, formatter, linter, IDE support, package manager

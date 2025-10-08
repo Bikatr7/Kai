@@ -111,6 +111,9 @@ testExpr expr content = do
 
 requiresIO :: Expr -> Bool
 requiresIO Input = True
+requiresIO Args = True
+requiresIO (ReadFile _) = True
+requiresIO (WriteFile _ _) = True
 requiresIO (Add e1 e2) = requiresIO e1 || requiresIO e2
 requiresIO (Sub e1 e2) = requiresIO e1 || requiresIO e2
 requiresIO (Mul e1 e2) = requiresIO e1 || requiresIO e2

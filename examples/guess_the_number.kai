@@ -1,0 +1,28 @@
+// Number Guessing Game
+// A simple interactive game demonstrating control flow and I/O
+
+letrec playGame = \secret -> \attempts ->
+  let _ = print (toString attempts) in
+  let _ = print "Guess a number between 1 and 100: " in
+  let guessStr = input in
+  case parseInt guessStr of
+    Just guess ->
+      if guess == secret then
+        print "Correct! You won!"
+      else if guess < secret then
+        let _ = print "Too low! Try again." in
+        playGame secret (attempts + 1)
+      else
+        let _ = print "Too high! Try again." in
+        playGame secret (attempts + 1)
+    | Nothing ->
+      let _ = print "Invalid input! Please enter a number." in
+      playGame secret attempts
+in
+
+let _ = print "=== Number Guessing Game ===" in
+let _ = print "I'm thinking of a number between 1 and 100." in
+let _ = print "" in
+
+// Secret number is 42
+playGame 42 1

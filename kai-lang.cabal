@@ -5,8 +5,8 @@ cabal-version: 2.2
 -- see: https://github.com/sol/hpack
 
 name:           kai-lang
-version:        0.0.3.3
-description:    A minimal, typed expression language implemented in Haskell
+version:        0.0.4
+description:    A functional-first scripting language with static typing
 homepage:       https://github.com/bikatr7/kai
 author:         Kaden Bilyeu (Bikatr7)
 maintainer:     bikatr7@proton.me
@@ -38,6 +38,7 @@ library
     , mtl
     , parser-combinators
     , shakespeare
+    , split
     , text
     , warp
     , yesod
@@ -70,6 +71,7 @@ executable kai
     , mtl
     , parser-combinators
     , shakespeare
+    , split
     , text
     , warp
     , yesod
@@ -99,6 +101,7 @@ executable kai-website
     , mtl
     , parser-combinators
     , shakespeare
+    , split
     , text
     , warp
     , yesod
@@ -121,13 +124,16 @@ test-suite kai-test
       IntegerOverflowSpec
       LambdaSpec
       LetBindingSpec
+      ListFunctionsSpec
       ParserSpec
       PropertyBasedSpec
       RuntimeErrorSpec
       ScriptSpec
       SequencingSpec
       StressTestSpec
+      StringFunctionsSpec
       StringSpec
+      TupleSpec
       TypeErrorSpec
       TypeInferenceSpec
       UnificationSpec
@@ -154,6 +160,7 @@ test-suite kai-test
     , mtl
     , parser-combinators
     , shakespeare
+    , split
     , text
     , unix
     , warp

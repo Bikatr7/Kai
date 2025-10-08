@@ -1,6 +1,6 @@
 name: kai-lang
-version: 0.0.3.3
-description: A minimal, typed expression language implemented in Haskell
+version: 0.0.4
+description: A functional-first scripting language with static typing
 homepage: https://github.com/bikatr7/kai
 license: AGPL-3.0-only
 author: Kaden Bilyeu (Bikatr7)
@@ -23,6 +23,7 @@ dependencies:
   - hspec
   - QuickCheck
   - mtl
+  - split
 
 library:
   source-dirs: src

@@ -1,0 +1,3 @@
+// Test: map function doubles each element
+// Expected: [2,4,6,8]
+map (\x -> x * 2) [1, 2, 3, 4]

@@ -1,0 +1,3 @@
+// Test: foldl function sums a list
+// Expected: 15
+foldl (\acc -> \x -> acc + x) 0 [1, 2, 3, 4, 5]

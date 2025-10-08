@@ -1,0 +1,8 @@
+// File I/O example: write to a file then read it back
+
+let content = "Hello from Kai!\nThis is a test file.\nLine 3." in
+let _ = writeFile "test_output.txt" content in
+let _ = print "File written successfully!" in
+let readContent = readFile "test_output.txt" in
+let _ = print "File contents:" in
+print readContent

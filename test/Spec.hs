@@ -21,6 +21,9 @@ import qualified UnificationSpec
 import qualified DataStructureSpec
 import qualified WildcardSpec
 import qualified SequencingSpec
+import qualified TupleSpec
+import qualified ListFunctionsSpec
+import qualified StringFunctionsSpec
 
 main :: IO ()
 main = hspec $ do
@@ -44,3 +47,6 @@ main = hspec $ do
   DataStructureSpec.spec
   WildcardSpec.spec
   SequencingSpec.spec
+  TupleSpec.spec
+  ListFunctionsSpec.spec
+  StringFunctionsSpec.spec

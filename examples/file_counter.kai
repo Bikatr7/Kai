@@ -1,0 +1,14 @@
+// Word counter: count words in a file
+// Usage: kai file_counter.kai filename.txt
+
+let processFile = \filename ->
+  let content = readFile filename in
+  let trimmed = trim content in
+  let words = split " " trimmed in
+  let count = length words in
+  print ("Word count in '" ++ filename ++ "': " ++ toString count)
+in
+
+case null args of
+  true -> print "Usage: kai file_counter.kai <filename>"
+  | false -> processFile (head args)

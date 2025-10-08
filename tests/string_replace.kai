@@ -1,0 +1,3 @@
+// Test: replace function replaces all occurrences
+// Expected: "bxnxnx"
+replace "a" "x" "banana"

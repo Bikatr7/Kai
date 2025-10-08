@@ -1,0 +1,9 @@
+// Text processing example: parse CSV data
+// Split CSV line, trim fields, filter empty values, join with pipes
+
+let csvLine = " apple , banana ,  , cherry " in
+let fields = split "," csvLine in
+let cleaned = map (\s -> trim s) fields in
+let nonEmpty = filter (\s -> strLength s > 0) cleaned in
+let result = join " | " nonEmpty in
+print result

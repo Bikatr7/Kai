@@ -1,0 +1,2 @@
+// expect: true
+snd (42, true)

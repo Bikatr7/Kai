@@ -1,0 +1,3 @@
+// Test: join function joins list of strings with delimiter
+// Expected: "a,b,c"
+join "," ["a", "b", "c"]

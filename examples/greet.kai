@@ -1,0 +1,9 @@
+// Simple greeting script - demonstrates command-line arguments
+// Usage: kai greet.kai Alice Bob Charlie
+
+let greetPerson = \name -> print ("Hello, " ++ name ++ "!") in
+let greetAll = \names -> case null names of
+  true -> print "No names provided. Usage: kai greet.kai [names...]"
+  | false -> let _ = map greetPerson names in print "Done!"
+in
+greetAll args

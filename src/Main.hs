@@ -53,53 +53,55 @@ runExpression debug input = do
             Left err -> putStrLn $ "Runtime error: " ++ show err
             Right val -> when debug $ print val
 
-runFile :: Bool -> FilePath -> IO ()
-runFile debug filename = do
+runFile :: Bool -> FilePath -> [String] -> IO ()
+runFile debug filename scriptArgs = do
   when debug $ putStrLn $ "Running file: " ++ filename
   content <- readFile filename
   -- Try single expression first, then fall back to multi-statement
   case parseFileExpr content of
     Left _ -> case parseStatements content of
-      Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr  
-      Right stmts -> runStatements debug stmts
-    Right expr -> runSingleExpression debug expr
+      Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr
+      Right stmts -> runStatements debug scriptArgs stmts
+    Right expr -> runSingleExpression debug scriptArgs expr
 
-runSingleExpression :: Bool -> Expr -> IO ()
-runSingleExpression debug expr = do
+runSingleExpression :: Bool -> [String] -> Expr -> IO ()
+runSingleExpression debug scriptArgs expr = do
   when debug $ putStrLn $ "AST: " ++ show expr
-  
+
   when debug $ putStr "Type: "
   case typeCheck expr of
     Left err -> putStrLn $ "Type error: " ++ show err
     Right ty -> do
       when debug $ print ty
-      
+
       when debug $ putStr "Evaluation: "
-      result <- evalWithEnv Map.empty expr
+      let argsEnv = Map.singleton "__args__" (VList (map VStr scriptArgs))
+      result <- evalWithEnv argsEnv expr
       case result of
         Left err -> putStrLn $ "Runtime error: " ++ show err
         Right val -> when debug $ print val
 
-runStatements :: Bool -> [Expr] -> IO ()
-runStatements debug stmts = do
+runStatements :: Bool -> [String] -> [Expr] -> IO ()
+runStatements debug scriptArgs stmts = do
   if null stmts then putStrLn "No statements found" else do
     -- Execute all statements and show their output
+    let argsEnv = Map.singleton "__args__" (VList (map VStr scriptArgs))
     mapM_ (\stmt -> do
-      result <- evalWithEnv Map.empty stmt
+      result <- evalWithEnv argsEnv stmt
       case result of
         Left err -> putStrLn $ "Runtime error: " ++ show err
         Right val -> return ()  -- Print statements handle their own output
       ) stmts
-    
+
     let expr = last stmts  -- Last statement is the main expression
     when debug $ putStrLn $ "AST: " ++ show expr
-    
+
     when debug $ putStr "Type: "
     case typeCheck expr of
       Left err -> putStrLn $ "Type error: " ++ show err
       Right ty -> do
         when debug $ print ty
-        
+
         when debug $ putStr "Evaluation: "
         result <- eval expr
         case result of
@@ -114,28 +116,27 @@ main = do
       putStrLn (unlines
         [ versionString
         , "Usage:"
-        , "  kai                      # show help and examples"
-        , "  kai FILE.kai             # run a script file"
-        , "  kai --debug FILE.kai     # run a script file with debug output"
-        , "  kai -e 'EXPR'            # evaluate a one-liner expression"
-        , "  kai --debug -e 'EXPR'    # evaluate with debug output"
-        , "  kai --help               # this message"
+        , "  kai                          # show help and examples"
+        , "  kai FILE.kai [args...]       # run a script file with optional arguments"
+        , "  kai --debug FILE.kai [args...] # run a script file with debug output"
+        , "  kai -e 'EXPR'                # evaluate a one-liner expression"
+        , "  kai --debug -e 'EXPR'        # evaluate with debug output"
+        , "  kai --help                   # this message"
         ])
     ["-h"] -> do
       putStrLn (unlines
         [ versionString
         , "Usage:"
-        , "  kai                      # show help and examples"
-        , "  kai FILE.kai             # run a script file"
-        , "  kai --debug FILE.kai     # run a script file with debug output"
-        , "  kai -e 'EXPR'            # evaluate a one-liner expression"
-        , "  kai --debug -e 'EXPR'    # evaluate with debug output"
-        , "  kai --help               # this message"
+        , "  kai                          # show help and examples"
+        , "  kai FILE.kai [args...]       # run a script file with optional arguments"
+        , "  kai --debug FILE.kai [args...] # run a script file with debug output"
+        , "  kai -e 'EXPR'                # evaluate a one-liner expression"
+        , "  kai --debug -e 'EXPR'        # evaluate with debug output"
+        , "  kai --help                   # this message"
         ])
     ["-e", exprStr] -> runExpression False exprStr
     ["--debug", "-e", exprStr] -> runExpression True exprStr
     [] -> do
       putStrLn $ versionString ++ " — pass a file, -e 'expr', or --help for usage."
-    [filename] -> runFile False filename
-    ["--debug", filename] -> runFile True filename
-    _ -> putStrLn "Usage: kai [filename] or kai --debug [filename]" 
+    ("--debug":filename:scriptArgs) -> runFile True filename scriptArgs
+    (filename:scriptArgs) -> runFile False filename scriptArgs 

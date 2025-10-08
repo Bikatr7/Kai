@@ -1,0 +1,19 @@
+// FizzBuzz - Classic programming challenge
+// Prints numbers 1-100, replacing multiples of 3 with "Fizz",
+// multiples of 5 with "Buzz", and multiples of both with "FizzBuzz"
+
+letrec fizzbuzz = \n ->
+  if n > 100 then
+    print "Done!"
+  else
+    let output =
+      if n - (n / 15 * 15) == 0 then "FizzBuzz"
+      else if n - (n / 3 * 3) == 0 then "Fizz"
+      else if n - (n / 5 * 5) == 0 then "Buzz"
+      else toString n
+    in
+    let _ = print output in
+    fizzbuzz (n + 1)
+in
+
+fizzbuzz 1

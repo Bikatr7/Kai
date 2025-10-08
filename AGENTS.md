@@ -2,6 +2,8 @@
 
 ## Read README.md in it's entirety.
 ## Read DEVELOPING.md in it's entirety.
+## Read FEATURES.md in it's entirety.
+## Read SPEC.md in it's entirety.
 
 # Instructions for Agents
 
@@ -75,7 +77,7 @@ case parseEvaluate "5 / 0" of
 - **When in doubt**: consult README.md first, then SPEC.md for technical details
 - **Design decisions**: Follow the functional-first philosophy described in README.md
 - **Feature priorities**: Match the roadmap and current limitations listed in README.md
-- **Documentation updates**: When adding language features, update README.md, SPEC.md, website, and DEVELOPING.md
+- **Documentation updates**: When adding language features, update README.md, SPEC.md, website, FEATURES.md and DEVELOPING.md
 
 ## Recent Major Improvements (v0.0.3.2+)
 - **Type annotations**: Optional Haskell-style type annotations for lambdas and let bindings

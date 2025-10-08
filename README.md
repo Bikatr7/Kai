@@ -4,7 +4,7 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Status (v0.0.3.3)
+## Current Status (v0.0.4)
 
 The language currently supports a compact, expression‑only core with full test coverage.
 
@@ -15,30 +15,34 @@ Features available today:
 - **Booleans**: `and`, `or`, `not`
 - **Comparisons**: `==`, `<`, `>`
 - **Strings**: string literals (`"hello"`), concatenation (`++`), escapes (`\"`, `\\`, `\n`)
+- **String functions**: `split`, `join`, `trim`, `replace`, `strLength` for text processing
 - **Lists**: `[1, 2, 3]`, concatenation (`++`), equality (`==`), cons (`::`), operations (`head`, `tail`, `null`)
+- **List functions**: `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip` for functional programming
+- **Tuples**: `(1, "hello", true)` for grouping values, with `fst` and `snd` for pairs
 - **Records**: `{a = 1, b = true}`, field access (`record.field`), equality (`==`)
 - **Unit & printing**: `()` unit value; `print : a -> Unit` prints and returns `()`; `input` reads a line of stdin and returns a string
+- **File I/O**: `readFile : String -> String` and `writeFile : String -> String -> Unit` for file operations
+- **Command-line arguments**: `args : [String]` returns list of command-line arguments passed to script
 - **Conditionals**: `if cond then e1 else e2`
 - **Functions**: lambdas (`\x -> expr`), application (`f x`), closures
-- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TList`, `TRecord`, `TFun` with unification and occurs check
+- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TList`, `TRecord`, `TTuple`, `TFun` with unification and occurs check
 - **Type annotations**: Optional type annotations (`let x : Int = 42`, `\x : String -> expr`)
 - **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
 - **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`
-- **Pattern matching**: Case expressions for handling Maybe/Either and other data types
+- **Pattern matching**: Case expressions for handling Maybe/Either, tuples, and other data types
 - **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
 - **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
 - **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
-- **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default)
+- **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default), supports passing arguments to scripts
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
-- **Tests**: Hspec + QuickCheck (318 examples) — all passing with comprehensive coverage including 27 input/conversion test files
-- **Working examples**: Interactive calculator demonstrating input, conversion functions, tail recursion, wildcard variables, and expression sequencing
+- **Tests**: Hspec + QuickCheck (435 examples) — all passing with comprehensive coverage
+- **Working examples**: Interactive calculator, FizzBuzz, guess the number game, list processing, text processing, file I/O demonstrations
 
 Current limitations:
 
 - Limited to single-file scripts (no modules or imports)
-- Limited I/O (only print statements and stdin, no file operations)
 - No REPL for interactive experimentation
-- No standard library (beyond basic list/record operations)
+- No standard library (beyond built-in functions)
 - No error recovery (one parse error stops execution)
 
 ## Quickstart
@@ -164,7 +168,7 @@ toString 100         // => "100"
 parseInt "42"        // => Just 42
 ```
 
-Lists and records:
+Lists, tuples, and records:
 
 ```kai
 [1, 2] ++ [3, 4]        // => [1, 2, 3, 4]
@@ -172,8 +176,39 @@ head([1, 2, 3])         // => 1
 tail([1, 2, 3])         // => [2, 3]
 null([])                // => true
 1 :: [2, 3]             // => [1, 2, 3]
+(1, "hello", true)      // Tuple with three values
+fst((42, "world"))      // => 42
+snd((42, "world"))      // => "world"
 {a = 1, b = true}.a    // => 1
 {a = 1} == {a = 1}      // => true
+```
+
+List and string functions:
+
+```kai
+map (\x -> x * 2) [1, 2, 3]           // => [2, 4, 6]
+filter (\x -> x > 2) [1, 2, 3, 4]     // => [3, 4]
+foldl (\acc -> \x -> acc + x) 0 [1, 2, 3]  // => 6
+zip [1, 2, 3] ["a", "b", "c"]         // => [(1, "a"), (2, "b"), (3, "c")]
+split " " "hello world"               // => ["hello", "world"]
+join ", " ["apple", "banana"]         // => "apple, banana"
+trim "  hello  "                      // => "hello"
+```
+
+File I/O and command-line arguments:
+
+```kai
+// Write to a file
+let _ = writeFile "output.txt" "Hello, world!" in
+print "File written"
+
+// Read from a file
+let content = readFile "input.txt" in
+print content
+
+// Access command-line arguments (run with: kai script.kai arg1 arg2)
+let firstArg = head args in
+print ("First argument: " ++ firstArg)
 ```
 
 Type safety (checked before evaluation):
@@ -185,7 +220,7 @@ if 5 then 1 else 2  // Type error: ExpectedBool TInt
 
 ## Language Notes
 
-- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `Int`, `Bool`, `String`, `Unit`, `List`, `Record`, `parseInt`, `toString`, `show`, `head`, `tail`, `null`).
+- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`).
 - Wildcard variable `_` can be used in let bindings to discard values: `let _ = expression in body`.
 - Expression sequencing with `;` has lowest precedence and is right-associative: `a; b; c` = `a; (b; c)`.
 - Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
@@ -235,27 +270,29 @@ Planned functional-first features:
 - ~~Hindley–Milner style type inference~~ ✅ **DONE**
 - ~~Basic pattern matching~~ ✅ **DONE** (`case` expressions for Maybe/Either)
 - ~~Lists and records~~ ✅ **DONE** (with basic operations)
+- ~~Tuples~~ ✅ **DONE** (with `fst` and `snd` for pairs)
 - Top‑level definitions and module system
-- Enhanced pattern matching (tuple destructuring, guards)
+- Enhanced pattern matching (tuple destructuring in case, guards)
 - Do-notation or block syntax for I/O sequencing
 - Match expressions as alternative to nested conditionals
 - Maps and advanced data structures
 
 **Functional-First Standard Library**
-- List operations: `map`, `filter`, `fold`, `zip` (immutable by default)
-- String utilities: `split`, `join`, `trim`, `replace`
+- ~~List operations: `map`, `filter`, `fold`, `zip`~~ ✅ **DONE** (immutable by default)
+- ~~String utilities: `split`, `join`, `trim`, `replace`~~ ✅ **DONE**
 - Math functions: `abs`, `min`, `max`, `sqrt`
-- Option/Result types for error handling
+- ~~Option/Result types for error handling~~ ✅ **DONE** (Maybe/Either)
 - Function composition and pipeline operators
 
 **I/O and Effects (Controlled Imperative)**
 - ~~Wildcard variables (`_`) for unused bindings in let expressions~~ ✅ **DONE**
 - ~~Statement blocks with semicolon syntax for imperative-style code~~ ✅ **DONE** (expression sequencing)
+- ~~File I/O: `readFile`, `writeFile`~~ ✅ **DONE**
+- ~~Command-line arguments~~ ✅ **DONE** (`args`)
 - Do-notation for clean I/O sequencing (addressing calculator verbosity)
-- File I/O: `readFile`, `writeFile`, `appendFile`
+- File I/O: `appendFile` and additional operations
 - Network operations: HTTP requests, JSON parsing
 - Process utilities: run external commands
-- Input mechanisms: `readLine`, command-line arguments
 - Mutable references when needed: `ref`, `var`
 
 **Scripting Conveniences**

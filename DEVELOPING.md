@@ -4,10 +4,10 @@ This document helps contributors work on Kai’s codebase efficiently.
 
 ## Architecture Overview
 
-- `src/Syntax.hs`: AST for expressions (`Expr`) with optional type annotations. Includes literals, variables, arithmetic, booleans, comparisons, strings, lists, records, Maybe/Either types, `print`, `input`, conversion functions, lambdas, application, `let`, `letrec`, case expressions, and type annotation expressions.
+- `src/Syntax.hs`: AST for expressions (`Expr`) with optional type annotations. Includes literals, variables, arithmetic, booleans, comparisons, strings, lists, tuples, records, Maybe/Either types, `print`, `input`, `args`, conversion functions, lambdas, application, `let`, `letrec`, case expressions, list/string/tuple functions, file I/O, and type annotation expressions.
 - `src/Parser.hs`: Megaparsec parser with performance optimizations for deeply nested expressions. Handles comments, precedence/associativity, unary minus, string escapes (`\"`, `\\`, `\n`), type annotations, and multi-statement parsing.
-- `src/TypeChecker.hs`: Hindley–Milner type inference with unification, occurs check, and substitution composition optimization. Core types: `TInt`, `TBool`, `TString`, `TUnit`, `TFun`, `TList`, `TRecord`, `TMaybe`, and `TEither`.
-- `src/Evaluator.hs`: Strict evaluator with closures and IO support. Runtime values: `VInt`, `VBool`, `VStr`, `VUnit`, `VFun`, `VList`, `VRecord`, `VMaybe`, `VEither`. Supports `print`, `input`, conversion functions, and list operations.
+- `src/TypeChecker.hs`: Hindley–Milner type inference with unification, occurs check, and substitution composition optimization. Core types: `TInt`, `TBool`, `TString`, `TUnit`, `TFun`, `TList`, `TRecord`, `TTuple`, `TMaybe`, and `TEither`.
+- `src/Evaluator.hs`: Strict evaluator with closures and IO support. Runtime values: `VInt`, `VBool`, `VStr`, `VUnit`, `VFun`, `VList`, `VRecord`, `VTuple`, `VMaybe`, `VEither`. Supports `print`, `input`, `args`, conversion functions, list/string/tuple operations, and file I/O.
 - `src/Main.hs`: CLI entry (`kai`). Parses input, type-checks, and evaluates; supports `-e`, `--debug` flag, and file execution with clean output by default.
 - `website/`: Yesod-based static site generator used for the project website/demo.
 
@@ -17,8 +17,13 @@ This document helps contributors work on Kai’s codebase efficiently.
 - Unit: `()` value with type `TUnit`.
 - `print : a -> Unit` prints and returns `()`.
 - `input : String` reads a line from stdin.
+- `args : [String]` returns command-line arguments passed to script.
+- File I/O: `readFile : String -> String`, `writeFile : String -> String -> Unit`.
 - Error handling: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions for pattern matching.
 - Safe conversion functions: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`.
+- List functions: `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`.
+- String functions: `split`, `join`, `trim`, `replace`, `strLength`.
+- Tuple functions: `fst`, `snd` for pairs.
 - Type annotations: Optional Haskell-style type annotations for lambdas and let bindings.
 - Strings: escapes `\"`, `\\`, `\n`. Unknown escapes are errors with a helpful message.
 - Precedence (highest to lowest):
@@ -43,7 +48,7 @@ Notes:
 Prereqs: Stack + GHC.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 318 tests including 27 input test files)
+- Tests: `stack test --fast` (all 435 tests)
 - Run CLI: `stack exec kai -- --help`
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
 - Try interactive calculator: `stack exec kai examples/calculator.kai`
@@ -88,6 +93,7 @@ Run subsets:
    - SPEC.md (technical language specification - update immediately when semantics change)
    - website/Main.hs (features, examples, version)
    - DEVELOPING.md (development practices)
+   - FEATURES.md (features)
 
 ## Versioning & Release
 
