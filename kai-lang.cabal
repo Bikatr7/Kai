@@ -22,6 +22,18 @@ library
       TypeChecker
   other-modules:
       Main
+      TypeChecker.Arithmetic
+      TypeChecker.Bindings
+      TypeChecker.ControlFlow
+      TypeChecker.DataStructures
+      TypeChecker.Functions
+      TypeChecker.Inference
+      TypeChecker.Literals
+      TypeChecker.Operations
+      TypeChecker.Patterns
+      TypeChecker.Substitution
+      TypeChecker.Types
+      TypeChecker.Unification
       Paths_kai_lang
   autogen-modules:
       Paths_kai_lang
@@ -54,6 +66,18 @@ executable kai
       Parser
       Syntax
       TypeChecker
+      TypeChecker.Arithmetic
+      TypeChecker.Bindings
+      TypeChecker.ControlFlow
+      TypeChecker.DataStructures
+      TypeChecker.Functions
+      TypeChecker.Inference
+      TypeChecker.Literals
+      TypeChecker.Operations
+      TypeChecker.Patterns
+      TypeChecker.Substitution
+      TypeChecker.Types
+      TypeChecker.Unification
       Paths_kai_lang
   autogen-modules:
       Paths_kai_lang
