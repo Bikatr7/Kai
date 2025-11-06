@@ -21,6 +21,19 @@ library
       Evaluator
       TypeChecker
   other-modules:
+      Evaluator.Arithmetic
+      Evaluator.Bindings
+      Evaluator.BooleanOps
+      Evaluator.ControlFlow
+      Evaluator.Conversions
+      Evaluator.DataStructures
+      Evaluator.Functions
+      Evaluator.Helpers
+      Evaluator.IOOps
+      Evaluator.Literals
+      Evaluator.Patterns
+      Evaluator.StringOps
+      Evaluator.Types
       Main
       Parser.Builtins
       Parser.ComplexExpr
@@ -70,6 +83,19 @@ executable kai
   main-is: Main.hs
   other-modules:
       Evaluator
+      Evaluator.Arithmetic
+      Evaluator.Bindings
+      Evaluator.BooleanOps
+      Evaluator.ControlFlow
+      Evaluator.Conversions
+      Evaluator.DataStructures
+      Evaluator.Functions
+      Evaluator.Helpers
+      Evaluator.IOOps
+      Evaluator.Literals
+      Evaluator.Patterns
+      Evaluator.StringOps
+      Evaluator.Types
       Parser
       Parser.Builtins
       Parser.ComplexExpr
