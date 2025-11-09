@@ -65,8 +65,6 @@ spec = describe "Input Support" $ do
           Left err -> expectationFailure $ "Type error: " ++ show err
           Right _ -> do
             (_, output) <- captureOutput $ withStdin providedInput $ eval expr
-            -- Extract the actual program output by taking everything after the last \r
-            let cleanOutput = case reverse (splitOn "\r" output) of
-                  (lastSegment:_) -> lastSegment
-                  [] -> output
+            -- Extract the actual program output by filtering out test framework progress dots
+            let cleanOutput = filter (\c -> c /= '.' && c /= '\r') output
             cleanOutput `shouldBe` expectedOutput
