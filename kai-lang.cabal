@@ -65,6 +65,8 @@ library
     , base >=4.7 && <5
     , bytestring
     , containers
+    , criterion
+    , deepseq
     , hspec
     , megaparsec
     , mtl
@@ -73,6 +75,7 @@ library
     , split
     , text
     , warp
+    , weigh
     , yesod
     , yesod-core
     , yesod-form
@@ -130,6 +133,8 @@ executable kai
     , base >=4.7 && <5
     , bytestring
     , containers
+    , criterion
+    , deepseq
     , hspec
     , megaparsec
     , mtl
@@ -138,6 +143,7 @@ executable kai
     , split
     , text
     , warp
+    , weigh
     , yesod
     , yesod-core
     , yesod-form
@@ -159,6 +165,8 @@ executable kai-website
     , base >=4.7 && <5
     , bytestring
     , containers
+    , criterion
+    , deepseq
     , directory
     , hspec
     , megaparsec
@@ -168,6 +176,7 @@ executable kai-website
     , split
     , text
     , warp
+    , weigh
     , yesod
     , yesod-core
     , yesod-form
@@ -216,6 +225,8 @@ test-suite kai-test
     , base >=4.7 && <5
     , bytestring
     , containers
+    , criterion
+    , deepseq
     , directory
     , filepath
     , hspec
@@ -228,6 +239,44 @@ test-suite kai-test
     , text
     , unix
     , warp
+    , weigh
+    , yesod
+    , yesod-core
+    , yesod-form
+    , yesod-static
+  default-language: Haskell2010
+
+benchmark kai-bench
+  type: exitcode-stdio-1.0
+  main-is: Bench.hs
+  other-modules:
+      EvaluatorBench
+      ParserBench
+      TypeCheckerBench
+      Paths_kai_lang
+  autogen-modules:
+      Paths_kai_lang
+  hs-source-dirs:
+      benchmarks
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -O2
+  build-depends:
+      QuickCheck
+    , aeson
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , criterion
+    , deepseq
+    , hspec
+    , kai-lang
+    , megaparsec
+    , mtl
+    , parser-combinators
+    , shakespeare
+    , split
+    , text
+    , warp
+    , weigh
     , yesod
     , yesod-core
     , yesod-form

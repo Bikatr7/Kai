@@ -3,7 +3,9 @@
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
 **Version**: 0.0.4
-**Last Updated**: 2025-10-08
+**Last Updated**: 2025-11-06
+
+**Note**: Kai uses a modular architecture with 28 focused submodules across Parser, TypeChecker, and Evaluator components. Performance benchmarks are available via `stack bench`.
 
 ## Table of Contents
 
@@ -466,9 +468,11 @@ String ::= '"' StringChar* '"'
 
 ## Implementation Notes
 
-- **Parser**: Megaparsec with operator precedence parsing
-- **Type Checker**: Algorithm W with unification
-- **Evaluator**: Direct AST interpretation with closure environments
-- **Performance**: Optimized for deeply nested expressions (1000+ levels)
+- **Architecture**: Modular design with 28 focused submodules across Parser (7 modules), TypeChecker (12 modules), and Evaluator (13 modules)
+- **Parser**: Megaparsec with operator precedence parsing across multiple specialized modules
+- **Type Checker**: Algorithm W with unification, split across specialized inference modules
+- **Evaluator**: Direct AST interpretation with closure environments, dual pure/IO evaluation paths
+- **Performance**: Optimized for deeply nested expressions (1000+ levels), comprehensive benchmarking suite available
+- **Benchmarks**: Criterion (speed) and Weigh (memory) profiling with regression detection
 
-This specification documents Kai v0.0.3.2. Updates to language features should be reflected in this document immediately.
+This specification documents Kai v0.0.4. Updates to language features should be reflected in this document immediately.

@@ -24,6 +24,9 @@ dependencies:
   - QuickCheck
   - mtl
   - split
+  - criterion
+  - weigh
+  - deepseq
 
 library:
   source-dirs: src
@@ -72,3 +75,20 @@ tests:
       - unix
     build-tools:
       - hspec-discover
+
+benchmarks:
+  kai-bench:
+    main: Bench.hs
+    source-dirs: benchmarks
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -O2
+    dependencies:
+      - criterion
+      - weigh
+      - deepseq
+      - kai-lang
+      - containers
+      - text

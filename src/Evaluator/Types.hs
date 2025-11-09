@@ -4,6 +4,7 @@ import Syntax
 import qualified Data.Map as Map
 import Data.IORef
 import Data.List (intercalate)
+import Control.DeepSeq
 
 data Value
   = VInt Int
@@ -50,6 +51,21 @@ instance Eq Value where
   (VRef _) == (VRef _) = False
   (VFun {}) == (VFun {}) = False
   _ == _ = False
+
+instance NFData Value where
+  rnf (VInt n) = rnf n
+  rnf (VBool b) = rnf b
+  rnf (VStr s) = rnf s
+  rnf VUnit = ()
+  rnf (VJust v) = rnf v
+  rnf VNothing = ()
+  rnf (VLeft v) = rnf v
+  rnf (VRight v) = rnf v
+  rnf (VList vs) = rnf vs
+  rnf (VRecord m) = rnf m
+  rnf (VTuple vs) = rnf vs
+  rnf (VRef _) = ()  -- IORef can't be fully evaluated
+  rnf (VFun _ _ _) = ()  -- Function can't be fully evaluated
 
 type Env = Map.Map String Value
 

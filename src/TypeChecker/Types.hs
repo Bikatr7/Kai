@@ -4,6 +4,7 @@ import Syntax
 import qualified Data.Map as Map
 import Control.Monad.State
 import Data.Bifunctor (second)
+import Control.DeepSeq
 
 data Type
   = TInt
@@ -51,3 +52,16 @@ syntaxTypeToType (STEither t1 t2) = TEither (syntaxTypeToType t1) (syntaxTypeToT
 syntaxTypeToType (STList t) = TList (syntaxTypeToType t)
 syntaxTypeToType (STRecord fields) = TRecord (Map.fromList (map (second syntaxTypeToType) fields))
 syntaxTypeToType (STTuple ts) = TTuple (map syntaxTypeToType ts)
+
+instance NFData Type where
+  rnf TInt = ()
+  rnf TBool = ()
+  rnf TString = ()
+  rnf TUnit = ()
+  rnf (TFun t1 t2) = rnf t1 `seq` rnf t2
+  rnf (TVar s) = rnf s
+  rnf (TMaybe t) = rnf t
+  rnf (TEither t1 t2) = rnf t1 `seq` rnf t2
+  rnf (TList t) = rnf t
+  rnf (TRecord m) = rnf m
+  rnf (TTuple ts) = rnf ts

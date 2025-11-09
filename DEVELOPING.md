@@ -4,11 +4,60 @@ This document helps contributors work on Kai’s codebase efficiently.
 
 ## Architecture Overview
 
-- `src/Syntax.hs`: AST for expressions (`Expr`) with optional type annotations. Includes literals, variables, arithmetic, booleans, comparisons, strings, lists, tuples, records, Maybe/Either types, `print`, `input`, `args`, conversion functions, lambdas, application, `let`, `letrec`, case expressions, list/string/tuple functions, file I/O, and type annotation expressions.
-- `src/Parser.hs`: Megaparsec parser with performance optimizations for deeply nested expressions. Handles comments, precedence/associativity, unary minus, string escapes (`\"`, `\\`, `\n`), type annotations, and multi-statement parsing.
-- `src/TypeChecker.hs`: Hindley–Milner type inference with unification, occurs check, and substitution composition optimization. Core types: `TInt`, `TBool`, `TString`, `TUnit`, `TFun`, `TList`, `TRecord`, `TTuple`, `TMaybe`, and `TEither`.
-- `src/Evaluator.hs`: Strict evaluator with closures and IO support. Runtime values: `VInt`, `VBool`, `VStr`, `VUnit`, `VFun`, `VList`, `VRecord`, `VTuple`, `VMaybe`, `VEither`. Supports `print`, `input`, `args`, conversion functions, list/string/tuple operations, and file I/O.
-- `src/Main.hs`: CLI entry (`kai`). Parses input, type-checks, and evaluates; supports `-e`, `--debug` flag, and file execution with clean output by default.
+### Modular Design
+The codebase follows a modular architecture with clear separation of concerns. Each major component is split into focused submodules for maintainability and performance.
+
+### Core Components
+
+#### Syntax (`src/Syntax.hs`)
+- AST definitions (`Expr`, `Pattern`) with NFData instances for benchmarking
+- Optional type annotations and comprehensive expression coverage
+- Literals, operators, functions, bindings, I/O operations
+
+#### Parser (`src/Parser/`)
+- **Lexer.hs**: Lexical analysis, reserved keywords, symbol parsing
+- **Literals.hs**: Basic literal parsing (integers, strings, booleans, unit)
+- **Types.hs**: Type annotation parsing
+- **Patterns.hs**: Pattern matching syntax parsing
+- **ComplexExpr.hs**: Complex expressions (lambdas, conditionals, bindings)
+- **Builtins.hs**: Built-in function parsing
+- **Expressions.hs**: Main expression parser with operator precedence
+- **Parser.hs**: Public interface coordinating all parsing components
+
+#### Type Checker (`src/TypeChecker/`)
+- **Types.hs**: Core type definitions and syntax-type conversions
+- **Substitution.hs**: Type variable substitution with composition optimization
+- **Unification.hs**: Unification algorithm with occurs check
+- **Literals.hs**: Literal and variable type inference
+- **Arithmetic.hs**: Arithmetic operator type checking
+- **ControlFlow.hs**: Control flow type checking
+- **Functions.hs**: Function and lambda type checking
+- **Bindings.hs**: Let/letrec binding type checking
+- **DataStructures.hs**: List, record, tuple type checking
+- **Operations.hs**: Built-in operation type checking
+- **Patterns.hs**: Pattern type checking
+- **Inference.hs**: Main type inference dispatcher
+- **TypeChecker.hs**: Public interface with typeCheck and typeCheckWithEnv
+
+#### Evaluator (`src/Evaluator/`)
+- **Types.hs**: Runtime value definitions with NFData for benchmarking
+- **Helpers.hs**: Utility functions for evaluation and string operations
+- **Literals.hs**: Literal value evaluation
+- **Arithmetic.hs**: Arithmetic operations (pure and IO variants)
+- **BooleanOps.hs**: Boolean logic evaluation (pure and IO variants)
+- **ControlFlow.hs**: Control flow evaluation (pure and IO variants)
+- **Functions.hs**: Function application and closures (pure and IO variants)
+- **Bindings.hs**: Let/letrec binding evaluation (pure and IO variants)
+- **DataStructures.hs**: List, record, tuple operations (pure and IO variants)
+- **StringOps.hs**: String manipulation (pure and IO variants)
+- **Conversions.hs**: Type conversion functions (pure and IO variants)
+- **IOOps.hs**: I/O operations (input, print, file operations)
+- **Patterns.hs**: Pattern matching evaluation (pure and IO variants)
+- **Evaluator.hs**: Public interface with eval, evalWithEnv, evalPure, evalPureWithEnv
+
+#### CLI (`src/Main.hs`)
+- Command-line interface with expression evaluation and file execution
+- Debug mode, clean output by default, argument passing support
 - `website/`: Yesod-based static site generator used for the project website/demo.
 
 ## Language Semantics (current)
@@ -71,6 +120,41 @@ Run subsets:
 - **Stack size**: Use `stack test --fast --test-arguments="--match Stress"` to verify deeply nested expressions (1000+ levels) don't cause infinite loops.
 - **Memory management**: Critical for handling complex recursive structures and large expressions.
 
+## Benchmarking
+
+Kai includes comprehensive performance benchmarks using Criterion (speed) and Weigh (memory). See `benchmarks/README.md` for detailed documentation.
+
+### Running Benchmarks
+
+```bash
+# Full benchmark suite
+stack bench
+
+# Specific components
+stack bench --benchmark-arguments="--match pattern 'Evaluator'"
+stack bench --benchmark-arguments="--match pattern 'Parser'"
+stack bench --benchmark-arguments="--match pattern 'Type Checker'"
+
+# Generate CSV output for analysis
+stack bench --benchmark-arguments="--csv=results.csv"
+```
+
+### Performance Regression Detection
+
+- **Run benchmarks before major changes** to establish baseline
+- **Run benchmarks after optimizations** to verify improvements
+- **Monitor for >10% regressions** which indicate potential issues
+- **Use CSV output** for automated comparison in CI/CD pipelines
+
+### Current Performance Metrics
+
+- **Most operations**: ~20-50ns (arithmetic, conditionals, functions)
+- **Record access**: ~1.93μs (optimized map lookups)
+- **Recursion**: ~6μs (appropriate for function call overhead)
+- **Boolean operations**: ~23ns (after syntax corrections)
+- **Parser**: ~40-600ns (linear scaling with complexity)
+- **Type checker**: ~20ns
+
 ## Linting & Style
 
 - HLint: `hlint .`
@@ -79,21 +163,26 @@ Run subsets:
 
 ## Adding Features (playbook)
 
-1) Update `Syntax` with new AST forms.
-2) Extend `Parser` with syntax + precedence placement.
-3) Extend `TypeChecker` with typing rules and unification as needed.
-4) Extend `Evaluator` with runtime behavior. For IO features, update both `evalWithEnv` and `evalWithEnvIO` to handle all expression types.
+1) Update `Syntax` with new AST forms and NFData instances for benchmarking.
+2) Extend appropriate `Parser` submodules with syntax + precedence placement.
+3) Extend appropriate `TypeChecker` submodules with typing rules and unification as needed.
+4) Extend appropriate `Evaluator` submodules with runtime behavior. For IO features, update both pure and IO variants.
 5) Add comprehensive tests:
    - Unit tests in `test/*Spec.hs` with proper error type matching.
    - Script test in `tests/*.kai` with `// expect:`.
    - Property tests when applicable.
    - Performance stress tests for deeply nested expressions.
-6) Update all documentation to reflect changes:
+6) **Run benchmarks** before and after changes to measure performance impact:
+   - `stack bench` for full benchmark suite
+   - `stack bench --benchmark-arguments="--match pattern 'Evaluator'"` for evaluator benchmarks
+   - Compare results to detect regressions (>10% slower indicates investigation needed)
+7) Update all documentation to reflect changes:
    - README.md (source of truth for project goals and status)
    - SPEC.md (technical language specification - update immediately when semantics change)
    - website/Main.hs (features, examples, version)
    - DEVELOPING.md (development practices)
    - FEATURES.md (features)
+   - benchmarks/README.md (benchmark documentation and guidelines)
 
 ## Versioning & Release
 

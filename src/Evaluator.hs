@@ -91,7 +91,13 @@ evalPureWithEnv env expr = case expr of
   Tail _ -> evalDataStructures evalPureWithEnv env expr
   Null _ -> evalDataStructures evalPureWithEnv env expr
   RecordLit _ -> evalDataStructures evalPureWithEnv env expr
-  RecordAccess _ _ -> evalDataStructures evalPureWithEnv env expr
+  RecordAccess r field ->
+    case evalPureWithEnv env r of
+      Right (VRecord m) -> case Map.lookup field m of
+        Just fv -> Right fv
+        Nothing -> Left $ RecordFieldNotFound field
+      Right _ -> Left $ TypeError "Record access expects a record"
+      Left err -> Left err
   TupleLit _ -> evalDataStructures evalPureWithEnv env expr
   Fst _ -> evalDataStructures evalPureWithEnv env expr
   Snd _ -> evalDataStructures evalPureWithEnv env expr
