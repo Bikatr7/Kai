@@ -1,9 +1,9 @@
 # AGENTS.md
 
-## Read README.md in it's entirety.
-## Read DEVELOPING.md in it's entirety.
-## Read FEATURES.md in it's entirety.
-## Read SPEC.md in it's entirety.
+## Read README.md in its entirety.
+## Read DEVELOPING.md in its entirety.
+## Read FEATURES.md in its entirety.
+## Read SPEC.md in its entirety.
 
 # Instructions for Agents
 
