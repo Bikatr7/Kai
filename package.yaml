@@ -8,14 +8,7 @@ maintainer: bikatr7@proton.me
 
 dependencies:
   - base >= 4.7 && < 5
-  - yesod
-  - yesod-core
-  - yesod-static
-  - yesod-form
   - text
-  - shakespeare
-  - warp
-  - aeson
   - containers
   - bytestring
   - megaparsec
@@ -24,11 +17,26 @@ dependencies:
   - QuickCheck
   - mtl
   - split
-  - criterion
   - weigh
   - deepseq
   - filepath
   - directory
+  - aeson
+
+when:
+  - condition: os(windows)
+    then:
+      dependencies: []
+    else:
+      dependencies:
+        - yesod
+        - yesod-core
+        - yesod-static
+        - yesod-form
+        - shakespeare
+        - warp
+        - criterion
+        - unix
 
 library:
   source-dirs: src
@@ -48,6 +56,20 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - directory
+    when:
+      - condition: os(windows)
+        then:
+          dependencies: []
+          buildable: false
+        else:
+          dependencies:
+            - yesod
+            - yesod-core
+            - yesod-static
+            - yesod-form
+            - shakespeare
+            - warp
+          buildable: true
 
   kai:
     main: Main.hs
@@ -74,7 +96,13 @@ tests:
       - directory
       - filepath
       - containers
-      - unix
+    when:
+      - condition: os(windows)
+        then:
+          dependencies: []
+        else:
+          dependencies:
+            - unix
     build-tools:
       - hspec-discover
 
@@ -88,9 +116,17 @@ benchmarks:
       - -with-rtsopts=-N
       - -O2
     dependencies:
-      - criterion
-      - weigh
-      - deepseq
       - kai-lang
       - containers
       - text
+    when:
+      - condition: os(windows)
+        then:
+          dependencies:
+            - weigh
+            - deepseq
+        else:
+          dependencies:
+            - criterion
+            - weigh
+            - deepseq
