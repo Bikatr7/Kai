@@ -6,6 +6,7 @@ import qualified Data.Map as Map
 import Control.Monad (foldM)
 
 type EvalFunc = Env -> Expr -> Either RuntimeError Value
+type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
 
 matchPattern :: Pattern -> Value -> Maybe Env
 matchPattern (PVar name) val = Just $ Map.singleton name val
@@ -54,3 +55,19 @@ evalPatterns eval env (Case scrutinee patterns) = do
           let newEnv = Map.union bindings env
           in eval newEnv expr
 evalPatterns _ _ _ = error "evalPatterns called on non-pattern expression"
+
+evalPatternsIO :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
+evalPatternsIO eval env (Case scrutinee patterns) = do
+  valResult <- eval env scrutinee
+  case valResult of
+    Left err -> return $ Left err
+    Right val -> tryPatterns env val patterns
+  where
+    tryPatterns _ _ [] = return $ Left $ TypeError "No matching pattern in case expression"
+    tryPatterns env val ((pat, expr) : rest) = do
+      case matchPattern pat val of
+        Nothing -> tryPatterns env val rest
+        Just bindings -> do
+          let newEnv = Map.union bindings env
+          eval newEnv expr
+evalPatternsIO _ _ _ = error "evalPatternsIO called on non-pattern expression"

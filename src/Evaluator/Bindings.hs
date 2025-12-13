@@ -35,18 +35,13 @@ evalBindingsIO eval env (Let var _maybeType val body) = do
       let env' = if var == "_" then env else Map.insert var valValue env
       eval env' body
 evalBindingsIO eval env (LetRec var _maybeType val body) = do
-  let testEnv = Map.insert var (VFun "_placeholder" (IntLit 0) env) env
-  testResult <- eval testEnv val
-  case testResult of
-    Left err -> return $ Left $ TypeError $ "LetRec definition failed: " ++ show err
-    Right _ -> do
-      recValueRef <- newIORef (VFun "_placeholder" (IntLit 0) env)
-      let env' = Map.insert var (VRef recValueRef) env
-      valResult <- eval env' val
-      case valResult of
-        Right recValue -> do
-          writeIORef recValueRef recValue
-          eval env' body
-        Left err -> return $ Left err
+  recValueRef <- newIORef (VFun "_placeholder" (IntLit 0) Map.empty)
+  let env' = Map.insert var (VRef recValueRef) env
+  valResult <- eval env' val
+  case valResult of
+    Left err -> return $ Left err
+    Right recValue -> do
+      writeIORef recValueRef recValue
+      eval env' body
 evalBindingsIO eval env (TypeAnnotation e _type) = eval env e
 evalBindingsIO _ _ _ = error "evalBindingsIO called on non-binding expression"

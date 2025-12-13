@@ -1,0 +1,6 @@
+// expect: 6
+import Math
+let nums = [1, 2, 3]
+foldl add 0 nums
+
+

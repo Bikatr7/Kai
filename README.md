@@ -4,9 +4,9 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Status (v0.0.4)
+## Current Status (v0.0.4.1)
 
-The language supports a comprehensive functional-first scripting language with extensive test coverage, modular architecture, and performance benchmarking. Recent optimizations have improved record access performance by ~3-5% and boolean operations by ~300x.
+The language supports a comprehensive functional-first scripting language with extensive test coverage, modular architecture, and performance benchmarking. Recent additions include top-level definitions and a module system for code organization and reuse.
 
 Features available today:
 
@@ -35,12 +35,13 @@ Features available today:
 - **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
 - **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default), supports passing arguments to scripts
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
-- **Tests**: Hspec + QuickCheck (435 examples) — all passing with comprehensive coverage
-- **Working examples**: Interactive calculator, FizzBuzz, guess the number game, list processing, text processing, file I/O demonstrations
+- **Top-level definitions**: `let` and `letrec` at module level for defining functions and values
+- **Module system**: `import ModuleName` to import modules, module resolution supports `ModuleName.kai` and `ModuleName/ModuleName.kai`, full cross-module type checking, explicit exports with `export name1, name2`
+- **Tests**: Hspec + QuickCheck (512 examples) — all passing with comprehensive coverage
+- **Working examples**: Interactive calculator, FizzBuzz, guess the number game, list processing, text processing, file I/O demonstrations, text analysis tool with modules
 
 Current limitations:
 
-- Limited to single-file scripts (no modules or imports)
 - No REPL for interactive experimentation
 - No standard library (beyond built-in functions)
 - No error recovery (one parse error stops execution)
@@ -193,6 +194,28 @@ zip [1, 2, 3] ["a", "b", "c"]         // => [(1, "a"), (2, "b"), (3, "c")]
 split " " "hello world"               // => ["hello", "world"]
 join ", " ["apple", "banana"]         // => "apple, banana"
 trim "  hello  "                      // => "hello"
+```
+
+Top-level definitions and modules:
+
+```kai
+// Math.kai - A simple math module
+let add = \x -> \y -> x + y
+let multiply = \x -> \y -> x * y
+
+// Main.kai - Using the module
+import Math
+add 2 3        // => 5
+multiply 4 5    // => 20
+
+// Top-level recursive function
+letrec factorial = \n -> if n == 0 then 1 else n * factorial (n - 1)
+factorial 5     // => 120
+
+// Multiple top-level definitions
+let x = 10
+let y = 20
+x + y           // => 30
 ```
 
 File I/O and command-line arguments:

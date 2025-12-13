@@ -1,0 +1,5 @@
+// expect: 20
+import Math
+multiply (add 2 3) 4
+
+

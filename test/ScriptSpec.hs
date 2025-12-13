@@ -20,15 +20,16 @@ spec = do
     forM_ files $ \fp -> do
       it fp $ do
         content <- readFile fp
-        -- For multi-statement files, use parseStatements directly
-        -- Only use parseFileExpr for files that can't be parsed as multiple statements
-        case parseStatements content of
-          Right stmts | length stmts > 1 -> do
-            let expr = last stmts  -- Last statement is the main expression to test
-            testExpr expr content
-          _ -> case parseFileExpr content of
-            Left perr -> expectationFailure ("Parse error: " ++ show perr)
-            Right expr -> testExpr expr content
+        -- Try parsing as program first (new top-level definitions)
+        case parseProgram content of
+          Right program -> testProgram program content
+          Left _ -> case parseStatements content of
+            Right stmts | length stmts > 1 -> do
+              let expr = last stmts  -- Last statement is the main expression to test
+              testExpr expr content
+            _ -> case parseFileExpr content of
+              Left perr -> expectationFailure ("Parse error: " ++ show perr)
+              Right expr -> testExpr expr content
 
   describe "Script files in test/" $ do
     files <- runIO $ kaiFilesIn "test"
@@ -132,6 +133,42 @@ requiresIO (Let _ _ val body) = requiresIO val || requiresIO body
 requiresIO (LetRec _ _ val body) = requiresIO val || requiresIO body
 requiresIO (Print e) = requiresIO e
 requiresIO _ = False
+
+testProgram :: Program -> String -> IO ()
+testProgram program content = do
+  case parseExpect content of
+    Just (ExpectValue expStr) -> do
+      case parseExpr expStr of
+        Left perr -> expectationFailure ("Bad expect expr: " ++ show perr)
+        Right eexp -> do
+          result <- evalProgram program
+          case (result, evalPure eexp) of
+            (Right v, Right vexp) -> v `shouldBe` vexp
+            (Left rerr, _) -> expectationFailure ("Runtime error: " ++ show rerr)
+            _ -> expectationFailure "Unexpected eval failure in expected expression"
+    Just (ExpectType tyStr) -> do
+      let expectedTy = case tyStr of
+            "TInt" -> Right TInt
+            "TBool" -> Right TBool
+            "TString" -> Right TString
+            "TUnit" -> Right TUnit
+            _ -> Left ("Unknown type in expect-type: " ++ tyStr)
+      case expectedTy of
+        Left msg -> expectationFailure msg
+        Right ety -> case typeCheckProgram program of
+          Right ty -> ty `shouldBe` ety
+          Left err -> expectationFailure ("Type error: " ++ show err)
+    Just ExpectError -> do
+      result <- evalProgram program
+      case result of
+        Left _ -> return ()  -- Expected error, test passes
+        Right v -> expectationFailure ("Expected error, got: " ++ show v)
+    Nothing -> do
+      -- No expect directive, just run the program
+      result <- evalProgram program
+      case result of
+        Left rerr -> expectationFailure ("Runtime error: " ++ show rerr)
+        Right _ -> return ()  -- Program ran successfully
 
 -- Utilities
 kaiFilesIn :: FilePath -> IO [FilePath]

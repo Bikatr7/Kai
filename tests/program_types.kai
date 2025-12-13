@@ -1,0 +1,3 @@
+// expect: 7
+let add : Int -> Int -> Int = \x -> \y -> x + y
+add 3 4

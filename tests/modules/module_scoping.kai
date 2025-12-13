@@ -1,0 +1,6 @@
+// expect: 30
+import Math
+let result = add 10 20
+result
+
+

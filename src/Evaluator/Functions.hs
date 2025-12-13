@@ -3,6 +3,7 @@ module Evaluator.Functions where
 import Evaluator.Types
 import Syntax
 import qualified Data.Map as Map
+import Data.IORef (readIORef)
 
 type EvalFunc = Env -> Expr -> Either RuntimeError Value
 type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
@@ -29,8 +30,25 @@ evalFunctionsIO eval env (App fun arg) = do
   case (funResult, argResult) of
     (Left err, _) -> return $ Left err
     (_, Left err) -> return $ Left err
-    (Right (VFun param body closureEnv), Right argVal) ->
-      let env' = Map.insert param argVal closureEnv
-      in eval env' body
-    (Right _, Right _) -> return $ Left $ TypeError "Cannot apply non-function value"
+    (Right funVal, Right argVal) -> do
+      -- Dereference VRef if needed
+      actualFun <- case funVal of
+        VRef ref -> do
+          val <- readIORef ref
+          -- If it's another VRef, dereference recursively
+          case val of
+            VRef ref2 -> readIORef ref2
+            _ -> return val
+        _ -> return funVal
+      case actualFun of
+        VFun param body closureEnv -> do
+          let env' = Map.insert param argVal closureEnv
+          eval env' body
+        _ -> do
+          -- Check what's actually in the VRef
+          case funVal of
+            VRef ref -> do
+              val <- readIORef ref
+              return $ Left $ TypeError ("Cannot apply non-function value: VRef contains " ++ take 200 (show val))
+            _ -> return $ Left $ TypeError ("Cannot apply non-function value: got " ++ take 200 (show actualFun))
 evalFunctionsIO _ _ _ = error "evalFunctionsIO called on non-function expression"

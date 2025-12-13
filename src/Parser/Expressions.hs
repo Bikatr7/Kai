@@ -56,6 +56,7 @@ builtinExpr = choice
   , headExpr expr
   , tailExpr expr
   , nullExpr expr
+  , fixExpr expr
   , fstExpr expr
   , sndExpr expr
   , mapExpr atom

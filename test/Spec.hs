@@ -10,11 +10,14 @@ import qualified EdgeCaseSpec
 import qualified IntegerOverflowSpec
 import qualified InputSpec
 import qualified LambdaSpec
+import qualified LetBindingSpec
 import qualified ParserSpec
+import qualified ProgramSpec
 import qualified PropertyBasedSpec
 import qualified RuntimeErrorSpec
 import qualified ScriptSpec
 import qualified StressTestSpec
+import qualified StringSpec
 import qualified TypeErrorSpec
 import qualified TypeInferenceSpec
 import qualified UnificationSpec
@@ -24,6 +27,7 @@ import qualified SequencingSpec
 import qualified TupleSpec
 import qualified ListFunctionsSpec
 import qualified StringFunctionsSpec
+import qualified ModuleSpec
 
 main :: IO ()
 main = hspec $ do
@@ -35,12 +39,15 @@ main = hspec $ do
   IntegerOverflowSpec.spec
   InputSpec.spec
   LambdaSpec.spec
+  LetBindingSpec.spec
   ParserSpec.spec
+  ProgramSpec.spec
   PropertyBasedSpec.spec
   RuntimeErrorSpec.spec
   -- Kai script files discovered under tests/ and test/
   ScriptSpec.spec
   StressTestSpec.spec
+  StringSpec.spec
   TypeErrorSpec.spec
   TypeInferenceSpec.spec
   UnificationSpec.spec
@@ -50,3 +57,4 @@ main = hspec $ do
   TupleSpec.spec
   ListFunctionsSpec.spec
   StringFunctionsSpec.spec
+  ModuleSpec.spec

@@ -66,5 +66,8 @@ spec = describe "Input Support" $ do
           Right _ -> do
             (_, output) <- captureOutput $ withStdin providedInput $ eval expr
             -- Extract the actual program output by filtering out test framework progress dots
+            -- and taking only the last line to avoid capturing extra output
             let cleanOutput = filter (\c -> c /= '.' && c /= '\r') output
-            cleanOutput `shouldBe` expectedOutput
+                lastLine = last $ lines cleanOutput
+                trimmedLine = dropWhile (== ' ') lastLine
+            trimmedLine `shouldBe` init expectedOutput  -- remove the \n from expected

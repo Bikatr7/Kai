@@ -39,16 +39,16 @@ getHomeR = defaultLayout $ do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>435
+            <div .stat-number>512
             <div .stat-label>Tests Passing
           <div .stat-item>
             <div .stat-number>8
             <div .stat-label>Core Types
           <div .stat-item>
-            <div .stat-number>23
+            <div .stat-number>26
             <div .stat-label>Built-in Functions
           <div .stat-item>
-            <div .stat-number>v0.0.4
+            <div .stat-number>v0.0.4.1
             <div .stat-label>Current Version
 
       <nav>
@@ -74,13 +74,13 @@ getHomeR = defaultLayout $ do
             <p>User input with `input`, type conversions (`parseInt`, `toString`, `show`), and interactive calculator example.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>435 tests with clear pass/fail indicators, property-based testing, and script evaluation for robust quality.
+            <p>512 tests with clear pass/fail indicators, property-based testing, and script evaluation for robust quality.
           <div .feature>
             <h3>Developer Experience
             <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
           <div .feature>
-            <h3>Type Safety
-            <p>All expressions type-checked before evaluation with descriptive error messages.
+            <h3>Module System
+            <p>Import modules with `import ModuleName`, top-level definitions with `let` and `letrec`, mutual recursion support, circular import detection, explicit exports, and module resolution.
 
       <section #quickstart>
         <h2>Quick Start
@@ -229,6 +229,18 @@ getHomeR = defaultLayout $ do
             <code>let compose = \\f -> \\g -> \\x -> f (g x) in compose (\\x -> x * 2) (\\x -> x + 1) 10
 
         <div .element-block>
+          <h3>Top-Level Definitions & Modules
+          <div .code-example>
+            <code>let x = 42
+            <code>let y = x + 1
+            <br>
+            <code>letrec factorial = \\n -> if n == 0 then 1 else n * factorial (n - 1)
+            <code>factorial 5
+            <br>
+            <code>import Math
+            <code>add 2 3
+
+        <div .element-block>
           <h3>Strings & Print
           <div .code-example>
             <code>"Hello, " ++ "World"
@@ -263,6 +275,17 @@ getHomeR = defaultLayout $ do
             <code>let add : Int -> Int -> Int = \\x : Int -> \\y : Int -> x + y
             <br>
             <code>(\\x : String -> case parseInt x of Just n -> n | Nothing -> 0) "42"
+
+        <div .element-block>
+          <h3>Pattern Matching
+          <div .code-example>
+            <code>case parseInt "42" of Just x -> x | Nothing -> 0
+            <br>
+            <code>case list of [] -> 0 | x :: xs -> x + length xs
+            <br>
+            <code>case tuple of (x, y) -> x + y
+            <br>
+            <code>case record of {a = x, b = y} -> x + y
 
         <div .element-block>
           <h3>Lists & Tuples
@@ -300,6 +323,21 @@ getHomeR = defaultLayout $ do
             <span .comment>// "hello"
 
         <div .element-block>
+          <h3>Pattern Matching Examples
+          <div .code-example>
+            <code>case parseInt "42" of Just x -> x | Nothing -> 0
+            <span .comment>// Safe string to int conversion
+            <br>
+            <code>case list of [] -> 0 | x :: xs -> x + length xs
+            <span .comment>// List pattern matching
+            <br>
+            <code>case tuple of (x, y) -> x + y
+            <span .comment>// Tuple destructuring
+            <br>
+            <code>case record of {a = x, b = y} -> x + y
+            <span .comment>// Record pattern matching
+
+        <div .element-block>
           <h3>File I/O & Arguments
           <div .code-example>
             <code>let content = readFile "input.txt" in print content
@@ -324,9 +362,6 @@ getHomeR = defaultLayout $ do
           <h3>Current Limitations
           <div .code-example>
             <span .limitation>×
-            <span>Limited to single-file scripts (no modules or imports)
-            <br>
-            <span .limitation>×
             <span>No REPL for interactive experimentation
             <br>
             <span .limitation>×
@@ -339,7 +374,7 @@ getHomeR = defaultLayout $ do
             <span>No custom data types (only built-in types)
 
       <section #roadmap>
-        <h2>Current Status (v0.0.4) & Roadmap
+        <h2>Current Status (v0.0.4.1) & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -381,18 +416,23 @@ getHomeR = defaultLayout $ do
             <div .timeline-content>
               <h3>Standard Library (Done)
               <p>List functions (map, filter, fold, zip), string functions (split, join, trim), 26 built-ins
+          <div .timeline-item>
+            <div .timeline-marker data-step="9">
+            <div .timeline-content>
+              <h3>Top-Level Definitions & Modules (Done)
+              <p>Module system with imports, top-level let/letrec definitions, mutual recursion support
           <div .timeline-item .current>
-            <div .timeline-marker .current data-step="9">
+            <div .timeline-marker .current data-step="10">
             <div .timeline-content>
               <h3>File I/O & Scripting (Done)
               <p>readFile, writeFile, command-line arguments, practical scripting capabilities
           <div .timeline-item>
-            <div .timeline-marker data-step="10">
-            <div .timeline-content>
-              <h3>Modules & Advanced Stdlib (Planned)
-              <p>Module system, imports/exports, math functions, more list/string operations
-          <div .timeline-item>
             <div .timeline-marker data-step="11">
+            <div .timeline-content>
+              <h3>Advanced Stdlib (Planned)
+              <p>Math functions, more list/string operations
+          <div .timeline-item>
+            <div .timeline-marker data-step="12">
             <div .timeline-content>
               <h3>Developer Tools (Planned)
               <p>REPL, formatter, linter, IDE support, package manager

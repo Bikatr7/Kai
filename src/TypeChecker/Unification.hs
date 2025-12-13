@@ -20,7 +20,11 @@ occurs _ _ = False
 unify :: Type -> Type -> Either TypeError Substitution
 unify (TVar a) t
   | t == TVar a = Right Map.empty
-  | occurs a t = Left $ InfiniteType a t
+  | occurs a t =
+      -- Special case for recursive functions: allow TVar a = TFun arg (TVar a)
+      case t of
+        TFun _ (TVar retVar) | retVar == a -> Right $ Map.singleton a t
+        _ -> Left $ InfiniteType a t
   | otherwise = Right $ Map.singleton a t
 unify t (TVar a) = unify (TVar a) t
 unify TInt TInt = Right Map.empty

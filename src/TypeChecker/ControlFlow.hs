@@ -1,10 +1,12 @@
 module TypeChecker.ControlFlow where
 
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Control.Monad.Trans (lift)
 import Syntax (Expr(..))
 import TypeChecker.Types
-import TypeChecker.Substitution
+import TypeChecker.Substitution (applySubst, applySubstEnv, composeSubst, composeSubstList, freeTypeVars)
+import qualified TypeChecker.Substitution as Subst
 import TypeChecker.Unification
 
 type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
@@ -70,7 +72,42 @@ inferControlFlow infer env (If c t e) = do
   let s12 = composeSubst s2 s1
   (s3, tt) <- infer env t
   (s4, te) <- infer env e
-  s5 <- lift $ unify (applySubst s4 tt) te
+  -- CRITICAL: When unifying then and else branches, if we get UnificationError
+  -- because one is concrete and the other is a function type with a return type
+  -- variable in the environment (recursive function), we should unify the concrete
+  -- type with the return type variable instead.
+  let ttWithS4 = applySubst s4 tt
+  let teWithS3 = applySubst s3 te
+  let envTypeVars = [tv | (_, TVar tv) <- Map.toList env]
+  let isConcreteType TInt = True
+      isConcreteType TBool = True
+      isConcreteType TString = True
+      isConcreteType TUnit = True
+      isConcreteType (TList _) = True
+      isConcreteType (TRecord _) = True
+      isConcreteType (TMaybe _) = True
+      isConcreteType (TEither _ _) = True
+      isConcreteType (TTuple _) = True
+      isConcreteType _ = False
+  -- Try normal unification first, with special handling for recursive function type variables
+  -- Call unify directly (not lifted) so we can pattern match on the Either
+  let s5Result = unify ttWithS4 teWithS3
+  -- CRITICAL FIX: If we get UnificationError with concrete type vs function type with type variable return,
+  -- this likely means we're trying to unify the then branch (concrete) with else branch (function type)
+  -- where the function type's return type is a recursive function's type variable.
+  -- In this case, we should unify the concrete type with the return type variable, not fail.
+  s5 <- either
+    (\err -> case err of
+      UnificationError concrete (TFun arg (TVar retVar)) | isConcreteType concrete -> do
+        -- Concrete type vs function type with return type variable
+        -- Unify concrete with return type variable instead
+        either (lift . Left) return $ unify concrete (TVar retVar)
+      UnificationError (TFun arg (TVar retVar)) concrete | isConcreteType concrete -> do
+        -- Same, reversed
+        either (lift . Left) return $ unify (TVar retVar) concrete
+      _ -> lift $ Left err)
+    return
+    s5Result
   let finalSubst = composeSubstList [s12, s3, s4, s5]
   return (finalSubst, applySubst s5 te)
 

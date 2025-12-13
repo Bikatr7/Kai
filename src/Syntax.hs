@@ -58,6 +58,8 @@ data Expr
   | Head Expr
   | Tail Expr
   | Null Expr
+  -- Fixpoint combinator for recursion
+  | Fix Expr
   -- Records
   | RecordLit [(String, Expr)]
   | RecordAccess Expr String
@@ -85,6 +87,17 @@ data Expr
   | WriteFile Expr Expr
   -- Command-line arguments
   | Args
+  deriving (Show, Eq)
+
+-- Top-level definitions for modules
+data TopLevel
+  = TLDef String (Maybe SyntaxType) Expr      -- let x = expr
+  | TLExpr Expr                               -- top-level expression
+  | TLImport String                           -- import ModuleName
+  | TLExport [String]                         -- export name1, name2, ...
+  deriving (Show, Eq)
+
+data Program = Program [TopLevel]
   deriving (Show, Eq)
 
 -- Patterns for case expressions
@@ -155,6 +168,7 @@ instance NFData Expr where
   rnf (Head e) = rnf e
   rnf (Tail e) = rnf e
   rnf (Null e) = rnf e
+  rnf (Fix e) = rnf e
   rnf (RecordLit fs) = rnf fs
   rnf (RecordAccess e s) = rnf e `seq` rnf s
   rnf (TupleLit es) = rnf es
@@ -176,6 +190,15 @@ instance NFData Expr where
   rnf (ReadFile e) = rnf e
   rnf (WriteFile e1 e2) = rnf e1 `seq` rnf e2
   rnf Args = ()
+
+instance NFData TopLevel where
+  rnf (TLDef s mt e) = rnf s `seq` rnf mt `seq` rnf e
+  rnf (TLExpr e) = rnf e
+  rnf (TLImport s) = rnf s
+  rnf (TLExport ss) = rnf ss
+
+instance NFData Program where
+  rnf (Program tls) = rnf tls
 
 instance NFData Pattern where
   rnf (PVar s) = rnf s

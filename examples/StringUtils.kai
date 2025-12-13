@@ -1,0 +1,2 @@
+// StringUtils.kai - String manipulation utilities
+let words = \s -> filter (\w -> not (w == "")) (split " " (trim s))

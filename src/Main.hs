@@ -1,16 +1,20 @@
 module Main where
 
 import Syntax
-import TypeChecker
+import TypeChecker (typeCheck, typeCheckProgramWithDirIO)
 import Evaluator
 import Parser
+import Evaluator.Types (Value(..))
 import System.Environment
+import System.Exit (exitFailure)
 import System.IO
+import System.FilePath (takeDirectory)
 import Data.List (intercalate)
 import qualified Data.Map as Map
 import Paths_kai_lang (version)
 import Data.Version (showVersion)
-import Control.Monad (when)
+import Control.Monad (when, unless)
+import qualified ModuleSystem
 
 versionString :: String
 versionString = "Kai v" ++ showVersion version
@@ -35,34 +39,56 @@ examples =
 runExpression :: Bool -> String -> IO ()
 runExpression debug input = do
   when debug $ putStrLn $ "\nExpression: " ++ input
-  
-  case parseExpr input of
-    Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr
-    Right expr -> do
-      when debug $ putStrLn $ "AST: " ++ show expr
-      
-      when debug $ putStr "Type: "
-      case typeCheck expr of
-        Left err -> putStrLn $ "Type error: " ++ show err
-        Right ty -> do
-          when debug $ print ty
-          
-          when debug $ putStr "Evaluation: "
-          result <- eval expr
-          case result of
-            Left err -> putStrLn $ "Runtime error: " ++ show err
-            Right val -> when debug $ print val
+  case parseProgram input of
+    Right program -> runProgram debug "." [] program
+    Left _ -> case parseExpr input of
+      Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr
+      Right expr -> do
+        when debug $ putStrLn $ "AST: " ++ show expr
+        when debug $ putStr "Type: "
+        case typeCheck expr of
+          Left err -> putStrLn $ "Type error: " ++ show err
+          Right ty -> do
+            when debug $ print ty
+            when debug $ putStr "Evaluation: "
+            result <- eval expr
+            case result of
+              Left err -> putStrLn $ "Runtime error: " ++ show err
+              Right val -> when debug $ print val
+
+runProgram :: Bool -> FilePath -> [String] -> Program -> IO ()
+runProgram debug currentDir scriptArgs program = do
+  when debug $ putStrLn $ "Program AST: " ++ show program
+  when debug $ putStr "Type: "
+  typeResult <- typeCheckProgramWithDirIO ModuleSystem.loadModuleTypeEnvIO currentDir program
+  case typeResult of
+    Left err -> do
+      putStrLn $ "Type error: " ++ show err
+      exitFailure
+    Right ty -> when debug $ print ty
+  when debug $ putStr "Evaluation: "
+  let argsEnv = Map.singleton "args" (VList (map VStr scriptArgs))
+  result <- evalProgramWithEnv argsEnv currentDir program
+  case result of
+    Left err -> putStrLn $ "Runtime error: " ++ show err
+    Right val -> when debug $ print val
 
 runFile :: Bool -> FilePath -> [String] -> IO ()
 runFile debug filename scriptArgs = do
   when debug $ putStrLn $ "Running file: " ++ filename
   content <- readFile filename
-  -- Try single expression first, then fall back to multi-statement
-  case parseFileExpr content of
-    Left _ -> case parseStatements content of
-      Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr
-      Right stmts -> runStatements debug scriptArgs stmts
-    Right expr -> runSingleExpression debug scriptArgs expr
+  let currentDir = takeDirectory filename
+  case parseProgram content of
+    Right program -> do
+      when debug $ putStrLn "Parsed as program"
+      runProgram debug currentDir scriptArgs program
+    Left _ -> do
+      when debug $ putStrLn "Falling back to legacy parsing"
+      case parseFileExpr content of
+        Left _ -> case parseStatements content of
+          Left parseErr -> putStrLn $ "Parse error: " ++ show parseErr
+          Right stmts -> runStatements debug scriptArgs stmts
+        Right expr -> runSingleExpression debug scriptArgs expr
 
 runSingleExpression :: Bool -> [String] -> Expr -> IO ()
 runSingleExpression debug scriptArgs expr = do

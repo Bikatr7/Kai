@@ -1,0 +1,5 @@
+// expect: 120
+import Recursive
+factorial 5
+
+

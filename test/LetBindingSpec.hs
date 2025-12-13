@@ -97,7 +97,7 @@ spec = do
       it "handles let bindings with complex arithmetic chains" $ do
         let expr = "let a = 2 in let b = a * 3 in let c = b + 4 in let d = c * 5 in let e = d - 10 in let f = e / 2 in f"
         case parseExpr expr of
-          Right ast -> evalPure ast `shouldBe` Right (VInt 25)
+          Right ast -> evalPure ast `shouldBe` Right (VInt 20)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "handles higher-order functions with multiple parameters" $ do

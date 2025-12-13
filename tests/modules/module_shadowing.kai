@@ -1,0 +1,6 @@
+// expect: 5
+import Math
+let add = \x -> \y -> x - y
+add 10 5
+
+

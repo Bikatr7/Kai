@@ -1,0 +1,7 @@
+// expect: 9
+import Math
+let x = add 1 2
+let y = multiply x 3
+y
+
+

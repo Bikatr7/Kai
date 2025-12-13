@@ -1,0 +1,6 @@
+// expect: 19
+import Math
+import Util
+add (double 5) (triple 3)
+
+

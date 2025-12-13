@@ -1,9 +1,9 @@
-# Kai Language Specification (v0.0.4)
+# Kai Language Specification (v0.0.4.1)
 
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
-**Version**: 0.0.4
-**Last Updated**: 2025-11-06
+**Version**: 0.0.4.1
+**Last Updated**: 2025-12-12
 
 **Note**: Kai uses a modular architecture with 28 focused submodules across Parser, TypeChecker, and Evaluator components. Performance benchmarks are available via `stack bench`.
 
@@ -15,6 +15,8 @@ This document provides a comprehensive technical specification of the Kai progra
 - [Expressions](#expressions)
 - [Functions](#functions)
 - [Type System](#type-system)
+- [Top-Level Definitions](#top-level-definitions)
+- [Module System](#module-system)
 - [Built-in Functions](#built-in-functions)
 - [I/O Operations](#io-operations)
 - [Error Handling](#error-handling)
@@ -27,7 +29,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - **Evaluation**: Strict (call-by-value) evaluation
 - **Type System**: Hindley-Milner type inference with unification and occurs check
 - **Paradigm**: Expression-oriented with immutable data by default
-- **File Format**: Single-file scripts with `.kai` extension
+- **File Format**: Single-file scripts with `.kai` extension, or multi-file modules with imports
 
 ## Lexical Structure
 
@@ -62,7 +64,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - Special identifier: `_` (wildcard) can be used in let bindings to discard values
 
 ### Reserved Keywords
-`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`
+`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`, `import`, `export`
 
 **Note**: `_` is not a keyword but has special meaning as a wildcard identifier in let bindings.
 
@@ -407,14 +409,12 @@ From highest to lowest precedence:
 
 ## Language Limitations (Current)
 
-- **Single-file scripts**: No module system or imports
-- **Basic I/O**: No file operations, only stdin/stdout
 - **No error recovery**: Single parse/type error stops execution
 - **No REPL**: Command-line only execution
 - **Limited standard library**: Only built-in conversion and list functions
 - **No custom data types**: Only built-in lists, records, Maybe, Either
 - **No polymorphic recursion**: Type inference limitations with complex recursive types
-- **Wildcard limitations**: `_` only allowed in `let` bindings, not in `letrec` or pattern matching
+- **Wildcard limitations**: `_` only allowed in `let` bindings, not in `letrec`
 
 ## Grammar Summary
 

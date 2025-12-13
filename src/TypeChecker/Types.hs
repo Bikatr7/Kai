@@ -35,6 +35,7 @@ data TypeError
   | UnificationError Type Type
   | RecordFieldMismatch String
   | InvalidWildcard String
+  | GeneralTypeError String
   deriving (Show, Eq)
 
 -- Type inference monad

@@ -1,0 +1,5 @@
+// Practical example: Text Analysis Tool
+// Demonstrates module system with StringUtils, MathUtils, and TextAnalysis
+import TextAnalysis
+let sampleText = "Hello world"
+print (analyzeText sampleText)

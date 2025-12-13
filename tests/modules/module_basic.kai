@@ -1,0 +1,5 @@
+// expect: 5
+import Math
+add 2 3
+
+

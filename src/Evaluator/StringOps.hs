@@ -8,6 +8,7 @@ import Data.List (intercalate)
 import Data.List.Split (splitOn)
 
 type EvalFunc = Env -> Expr -> Either RuntimeError Value
+type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
 
 evalStringOps :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
 evalStringOps eval env (Split delim str) = do
@@ -53,3 +54,58 @@ evalStringOps eval env (StrLength str) = do
         VStr s -> Right $ VInt (length s)
         _ -> Left $ TypeError "strLength: argument must be a string"
 evalStringOps _ _ _ = error "evalStringOps called on non-string operation"
+
+evalStringOpsIO :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
+evalStringOpsIO eval env (Split delim str) = do
+    delimResult <- eval env delim
+    strResult <- eval env str
+    case (delimResult, strResult) of
+        (Right (VStr d), Right (VStr s)) -> return $ Right $ VList (map VStr (splitOn d s))
+        (Right (VStr _), Right _) -> return $ Left $ TypeError "split: second argument must be a string"
+        (Right _, Right (VStr _)) -> return $ Left $ TypeError "split: first argument must be a string"
+        (Left err, _) -> return $ Left err
+        (_, Left err) -> return $ Left err
+        _ -> return $ Left $ TypeError "split: invalid arguments"
+evalStringOpsIO eval env (Join delim lst) = do
+    delimResult <- eval env delim
+    lstResult <- eval env lst
+    case (delimResult, lstResult) of
+        (Right (VStr d), Right (VList vs)) -> do
+            case mapM extractString vs of
+                Right strs -> return $ Right $ VStr (intercalate d strs)
+                Left err -> return $ Left err
+        (Right (VStr _), Right _) -> return $ Left $ TypeError "join: second argument must be a list"
+        (Right _, Right (VList _)) -> return $ Left $ TypeError "join: first argument must be a string"
+        (Left err, _) -> return $ Left err
+        (_, Left err) -> return $ Left err
+        _ -> return $ Left $ TypeError "join: invalid arguments"
+evalStringOpsIO eval env (Trim str) = do
+    strResult <- eval env str
+    case strResult of
+        Right (VStr s) -> return $ Right $ VStr (dropWhile isSpace $ dropWhileEnd isSpace s)
+        Right _ -> return $ Left $ TypeError "trim: argument must be a string"
+        Left err -> return $ Left err
+  where
+    dropWhileEnd p = reverse . dropWhile p . reverse
+evalStringOpsIO eval env (Replace old new str) = do
+    oldResult <- eval env old
+    newResult <- eval env new
+    strResult <- eval env str
+    case (oldResult, newResult, strResult) of
+        (Right (VStr o), Right (VStr n), Right (VStr s)) -> return $ Right $ VStr (replaceAll o n s)
+        (Right (VStr _), Right (VStr _), Right _) -> return $ Left $ TypeError "replace: third argument must be a string"
+        (Right (VStr _), Right _, Right (VStr _)) -> return $ Left $ TypeError "replace: second argument must be a string"
+        (Right _, Right (VStr _), Right (VStr _)) -> return $ Left $ TypeError "replace: first argument must be a string"
+        (Left err, _, _) -> return $ Left err
+        (_, Left err, _) -> return $ Left err
+        (_, _, Left err) -> return $ Left err
+        _ -> return $ Left $ TypeError "replace: invalid arguments"
+  where
+    replaceAll old new str = intercalate new (splitOn old str)
+evalStringOpsIO eval env (StrLength str) = do
+    strResult <- eval env str
+    case strResult of
+        Right (VStr s) -> return $ Right $ VInt (length s)
+        Right _ -> return $ Left $ TypeError "strLength: argument must be a string"
+        Left err -> return $ Left err
+evalStringOpsIO _ _ _ = error "evalStringOpsIO called on non-string operation"

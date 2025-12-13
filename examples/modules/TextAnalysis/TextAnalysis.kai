@@ -1,0 +1,35 @@
+// TextAnalysis.kai - Text analysis functions using StringUtils and MathUtils
+import StringUtils
+import MathUtils
+
+let wordCount = \text -> length (words text)
+
+let characterCount = \text -> strLength text
+
+let averageWordLength = \text -> case words text of
+  [] -> 0
+  | ws -> let lengths = map strLength ws in
+          average lengths
+
+let mostCommonWord = \text -> case words text of
+  [] -> ""
+  | ws -> let lowerWords = map toLower ws in
+          let uniqueWords = foldl (\acc -> \w -> 
+            if null (filter (\x -> x == w) acc) then w :: acc else acc) [] lowerWords in
+          let wordFreq = \w -> count (\x -> x == w) lowerWords in
+          let frequencies = map (\w -> (w, wordFreq w)) uniqueWords in
+          let maxFreq = max (map (\p -> case p of (_, f) -> f) frequencies) in
+          case filter (\p -> case p of (_, f) -> f == maxFreq) frequencies of
+            [] -> ""
+            | (w, _) :: _ -> w
+
+let analyzeText = \text -> 
+  let wc = wordCount text in
+  let cc = characterCount text in
+  let awl = averageWordLength text in
+  let mcw = mostCommonWord text in
+  "Word count: " ++ toString wc ++ "\n" ++
+  "Character count: " ++ toString cc ++ "\n" ++
+  "Average word length: " ++ toString awl ++ "\n" ++
+  "Most common word: " ++ mcw
+

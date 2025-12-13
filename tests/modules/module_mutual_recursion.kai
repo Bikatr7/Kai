@@ -1,0 +1,5 @@
+// expect: true
+import Mutual
+isEven 4
+
+

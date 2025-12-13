@@ -1,0 +1,18 @@
+// MathUtils.kai - Mathematical utilities
+let sum = \xs -> foldl (\acc -> \x -> acc + x) 0 xs
+
+let average = \xs -> case xs of
+  [] -> 0
+  | xs -> sum xs / length xs
+
+let max = \xs -> case xs of
+  [] -> 0
+  | x :: xs -> foldl (\acc -> \x -> if x > acc then x else acc) x xs
+
+let min = \xs -> case xs of
+  [] -> 0
+  | x :: xs -> foldl (\acc -> \x -> if x < acc then x else acc) x xs
+
+let count = \pred -> \xs -> length (filter pred xs)
+
+

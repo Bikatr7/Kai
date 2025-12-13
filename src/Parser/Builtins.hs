@@ -41,6 +41,9 @@ tailExpr expr = keyword "tail" >> Tail <$> expr
 nullExpr :: ExprParser -> Parser Expr
 nullExpr expr = keyword "null" >> Null <$> expr
 
+fixExpr :: ExprParser -> Parser Expr
+fixExpr expr = keyword "fix" >> Fix <$> expr
+
 fstExpr :: ExprParser -> Parser Expr
 fstExpr expr = keyword "fst" >> Fst <$> expr
 

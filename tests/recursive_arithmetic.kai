@@ -1,0 +1,4 @@
+// expect: 15
+// Test recursive function with arithmetic operations that was causing unification issues
+letrec sum_up_to = \n -> if n == 0 then 0 else n + sum_up_to (n - 1) in
+sum_up_to 5

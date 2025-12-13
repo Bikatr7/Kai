@@ -1,13 +1,13 @@
 # Kai Language Features
 
-**Version**: 0.0.4
-**Last Updated**: 2025-11-06
+**Version**: 0.0.4.1
+**Last Updated**: 2025-12-12
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
 ---
 
-## Implemented Features (v0.0.4)
+## Implemented Features (v0.0.4.1)
 
 ### Core Language
 
@@ -43,6 +43,8 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Recursive bindings**: `letrec f = value in body`
 - ✅ **Wildcard variables**: `let _ = expr in body` to discard values
 - ✅ **Type annotations**: Optional Haskell-style (`let x : Int = 42`, `\x : String -> expr`)
+- ✅ **Top-level definitions**: `let` and `letrec` at module level (v0.0.4.1)
+- ✅ **Mutual recursion**: Multiple consecutive `letrec` definitions support mutual recursion (v0.0.4.1)
 
 #### Data Structures
 - ✅ **Lists**: `[1, 2, 3]`, homogeneous, with operations
@@ -112,6 +114,18 @@ This document provides a comprehensive overview of all implemented and planned f
 
 **Total Built-in Functions**: 26
 
+### Module System
+
+- ✅ **Top-level definitions**: `let` and `letrec` at module level (v0.0.4.1)
+- ✅ **Module imports**: `import ModuleName` to import modules (v0.0.4.1)
+- ✅ **Module resolution**: Supports `ModuleName.kai` and `ModuleName/ModuleName.kai` patterns (v0.0.4.1)
+- ✅ **Module dependencies**: Modules can import other modules (v0.0.4.1)
+- ✅ **Environment merging**: Imported definitions merge into importing module's environment (v0.0.4.1)
+- ✅ **Mutual recursion**: Multiple consecutive `letrec` definitions support mutual recursion (v0.0.4.1)
+- ✅ **Circular import detection**: Prevents infinite loops with clear error messages showing the loading stack (v0.0.4.1)
+- ✅ **Type checking**: Full cross-module type checking with import resolution (v0.0.4.1)
+- ✅ **Explicit exports**: `export name1, name2` syntax for selective module exports with enforcement (v0.0.4.1)
+
 ### Parser & Syntax
 
 - ✅ **Megaparsec-based parser**: With operator precedence and associativity
@@ -140,7 +154,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **File execution**: `kai script.kai [args...]`
 - ✅ **Debug mode**: `kai --debug` for detailed output
 - ✅ **Help system**: `kai --help`
-- ✅ **Version display**: `Kai v0.0.4`
+- ✅ **Version display**: `Kai v0.0.4.1`
 - ✅ **Script arguments**: Pass arguments to scripts
 - ✅ **Clean output**: No debug noise by default
 - ✅ **Install script**: `make install` to `~/.local/bin`
@@ -148,13 +162,13 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### Testing Infrastructure
 
-- ✅ **435 unit tests**: Using Hspec
+- ✅ **512 unit tests**: Using Hspec
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
 - ✅ **Script tests**: `.kai` files with `// expect:` directives
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
 - ✅ **Type checking tests**: All type inference scenarios
 - ✅ **Parser tests**: Edge cases and error messages
-- ✅ **0 HLint warnings**: Clean, idiomatic Haskell code
+- ✅ **Clean codebase**: Well-structured Haskell with comprehensive test coverage
 
 ### Documentation
 
@@ -198,8 +212,8 @@ This document provides a comprehensive overview of all implemented and planned f
 ### Core Language (Planned)
 
 #### Top Priority
-- ⏳ **Top-level definitions**: Define functions/values at module level
-- ⏳ **Module system**: Import/export across files
+- ✅ ~~Top-level definitions~~ **DONE** (v0.0.4.1)
+- ✅ ~~Module system~~ **DONE** (v0.0.4.1)
 - ⏳ **Enhanced pattern matching**:
   - Tuple destructuring in case expressions
   - Guards in patterns (`case x of n | n > 0 -> ...`)
@@ -390,7 +404,6 @@ This document provides a comprehensive overview of all implemented and planned f
 ## Current Limitations
 
 ### Language Limitations
-- ❌ **Single-file scripts only**: No module system or imports
 - ❌ **No REPL**: Command-line execution only
 - ❌ **No custom data types**: Only built-in types available
 - ❌ **Limited pattern matching**: No guards, no as-patterns
