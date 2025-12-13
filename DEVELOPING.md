@@ -211,6 +211,7 @@ stack bench --benchmark-arguments="--csv=results.csv"
 
 ## Notes / TODOs
 
-- Planned next steps (from roadmap): data structures (lists, records), pattern matching, and module system.
+- **Next priority features**: REPL implementation, custom data types, enhanced pattern matching
 - When changing semantics, align README.md, SPEC.md, website, and DEVELOPING.md immediately.
 - Always verify that stress tests pass after performance-critical changes.
+- Cross-platform support: Conditional dependencies for Windows compatibility

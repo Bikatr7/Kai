@@ -23,6 +23,9 @@ evalConversions eval env (ToString e) = do
 evalConversions eval env (Show e) = do
   result <- eval env e
   Right $ VStr (showValue result)
+evalConversions eval env (Discard e) = do
+  _ <- eval env e  -- Evaluate but ignore result
+  Right VUnit
 evalConversions eval env (MJust e) = do
   result <- eval env e
   Right $ VJust result
@@ -55,6 +58,11 @@ evalConversionsIO eval env (Show e) = do
   case result of
     Left err -> return $ Left err
     Right val -> return $ Right $ VStr (showValue val)
+evalConversionsIO eval env (Discard e) = do
+  result <- eval env e
+  case result of
+    Left err -> return $ Left err
+    Right _ -> return $ Right VUnit
 evalConversionsIO eval env (MJust e) = do
   result <- eval env e
   case result of

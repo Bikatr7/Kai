@@ -9,7 +9,7 @@ type EvalFunc = Env -> Expr -> Either RuntimeError Value
 type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
 
 matchPattern :: Pattern -> Value -> Maybe Env
-matchPattern (PVar name) val = Just $ Map.singleton name val
+matchPattern (PVar name) val = Just $ if name == "_" then Map.empty else Map.singleton name val
 matchPattern (PInt n) (VInt m) = if n == m then Just Map.empty else Nothing
 matchPattern (PBool b) (VBool c) = if b == c then Just Map.empty else Nothing
 matchPattern (PStr s) (VStr t) = if s == t then Just Map.empty else Nothing

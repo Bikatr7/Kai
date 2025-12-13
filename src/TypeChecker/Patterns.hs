@@ -10,7 +10,7 @@ import TypeChecker.Substitution
 import TypeChecker.Unification
 
 inferPattern :: Pattern -> Type -> TypeInfer (Substitution, TypeEnv)
-inferPattern (PVar name) ty = return (Map.empty, Map.singleton name ty)
+inferPattern (PVar name) ty = return (Map.empty, if name == "_" then Map.empty else Map.singleton name ty)
 inferPattern (PInt _) ty = do
   s <- lift $ unify ty TInt
   return (s, Map.empty)

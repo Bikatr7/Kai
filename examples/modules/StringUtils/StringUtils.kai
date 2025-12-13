@@ -1,6 +1,15 @@
 // StringUtils.kai - String manipulation utilities
 let words = \s -> filter (\w -> w != "") (split " " (trim s))
 
-let toLower = \s -> replace "A" "a" (replace "B" "b" (replace "C" "c" (replace "D" "d" (replace "E" "e" (replace "F" "f" (replace "G" "g" (replace "H" "h" (replace "I" "i" (replace "J" "j" (replace "K" "k" (replace "L" "l" (replace "M" "m" (replace "N" "n" (replace "O" "o" (replace "P" "p" (replace "Q" "q" (replace "R" "r" (replace "S" "s" (replace "T" "t" (replace "U" "u" (replace "V" "v" (replace "W" "w" (replace "X" "x" (replace "Y" "y" (replace "Z" "z" s))))))))))))))))))))))))
+let toLower = \s ->
+  let lowerMap = [
+    ("A", "a"), ("B", "b"), ("C", "c"), ("D", "d"), ("E", "e"),
+    ("F", "f"), ("G", "g"), ("H", "h"), ("I", "i"), ("J", "j"),
+    ("K", "k"), ("L", "l"), ("M", "m"), ("N", "n"), ("O", "o"),
+    ("P", "p"), ("Q", "q"), ("R", "r"), ("S", "s"), ("T", "t"),
+    ("U", "u"), ("V", "v"), ("W", "w"), ("X", "x"), ("Y", "y"),
+    ("Z", "z")
+  ] in
+  foldl (\acc -> \(upper, lower) -> replace upper lower acc) s lowerMap
 
-
+export words, toLower

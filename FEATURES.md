@@ -1,13 +1,13 @@
 # Kai Language Features
 
-**Version**: 0.0.4.1
-**Last Updated**: 2025-12-12
+**Version**: 0.0.4.2
+**Last Updated**: 2025-12-13
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
 ---
 
-## Implemented Features (v0.0.4.1)
+## Implemented Features (v0.0.4.2)
 
 ### Core Language
 
@@ -43,8 +43,8 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Recursive bindings**: `letrec f = value in body`
 - ✅ **Wildcard variables**: `let _ = expr in body` to discard values
 - ✅ **Type annotations**: Optional Haskell-style (`let x : Int = 42`, `\x : String -> expr`)
-- ✅ **Top-level definitions**: `let` and `letrec` at module level (v0.0.4.1)
-- ✅ **Mutual recursion**: Multiple consecutive `letrec` definitions support mutual recursion (v0.0.4.1)
+- ✅ **Top-level definitions**: `let` and `letrec` at module level (v0.0.4.2)
+- ✅ **Mutual recursion**: Multiple consecutive `letrec` definitions support mutual recursion (v0.0.4.2)
 
 #### Data Structures
 - ✅ **Lists**: `[1, 2, 3]`, homogeneous, with operations
@@ -55,6 +55,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 #### Pattern Matching
 - ✅ **Variable patterns**: `x`
+- ✅ **Wildcard patterns**: `_` (matches any value without binding)
 - ✅ **Literal patterns**: `42`, `true`, `"hello"`, `()`
 - ✅ **Maybe patterns**: `Just x`, `Nothing`
 - ✅ **Either patterns**: `Left x`, `Right x`
@@ -76,10 +77,11 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### Built-in Functions
 
-#### Type Conversion (3)
+#### Type Conversion (4)
 - ✅ `parseInt : String -> Maybe Int` - Safe string to int conversion
 - ✅ `toString : Int -> String` - Integer to string
 - ✅ `show : a -> String` - Any value to string representation
+- ✅ `discard : a -> Unit` - Evaluates and discards any value
 
 #### List Operations (11)
 - ✅ `head : [a] -> a` - First element (runtime error if empty)
@@ -112,19 +114,19 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ `writeFile : String -> String -> Unit` - Write string to file (overwrite)
 - ✅ `args : [String]` - Command-line arguments passed to script
 
-**Total Built-in Functions**: 26
+**Total Built-in Functions**: 27
 
 ### Module System
 
-- ✅ **Top-level definitions**: `let` and `letrec` at module level (v0.0.4.1)
-- ✅ **Module imports**: `import ModuleName` to import modules (v0.0.4.1)
-- ✅ **Module resolution**: Supports `ModuleName.kai` and `ModuleName/ModuleName.kai` patterns (v0.0.4.1)
-- ✅ **Module dependencies**: Modules can import other modules (v0.0.4.1)
-- ✅ **Environment merging**: Imported definitions merge into importing module's environment (v0.0.4.1)
-- ✅ **Mutual recursion**: Multiple consecutive `letrec` definitions support mutual recursion (v0.0.4.1)
-- ✅ **Circular import detection**: Prevents infinite loops with clear error messages showing the loading stack (v0.0.4.1)
-- ✅ **Type checking**: Full cross-module type checking with import resolution (v0.0.4.1)
-- ✅ **Explicit exports**: `export name1, name2` syntax for selective module exports with enforcement (v0.0.4.1)
+- ✅ **Top-level definitions**: `let` and `letrec` at module level (v0.0.4.2)
+- ✅ **Module imports**: `import ModuleName` to import modules (v0.0.4.2)
+- ✅ **Module resolution**: Supports `ModuleName.kai` and `ModuleName/ModuleName.kai` patterns (v0.0.4.2)
+- ✅ **Module dependencies**: Modules can import other modules (v0.0.4.2)
+- ✅ **Environment merging**: Imported definitions merge into importing module's environment (v0.0.4.2)
+- ✅ **Mutual recursion**: Multiple consecutive `letrec` definitions support mutual recursion (v0.0.4.2)
+- ✅ **Circular import detection**: Prevents infinite loops with clear error messages showing the loading stack (v0.0.4.2)
+- ✅ **Type checking**: Full cross-module type checking with import resolution (v0.0.4.2)
+- ✅ **Explicit exports**: `export name1, name2` syntax for selective module exports with enforcement (v0.0.4.2)
 
 ### Parser & Syntax
 
@@ -154,7 +156,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **File execution**: `kai script.kai [args...]`
 - ✅ **Debug mode**: `kai --debug` for detailed output
 - ✅ **Help system**: `kai --help`
-- ✅ **Version display**: `Kai v0.0.4.1`
+- ✅ **Version display**: `Kai v0.0.4.2`
 - ✅ **Script arguments**: Pass arguments to scripts
 - ✅ **Clean output**: No debug noise by default
 - ✅ **Install script**: `make install` to `~/.local/bin`
@@ -162,7 +164,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### Testing Infrastructure
 
-- ✅ **512 unit tests**: Using Hspec
+- ✅ **521 unit tests**: Using Hspec
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
 - ✅ **Script tests**: `.kai` files with `// expect:` directives
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
@@ -212,8 +214,8 @@ This document provides a comprehensive overview of all implemented and planned f
 ### Core Language (Planned)
 
 #### Top Priority
-- ✅ ~~Top-level definitions~~ **DONE** (v0.0.4.1)
-- ✅ ~~Module system~~ **DONE** (v0.0.4.1)
+- ✅ ~~Top-level definitions~~ **DONE** (v0.0.4.2)
+- ✅ ~~Module system~~ **DONE** (v0.0.4.2)
 - ⏳ **Enhanced pattern matching**:
   - Tuple destructuring in case expressions
   - Guards in patterns (`case x of n | n > 0 -> ...`)
@@ -407,7 +409,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ❌ **No REPL**: Command-line execution only
 - ❌ **No custom data types**: Only built-in types available
 - ❌ **Limited pattern matching**: No guards, no as-patterns
-- ❌ **Wildcard restrictions**: `_` only in `let` bindings, not in `letrec` or all patterns
+- ❌ **Wildcard restrictions**: `_` not allowed in `letrec` bindings (cannot be meaningfully recursive)
 - ❌ **No polymorphic recursion**: Type inference limitations
 - ❌ **No error recovery**: One parse/type error stops execution
 - ❌ **Integer-only arithmetic**: No floating-point numbers
@@ -440,7 +442,7 @@ This document provides a comprehensive overview of all implemented and planned f
 ## Implementation Statistics
 
 - **Lines of Haskell**: ~4,200 (estimated, including benchmarks)
-- **Test Coverage**: 435 tests, 100% passing
+- **Test Coverage**: 521 tests, 100% passing
 - **HLint Warnings**: 0
 - **Core Types**: 8 (Int, Bool, String, Unit, List, Tuple, Record, Function)
 - **Built-in Functions**: 26

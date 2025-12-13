@@ -1,0 +1,15 @@
+// Test wildcard patterns in case expressions
+// expect: "matched"
+
+// Wildcard in Maybe pattern
+case Just 42 of _ -> "matched" | Nothing -> "not matched"
+
+// Wildcard in list pattern
+case [1, 2, 3] of _ -> "list matched" | [] -> "empty"
+
+// Wildcard in tuple pattern
+case (1, "hello") of _ -> "tuple matched"
+
+// Wildcard should not bind to environment
+let _ = case Just 42 of _ -> "bound" | Nothing -> "none" in
+case Nothing of _ -> "wildcard works" | Just x -> "should not match"

@@ -48,6 +48,7 @@ atom = choice
 builtinExpr :: Parser Expr
 builtinExpr = choice
   [ printExpr expr
+  , discardExpr expr
   , inputExpr
   , argsExpr
   , parseIntExpr expr

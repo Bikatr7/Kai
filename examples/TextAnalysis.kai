@@ -2,4 +2,11 @@
 let words = \s -> filter (\w -> not (w == "")) (split " " (trim s))
 let wordCount = \text -> length (words text)
 let characterCount = \text -> strLength text
-let analyzeText = \text -> let wc = wordCount text in let cc = characterCount text in let wcStr = toString wc in let ccStr = toString cc in "Word count: " ++ wcStr ++ "\nCharacter count: " ++ ccStr
+let analyzeText = \text ->
+  let wc = wordCount text in
+  let cc = characterCount text in
+  let wcStr = toString wc in
+  let ccStr = toString cc in
+  "Word count: " ++ wcStr ++ "\nCharacter count: " ++ ccStr
+
+export words, wordCount, characterCount, analyzeText

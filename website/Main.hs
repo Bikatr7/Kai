@@ -39,7 +39,7 @@ getHomeR = defaultLayout $ do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>512
+            <div .stat-number>521
             <div .stat-label>Tests Passing
           <div .stat-item>
             <div .stat-number>8
@@ -48,7 +48,7 @@ getHomeR = defaultLayout $ do
             <div .stat-number>26
             <div .stat-label>Built-in Functions
           <div .stat-item>
-            <div .stat-number>v0.0.4.1
+            <div .stat-number>v0.0.4.2
             <div .stat-label>Current Version
 
       <nav>
@@ -74,7 +74,7 @@ getHomeR = defaultLayout $ do
             <p>User input with `input`, type conversions (`parseInt`, `toString`, `show`), and interactive calculator example.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>512 tests with clear pass/fail indicators, property-based testing, and script evaluation for robust quality.
+            <p>521 tests with clear pass/fail indicators, property-based testing, and script evaluation for robust quality.
           <div .feature>
             <h3>Developer Experience
             <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
@@ -160,6 +160,7 @@ getHomeR = defaultLayout $ do
             <code>let add : Int -> Int -> Int = \\x : Int -> \\y : Int -> x + y
             <code>parseInt "42"     <!-- String to Maybe Int -->
             <code>toString 100      <!-- Int to String -->
+            <code>discard 42        <!-- Evaluates and discards any value -->
             <code>show (42 + 3)     <!-- Any type to String -->
 
         <div .element-block>
@@ -286,6 +287,8 @@ getHomeR = defaultLayout $ do
             <code>case tuple of (x, y) -> x + y
             <br>
             <code>case record of {a = x, b = y} -> x + y
+            <br>
+            <code>case Just 42 of _ -> "any value" | Nothing -> "none"
 
         <div .element-block>
           <h3>Lists & Tuples
@@ -374,7 +377,7 @@ getHomeR = defaultLayout $ do
             <span>No custom data types (only built-in types)
 
       <section #roadmap>
-        <h2>Current Status (v0.0.4.1) & Roadmap
+        <h2>Current Status (v0.0.4.2) & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">

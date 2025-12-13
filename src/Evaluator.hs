@@ -122,6 +122,7 @@ evalPureWithEnv env expr = case expr of
   ParseInt _ -> evalConversions evalPureWithEnv env expr
   ToString _ -> evalConversions evalPureWithEnv env expr
   Show _ -> evalConversions evalPureWithEnv env expr
+  Discard _ -> evalConversions evalPureWithEnv env expr
   MJust _ -> evalConversions evalPureWithEnv env expr
   MNothing -> evalConversions evalPureWithEnv env expr
   ELeft _ -> evalConversions evalPureWithEnv env expr
@@ -259,6 +260,7 @@ evalWithEnv env expr = case expr of
   ParseInt _ -> ConvIO.evalConversionsIO evalWithEnv env expr
   ToString _ -> ConvIO.evalConversionsIO evalWithEnv env expr
   Show _ -> ConvIO.evalConversionsIO evalWithEnv env expr
+  Discard _ -> ConvIO.evalConversionsIO evalWithEnv env expr
   MJust _ -> ConvIO.evalConversionsIO evalWithEnv env expr
   MNothing -> ConvIO.evalConversionsIO evalWithEnv env expr
   ELeft _ -> ConvIO.evalConversionsIO evalWithEnv env expr

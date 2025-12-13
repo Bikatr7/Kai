@@ -27,6 +27,10 @@ inferOperations infer env (Show e) = do
   (s, _) <- infer env e
   return (s, TString)
 
+inferOperations infer env (Discard e) = do
+  (s, _) <- infer env e
+  return (s, TUnit)
+
 inferOperations infer env (MJust e) = do
   (s, eType) <- infer env e
   return (s, TMaybe eType)

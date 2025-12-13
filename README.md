@@ -4,7 +4,7 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Status (v0.0.4.1)
+## Current Status (v0.0.4.2)
 
 The language supports a comprehensive functional-first scripting language with extensive test coverage, modular architecture, and performance benchmarking. Recent additions include top-level definitions and a module system for code organization and reuse.
 
@@ -28,7 +28,7 @@ Features available today:
 - **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TList`, `TRecord`, `TTuple`, `TFun` with unification and occurs check
 - **Type annotations**: Optional type annotations (`let x : Int = 42`, `\x : String -> expr`)
 - **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
-- **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`
+- **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`, `discard : a -> Unit`
 - **Pattern matching**: Case expressions for handling Maybe/Either, tuples, and other data types
 - **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
 - **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
@@ -37,7 +37,7 @@ Features available today:
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
 - **Top-level definitions**: `let` and `letrec` at module level for defining functions and values
 - **Module system**: `import ModuleName` to import modules, module resolution supports `ModuleName.kai` and `ModuleName/ModuleName.kai`, full cross-module type checking, explicit exports with `export name1, name2`
-- **Tests**: Hspec + QuickCheck (512 examples) — all passing with comprehensive coverage
+- **Tests**: Hspec + QuickCheck (521 examples) — all passing with comprehensive coverage
 - **Working examples**: Interactive calculator, FizzBuzz, guess the number game, list processing, text processing, file I/O demonstrations, text analysis tool with modules
 
 Current limitations:
@@ -86,8 +86,8 @@ kai path/to/script.kai
 
 Prebuilt binaries (CI Releases):
 
-- Update the version in `package.yaml` and push to master. GitHub Actions will automatically create a release with binaries for Linux and macOS.
-- Download the appropriate `kai-<platform>` binary from the Releases page, `chmod +x`, and place it on your `PATH`.
+- Update the version in `package.yaml` and push to master. GitHub Actions will automatically create a release with binaries for Linux, macOS, and Windows.
+- Download the appropriate `kai-<platform>` binary from the Releases page, `chmod +x` (Linux/macOS), and place it on your `PATH`.
 - From source, `stack install` also produces a native binary in your local Stack install path.
 
 Export a static site bundle:
@@ -218,6 +218,16 @@ let y = 20
 x + y           // => 30
 ```
 
+Shebang support for executable scripts:
+
+```kai
+#!/usr/bin/env kai
+// Make this file executable with: chmod +x script.kai
+// Then run it directly: ./script.kai
+
+print "Hello from executable Kai script!"
+```
+
 File I/O and command-line arguments:
 
 ```kai
@@ -273,7 +283,7 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 ## Language Notes
 
 - Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`).
-- Wildcard variable `_` can be used in let bindings to discard values: `let _ = expression in body`.
+- Wildcard variable `_` can be used in let bindings and pattern matching to discard values: `let _ = expression in body`, `case x of _ -> "any" | Just val -> "some"`.
 - Expression sequencing with `;` has lowest precedence and is right-associative: `a; b; c` = `a; (b; c)`.
 - Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
 - Concatenation (`++`) works for both strings and lists, right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`, `[1, 2] ++ [3, 4]` parses as `[1, 2] ++ [3, 4]`.

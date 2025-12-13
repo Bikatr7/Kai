@@ -33,3 +33,5 @@ let analyzeText = \text ->
   "Average word length: " ++ toString awl ++ "\n" ++
   "Most common word: " ++ mcw
 
+export wordCount, characterCount, averageWordLength, mostCommonWord, analyzeText
+

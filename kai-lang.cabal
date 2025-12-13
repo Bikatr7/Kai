@@ -5,7 +5,7 @@ cabal-version: 2.2
 -- see: https://github.com/sol/hpack
 
 name:           kai-lang
-version:        0.0.4.1
+version:        0.0.4.2
 description:    A functional-first scripting language with static typing
 homepage:       https://github.com/bikatr7/kai
 author:         Kaden Bilyeu (Bikatr7)

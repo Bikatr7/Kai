@@ -1,9 +1,9 @@
-# Kai Language Specification (v0.0.4.1)
+# Kai Language Specification (v0.0.4.2)
 
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
-**Version**: 0.0.4.1
-**Last Updated**: 2025-12-12
+**Version**: 0.0.4.2
+**Last Updated**: 2025-12-13
 
 **Note**: Kai uses a modular architecture with 28 focused submodules across Parser, TypeChecker, and Evaluator components. Performance benchmarks are available via `stack bench`.
 
@@ -64,7 +64,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - Special identifier: `_` (wildcard) can be used in let bindings to discard values
 
 ### Reserved Keywords
-`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`, `import`, `export`
+`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `discard`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`, `import`, `export`
 
 **Note**: `_` is not a keyword but has special meaning as a wildcard identifier in let bindings.
 
@@ -154,6 +154,8 @@ case expression of pattern -> expr | pattern -> expr
 ```
 
 **Patterns**:
+- `x` - variable pattern (binds value to variable)
+- `_` - wildcard pattern (matches any value without binding)
 - `Just x` - matches Maybe values
 - `Nothing` - matches empty Maybe
 - `Left x` - matches Either left values
@@ -247,6 +249,7 @@ Kai uses Hindley-Milner type inference:
 parseInt : String -> Maybe Int  // "42" -> Just 42, "abc" -> Nothing
 toString : Int -> String        // 42 -> "42"
 show : a -> String             // Any value to string representation
+discard : a -> Unit             // Evaluates and discards any value, returns ()
 ```
 
 ### List Functions
@@ -414,7 +417,6 @@ From highest to lowest precedence:
 - **Limited standard library**: Only built-in conversion and list functions
 - **No custom data types**: Only built-in lists, records, Maybe, Either
 - **No polymorphic recursion**: Type inference limitations with complex recursive types
-- **Wildcard limitations**: `_` only allowed in `let` bindings, not in `letrec`
 
 ## Grammar Summary
 

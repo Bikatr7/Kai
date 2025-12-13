@@ -1,0 +1,9 @@
+// Wildcard Patterns Example
+// Demonstrates wildcard (_) pattern matching in case expressions
+
+let _ = print "=== Wildcard Patterns Demo ===" in
+let _ = print (case Just 42 of _ -> "Matches any value!") in
+let _ = print (case Nothing of Just x -> "Has value" | _ -> "No value") in
+let _ = print (case [] of _ -> "Any list") in
+let _ = print (case [1,2,3] of _ -> "Any non-empty list") in
+print "Wildcard patterns work!"

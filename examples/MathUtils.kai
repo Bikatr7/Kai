@@ -1,3 +1,5 @@
 // MathUtils.kai - Mathematical utilities
 let sum = \xs -> foldl (\acc -> \x -> acc + x) 0 xs
 let average = \xs -> case xs of [] -> 0 | xs -> sum xs / length xs
+
+export sum, average

@@ -144,3 +144,6 @@ rightExpr :: ExprParser -> Parser Expr
 rightExpr expr = do
   symbol "Right"
   ERight <$> expr
+
+discardExpr :: ExprParser -> Parser Expr
+discardExpr expr = keyword "discard" >> Discard <$> expr

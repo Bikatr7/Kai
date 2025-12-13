@@ -1,0 +1,2 @@
+// expect: 42
+let _ = discard 42 in 42

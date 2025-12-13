@@ -36,6 +36,7 @@ data Expr
   | Gt Expr Expr
   | If Expr Expr Expr
   | Print Expr
+  | Discard Expr
   | Lambda String (Maybe SyntaxType) Expr
   | App Expr Expr
   | Let String (Maybe SyntaxType) Expr Expr
@@ -150,6 +151,7 @@ instance NFData Expr where
   rnf (Gt e1 e2) = rnf e1 `seq` rnf e2
   rnf (If c t e) = rnf c `seq` rnf t `seq` rnf e
   rnf (Print e) = rnf e
+  rnf (Discard e) = rnf e
   rnf (Lambda s mt e) = rnf s `seq` rnf mt `seq` rnf e
   rnf (App e1 e2) = rnf e1 `seq` rnf e2
   rnf (Let s mt e1 e2) = rnf s `seq` rnf mt `seq` rnf e1 `seq` rnf e2
