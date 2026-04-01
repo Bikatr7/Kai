@@ -17,5 +17,7 @@ inferLiteral _ Args = return (Map.empty, TList TString)
 
 inferVariable :: TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferVariable env (Var x) = case Map.lookup x env of
-  Just t -> return (Map.empty, t)
+  Just scheme -> do
+    ty <- instantiate scheme
+    return (Map.empty, ty)
   Nothing -> lift $ Left $ UnboundVariable x

@@ -23,8 +23,13 @@ applySubst sub (TRecord fields) = TRecord (Map.map (applySubst sub) fields)
 applySubst sub (TTuple ts) = TTuple (map (applySubst sub) ts)
 applySubst _ t = t
 
+applySubstScheme :: Substitution -> Scheme -> Scheme
+applySubstScheme sub (Forall vars ty) =
+  let filteredSubst = foldr Map.delete sub vars
+  in Forall vars (applySubst filteredSubst ty)
+
 applySubstEnv :: Substitution -> TypeEnv -> TypeEnv
-applySubstEnv sub = Map.map (applySubst sub)
+applySubstEnv sub = Map.map (applySubstScheme sub)
 
 composeSubst :: Substitution -> Substitution -> Substitution
 composeSubst s1 s2 =
@@ -46,7 +51,22 @@ freeTypeVars (TMaybe t) = freeTypeVars t
 freeTypeVars (TEither t1 t2) = freeTypeVars t1 `Set.union` freeTypeVars t2
 freeTypeVars (TList t) = freeTypeVars t
 freeTypeVars (TRecord fields) = Set.unions (map freeTypeVars (Map.elems fields))
+freeTypeVars (TTuple ts) = Set.unions (map freeTypeVars ts)
 freeTypeVars _ = Set.empty
 
+freeTypeVarsScheme :: Scheme -> Set.Set String
+freeTypeVarsScheme (Forall vars ty) = freeTypeVars ty `Set.difference` Set.fromList vars
+
 freeTypeVarsEnv :: TypeEnv -> Set.Set String
-freeTypeVarsEnv env = Set.unions (map freeTypeVars (Map.elems env))
+freeTypeVarsEnv env = Set.unions (map freeTypeVarsScheme (Map.elems env))
+
+generalize :: TypeEnv -> Type -> Scheme
+generalize env ty =
+  let vars = Set.toList $ freeTypeVars ty `Set.difference` freeTypeVarsEnv env
+  in Forall vars ty
+
+instantiate :: Scheme -> TypeInfer Type
+instantiate (Forall vars ty) = do
+  freshVars <- mapM (const freshTVar) vars
+  let substitution = Map.fromList $ zip vars freshVars
+  return $ applySubst substitution ty

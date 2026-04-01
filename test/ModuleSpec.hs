@@ -8,8 +8,10 @@ import System.IO (writeFile)
 import Parser
 import Evaluator (evalProgramWithEnv, Value(..))
 import qualified Evaluator as E
+import TypeChecker (Type(..), typeCheckProgramWithDirIO)
 import Syntax
 import qualified Data.Map as Map
+import qualified ModuleSystem
 
 spec :: Spec
 spec = do
@@ -23,6 +25,16 @@ spec = do
               Right ast -> do
                 result <- evalProgramWithEnv Map.empty "test_modules" ast
                 result `shouldBe` Right (VInt 5)
+              Left err -> expectationFailure $ "Parse error: " ++ show err
+
+          it "imports polymorphic definitions across distinct uses" $ do
+            let program = "import Poly\n(id 1, id true)"
+            case parseProgram program of
+              Right ast -> do
+                typeResult <- typeCheckProgramWithDirIO ModuleSystem.loadModuleTypeEnvIO "test_modules" ast
+                typeResult `shouldBe` Right (TTuple [TInt, TBool])
+                result <- evalProgramWithEnv Map.empty "test_modules" ast
+                result `shouldBe` Right (VTuple [VInt 1, VBool True])
               Left err -> expectationFailure $ "Parse error: " ++ show err
 
           it "imports and uses multiple functions from a module" $ do
@@ -141,6 +153,16 @@ spec = do
                 result `shouldBe` Right (VBool True)
               Left err -> expectationFailure $ "Parse error: " ++ show err
 
+          it "type-checks imported recursive functions with their concrete types" $ do
+            let program = "import Recursive\nfactorial true"
+            case parseProgram program of
+              Right ast -> do
+                result <- typeCheckProgramWithDirIO ModuleSystem.loadModuleTypeEnvIO "test_modules" ast
+                case result of
+                  Left _ -> return ()
+                  Right ty -> expectationFailure $ "Expected type error, got: " ++ show ty
+              Left err -> expectationFailure $ "Parse error: " ++ show err
+
         describe "Complex Module Usage" $ do
           it "uses imported functions in complex expressions" $ do
             let program = "import Math\nlet x = add 1 2\nlet y = multiply x 3\ny"
@@ -182,6 +204,11 @@ setupTestModules = do
     [ "let double = \\x -> x * 2"
     , "let triple = \\x -> x * 3"
     , "let square = \\x -> x * x"
+    ]
+
+  -- Poly.kai
+  writeFile "test_modules/Poly.kai" $ unlines
+    [ "let id = \\x -> x"
     ]
   
   -- Constants.kai
@@ -229,4 +256,3 @@ cleanupTestModules :: IO ()
 cleanupTestModules = do
   removeDirectoryRecursive "test_modules"
   return ()
-

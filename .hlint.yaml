@@ -1,0 +1,5 @@
+- ignore: {name: "Use record patterns"}
+- ignore: {name: "Use lambda-case"}
+- ignore: {name: "Use newtype instead of data"}
+- ignore: {name: "Use list literal pattern"}
+- ignore: {name: "Use second"}

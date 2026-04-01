@@ -55,9 +55,10 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - **Patterns.hs**: Pattern matching evaluation (pure and IO variants)
 - **Evaluator.hs**: Public interface with eval, evalWithEnv, evalPure, evalPureWithEnv
 
-#### CLI (`src/Main.hs`)
+#### CLI (`src/CLI.hs`, `src/Main.hs`)
 - Command-line interface with expression evaluation and file execution
 - Debug mode, clean output by default, argument passing support
+- Non-zero exit codes for parse, type, and runtime failures
 - `website/`: Yesod-based static site generator used for the project website/demo.
 
 ## Language Semantics (current)
@@ -68,12 +69,14 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - `input : String` reads a line from stdin.
 - `args : [String]` returns command-line arguments passed to script.
 - File I/O: `readFile : String -> String`, `writeFile : String -> String -> Unit`.
+- A leading shebang line (`#!/usr/bin/env kai`) is ignored when parsing files.
 - Error handling: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions for pattern matching.
 - Safe conversion functions: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`.
 - List functions: `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`.
 - String functions: `split`, `join`, `trim`, `replace`, `strLength`.
 - Tuple functions: `fst`, `snd` for pairs.
 - Type annotations: Optional Haskell-style type annotations for lambdas and let bindings.
+- Let, letrec, top-level, and imported definitions are generalized; lambda parameters and pattern bindings remain monomorphic within each use site.
 - Strings: escapes `\"`, `\\`, `\n`. Unknown escapes are errors with a helpful message.
 - Precedence (highest to lowest):
   1) application (left)
@@ -97,7 +100,7 @@ Notes:
 Prereqs: Stack + GHC.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 435 tests)
+- Tests: `stack test --fast` (all 540 examples)
 - Run CLI: `stack exec kai -- --help`
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
 - Try interactive calculator: `stack exec kai examples/calculator.kai`
@@ -207,7 +210,7 @@ stack bench --benchmark-arguments="--csv=results.csv"
 - **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
 - **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels) through parser and type checker optimizations
 - **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed for development
-- **Comprehensive testing**: 318 tests including 28 new tests for wildcard variables and expression sequencing
+- **Comprehensive testing**: 540 passing examples spanning unit, property, script, CLI, and stress coverage
 
 ## Notes / TODOs
 

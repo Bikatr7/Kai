@@ -4,9 +4,9 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Status (v0.0.4.2)
+## Current Status (v0.0.4.3)
 
-The language supports a comprehensive functional-first scripting language with extensive test coverage, modular architecture, and performance benchmarking. Recent additions include top-level definitions and a module system for code organization and reuse.
+The language supports a comprehensive functional-first scripting language with extensive test coverage, modular architecture, and performance benchmarking. Recent additions include generalized let-polymorphism, stronger CLI/script behavior, and better top-level/module consistency.
 
 Features available today:
 
@@ -25,7 +25,7 @@ Features available today:
 - **Command-line arguments**: `args : [String]` returns list of command-line arguments passed to script
 - **Conditionals**: `if cond then e1 else e2`
 - **Functions**: lambdas (`\x -> expr`), application (`f x`), closures
-- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TList`, `TRecord`, `TTuple`, `TFun` with unification and occurs check
+- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TList`, `TRecord`, `TTuple`, `TFun` with unification, occurs check, and generalized let-polymorphism
 - **Type annotations**: Optional type annotations (`let x : Int = 42`, `\x : String -> expr`)
 - **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
 - **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`, `discard : a -> Unit`
@@ -33,11 +33,11 @@ Features available today:
 - **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
 - **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
 - **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
-- **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default), supports passing arguments to scripts
+- **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default), supports passing arguments to scripts, and returns non-zero exit codes on failures
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
 - **Top-level definitions**: `let` and `letrec` at module level for defining functions and values
 - **Module system**: `import ModuleName` to import modules, module resolution supports `ModuleName.kai` and `ModuleName/ModuleName.kai`, full cross-module type checking, explicit exports with `export name1, name2`
-- **Tests**: Hspec + QuickCheck (521 examples) — all passing with comprehensive coverage
+- **Tests**: Hspec + QuickCheck (540 examples) — all passing with comprehensive coverage
 - **Working examples**: Interactive calculator, FizzBuzz, guess the number game, list processing, text processing, file I/O demonstrations, text analysis tool with modules
 
 Current limitations:
@@ -336,7 +336,8 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 │   │   ├── IOOps.hs              ## I/O operation evaluation
 │   │   └── Patterns.hs           ## Pattern matching evaluation (pure & IO)
 │   ├── Evaluator.hs              ## Public evaluator interface
-│   └── Main.hs                   ## CLI entry for `kai`
+│   ├── CLI.hs                    ## CLI runner and exit-code handling
+│   └── Main.hs                   ## Thin executable entry for `kai`
 ├── benchmarks/                    ## Performance benchmarking suite
 │   ├── Bench.hs                  ## Main benchmark orchestrator
 │   ├── ParserBench.hs            ## Parser performance benchmarks
@@ -370,11 +371,11 @@ Planned functional-first features:
 
 **Core Language**
 - ~~Let‑bindings and recursion~~ ✅ **DONE** (`let` and `letrec`)
-- ~~Hindley–Milner style type inference~~ ✅ **DONE**
+- ~~Unification-based type inference~~ ✅ **DONE**
 - ~~Basic pattern matching~~ ✅ **DONE** (`case` expressions for Maybe/Either)
 - ~~Lists and records~~ ✅ **DONE** (with basic operations)
 - ~~Tuples~~ ✅ **DONE** (with `fst` and `snd` for pairs)
-- Top‑level definitions and module system
+- ~~Top‑level definitions and module system~~ ✅ **DONE**
 - Enhanced pattern matching (tuple destructuring in case, guards)
 - Do-notation or block syntax for I/O sequencing
 - Match expressions as alternative to nested conditionals
@@ -402,8 +403,8 @@ Planned functional-first features:
 - REPL with multiline input and `:type` command
 - Better error messages with suggestions
 - Formatter and basic linter
-- Shebang support for executable scripts
-- Package/module system for reusable code
+- ~~Shebang support for executable scripts~~ ✅ **DONE**
+- Package manager for reusable code
 
 **Performance Escape Hatches**
 - Mutable arrays/buffers for hot paths

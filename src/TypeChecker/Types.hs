@@ -20,7 +20,10 @@ data Type
   | TTuple [Type]
   deriving (Show, Eq)
 
-type TypeEnv = Map.Map String Type
+data Scheme = Forall [String] Type
+  deriving (Show, Eq)
+
+type TypeEnv = Map.Map String Scheme
 
 -- Substitution maps type variables to types
 type Substitution = Map.Map String Type
@@ -54,6 +57,12 @@ syntaxTypeToType (STList t) = TList (syntaxTypeToType t)
 syntaxTypeToType (STRecord fields) = TRecord (Map.fromList (map (second syntaxTypeToType) fields))
 syntaxTypeToType (STTuple ts) = TTuple (map syntaxTypeToType ts)
 
+monoScheme :: Type -> Scheme
+monoScheme = Forall []
+
+schemeType :: Scheme -> Type
+schemeType (Forall _ ty) = ty
+
 instance NFData Type where
   rnf TInt = ()
   rnf TBool = ()
@@ -66,3 +75,6 @@ instance NFData Type where
   rnf (TList t) = rnf t
   rnf (TRecord m) = rnf m
   rnf (TTuple ts) = rnf ts
+
+instance NFData Scheme where
+  rnf (Forall vars ty) = rnf vars `seq` rnf ty

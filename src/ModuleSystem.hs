@@ -1,3 +1,5 @@
+{-# LANGUAGE LambdaCase #-}
+
 module ModuleSystem (
     loadModule,
     resolveModulePath,
@@ -8,22 +10,21 @@ module ModuleSystem (
 
 import Syntax
 import Parser
-import TypeChecker (typeCheckProgramWithDirIO, TypeEnv, TypeError(..), typeCheckWithEnv, syntaxTypeToType)
-import TypeChecker.Types (Type(..))
-import TypeChecker.Substitution (freshTVar, applySubst, composeSubst)
+import TypeChecker (typeCheckProgramWithDirIO, TypeEnv, Substitution, TypeError(..), syntaxTypeToType)
+import TypeChecker.Types (Type(..), monoScheme, schemeType)
+import TypeChecker.Substitution (applySubst, applySubstEnv, composeSubst, generalize)
 import TypeChecker.Unification (unify)
 import TypeChecker.Inference (infer)
 import Evaluator.Types
 import qualified Data.Map as Map
-import System.FilePath (takeDirectory, (</>), takeFileName, dropExtension)
+import System.FilePath (takeDirectory, (</>))
 import System.Directory (doesFileExist)
-import Control.Monad (foldM, liftM, when)
-import Control.Monad.State (runStateT)
+import Control.Monad (foldM)
 import Data.IORef (newIORef, writeIORef)
+import Data.Either (lefts, rights)
 import Data.List (foldr, intercalate)
-import Data.Foldable (foldl')
 import System.IO.Error (catchIOError)
-import Control.Monad.State (evalStateT, runStateT)
+import Control.Monad.State (evalStateT)
 
 data ModuleInfo = ModuleInfo
     { moduleName :: String
@@ -90,6 +91,20 @@ filterByExports :: Map.Map String a -> [String] -> Map.Map String a
 filterByExports env [] = env
 filterByExports env exports = Map.filterWithKey (\k _ -> k `elem` exports) env
 
+mergeMutualSubstitutions :: [Substitution] -> Either TypeError Substitution
+mergeMutualSubstitutions = foldM mergeSubstitution Map.empty
+  where
+    mergeSubstitution acc sub = foldM mergeBinding acc (Map.toList sub)
+
+    mergeBinding acc (name, ty) =
+      let ty' = applySubst acc ty
+      in case Map.lookup name acc of
+        Nothing -> Right $ Map.insert name ty' acc
+        Just existing -> do
+          unifySubst <- unify (applySubst acc existing) ty'
+          let acc' = composeSubst unifySubst acc
+          return $ Map.insert name (applySubst acc' ty') acc'
+
 evalModuleWithEnv :: (Env -> Expr -> IO (Either RuntimeError Value)) -> Env -> FilePath -> Program -> [String] -> IO (Either RuntimeError Env)
 evalModuleWithEnv evalFunc env currentDir (Program topLevels) loadingStack = do
     importResult <- processImports evalFunc env currentDir topLevels [] loadingStack
@@ -150,8 +165,7 @@ evalModuleWithEnv evalFunc env currentDir (Program topLevels) loadingStack = do
                     TLDef var _ _ -> (var, VRef ref)
                     _ -> error "processMutualRecursion: expected TLDef") letrecs refs
         let mutualEnv = Map.union refMap env
-        results <- mapM (\topLevel ->
-            case topLevel of
+        results <- mapM (\case
                 TLDef var _ expr ->
                     case expr of
                         LetRec _ _ recVal _ -> evalFunc mutualEnv recVal
@@ -161,7 +175,7 @@ evalModuleWithEnv evalFunc env currentDir (Program topLevels) loadingStack = do
         case findError of
             Left err -> return $ Left err
             Right _ -> do
-                let recValues = [v | Right v <- results]
+                let recValues = rights results
                 let checkAndUpdate (recValue, ref) =
                         case recValue of
                             VFun _ _ _ -> do
@@ -186,7 +200,7 @@ loadModuleTypeEnvIOWithStack currentDir moduleName loadingStack = do
           case pathResult of
             Left err -> return $ Left $ GeneralTypeError $ "Failed to import module " ++ moduleName ++ ": " ++ err
             Right path -> do
-              contentResult <- catchIOError (Right <$> readFile path) (\e -> return $ Left $ show e)
+              contentResult <- catchIOError (Right <$> readFile path) (return . Left . show)
               case contentResult of
                 Left err -> return $ Left $ GeneralTypeError $ "IO error reading module " ++ moduleName ++ ": " ++ err
                 Right content -> do
@@ -244,16 +258,25 @@ extractTypeEnvIOWithStack currentDir program loadingStack = do
             Left err -> return $ Left err
             Right mutualEnv -> go mutualEnv remaining
         _ -> do
-          case typeCheckWithEnv env expr of
+          case evalStateT (infer env expr) 0 of
             Left err -> return $ Left err
-            Right defTy -> do
-              let finalTy = case maybeType of
-                    Just annotatedTy -> let syntaxTy = syntaxTypeToType annotatedTy
-                                        in if defTy == syntaxTy then defTy
-                                           else error "Type mismatch in definition"
-                    Nothing -> defTy
-              let env' = Map.insert var finalTy env
-              go env' rest
+            Right (subst, defTy) -> do
+              let appliedTy = applySubst subst defTy
+              case maybeType of
+                Just annotatedTy -> do
+                  let syntaxTy = syntaxTypeToType annotatedTy
+                  case unify appliedTy syntaxTy of
+                    Left err -> return $ Left err
+                    Right unifySubst -> do
+                      let definitionSubst = composeSubst unifySubst subst
+                      let finalTy = applySubst unifySubst appliedTy
+                      let baseEnv = applySubstEnv definitionSubst env
+                      let env' = Map.insert var (generalize baseEnv finalTy) baseEnv
+                      go env' rest
+                Nothing -> do
+                  let baseEnv = applySubstEnv subst env
+                  let env' = Map.insert var (generalize baseEnv appliedTy) baseEnv
+                  go env' rest
     go env (_ : rest) = go env rest
     
     collectConsecutiveLetrecsExtract :: [TopLevel] -> ([TopLevel], [TopLevel])
@@ -268,9 +291,34 @@ extractTypeEnvIOWithStack currentDir program loadingStack = do
     
     processMutualRecursionTypeExtract :: TypeEnv -> [TopLevel] -> IO (Either TypeError TypeEnv)
     processMutualRecursionTypeExtract env letrecs = do
-      let funcTypes = map (\topLevel ->
-            case topLevel of
-              TLDef var _ _ -> (var, TVar var)
-              _ -> error "processMutualRecursionTypeExtract: expected TLDef") letrecs
-      return $ Right (Map.union (Map.fromList funcTypes) env)
-
+      let funcTypes = map (\case
+            TLDef var maybeType _ -> (var, case maybeType of
+              Just sType -> syntaxTypeToType sType
+              Nothing -> TVar var)
+            _ -> error "processMutualRecursionTypeExtract: expected TLDef") letrecs
+      let mutualEnv = Map.union (Map.fromList (map (\(var, ty) -> (var, monoScheme ty)) funcTypes)) env
+      let typeCheckLetrec topLevel = case topLevel of
+            TLDef var _ (LetRec _ _ val _) ->
+              case evalStateT (infer mutualEnv val) 0 of
+                Left err -> Left err
+                Right (subst, valType) ->
+                  case unify (applySubst subst (schemeType (mutualEnv Map.! var))) (applySubst subst valType) of
+                    Left err -> Left err
+                    Right unifySubst ->
+                      let finalSubst = composeSubst unifySubst subst
+                          finalType = applySubst finalSubst (schemeType (mutualEnv Map.! var))
+                      in Right (finalSubst, finalType)
+            _ -> Left (GeneralTypeError "processMutualRecursionTypeExtract: expected TLDef with LetRec")
+      let results = map typeCheckLetrec letrecs
+      case lefts results of
+        err : _ -> return $ Left err
+        [] -> do
+          let successes = rights results
+          case mergeMutualSubstitutions (map fst successes) of
+            Left err -> return $ Left err
+            Right combinedSubst -> do
+              let baseEnv = applySubstEnv combinedSubst env
+              let finalTypes = map (applySubst combinedSubst . snd) funcTypes
+              let generalized = zipWith (\(var, _) ty -> (var, generalize baseEnv ty)) funcTypes finalTypes
+              let finalEnv = Map.union (Map.fromList generalized) baseEnv
+              return $ Right finalEnv

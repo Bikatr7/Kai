@@ -1,13 +1,13 @@
 # Kai Language Features
 
-**Version**: 0.0.4.2
-**Last Updated**: 2025-12-13
+**Version**: 0.0.4.3
+**Last Updated**: 2026-04-01
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
 ---
 
-## Implemented Features (v0.0.4.2)
+## Implemented Features (v0.0.4.3)
 
 ### Core Language
 
@@ -65,10 +65,11 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### Type System
 
-- ✅ **Hindley-Milner type inference**: Full type inference without explicit annotations
+- ✅ **Unification-based type inference**: Function and expression types are inferred without explicit annotations
 - ✅ **Static type checking**: All types checked before evaluation
 - ✅ **Unification**: With occurs check to prevent infinite types
-- ✅ **Polymorphic functions**: Support for parametric polymorphism
+- ✅ **Generalized let-polymorphism**: `let`, `letrec`, top-level, and imported definitions can be reused at multiple types
+- ✅ **Parametric function types**: Functions such as `\x -> x` infer type variables in their signatures
 - ✅ **Base types**: `Int`, `Bool`, `String`, `Unit`
 - ✅ **Composite types**: `[T]`, `(T1, T2, ...)`, `{field: T}`
 - ✅ **Function types**: `T1 -> T2` (right-associative)
@@ -154,17 +155,19 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Command-line interface**: `kai` executable
 - ✅ **Expression evaluation**: `kai -e "expr"`
 - ✅ **File execution**: `kai script.kai [args...]`
+- ✅ **Shebang support**: `#!/usr/bin/env kai` for executable scripts
 - ✅ **Debug mode**: `kai --debug` for detailed output
 - ✅ **Help system**: `kai --help`
-- ✅ **Version display**: `Kai v0.0.4.2`
+- ✅ **Version display**: `Kai v0.0.4.3`
 - ✅ **Script arguments**: Pass arguments to scripts
+- ✅ **Failure exit codes**: Parse, type, and runtime failures return non-zero exit codes
 - ✅ **Clean output**: No debug noise by default
 - ✅ **Install script**: `make install` to `~/.local/bin`
 - ✅ **Runner script**: Lightweight wrapper for compiled binary
 
 ### Testing Infrastructure
 
-- ✅ **521 unit tests**: Using Hspec
+- ✅ **540 test examples**: Hspec, QuickCheck, script, CLI, and stress coverage
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
 - ✅ **Script tests**: `.kai` files with `// expect:` directives
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
@@ -377,7 +380,6 @@ This document provides a comprehensive overview of all implemented and planned f
 #### Tooling
 - ⏳ **Formatter**: Automatic code formatting (`kai fmt`)
 - ⏳ **Linter**: Style suggestions (`kai lint`)
-- ⏳ **Shebang support**: `#!/usr/bin/env kai` for executable scripts
 - ⏳ **Language server**: LSP for IDE support
 - ⏳ **Package manager**: Dependency management
 - ⏳ **Documentation generator**: Generate docs from code
@@ -442,10 +444,10 @@ This document provides a comprehensive overview of all implemented and planned f
 ## Implementation Statistics
 
 - **Lines of Haskell**: ~4,200 (estimated, including benchmarks)
-- **Test Coverage**: 521 tests, 100% passing
+- **Test Coverage**: 540 examples, 100% passing
 - **HLint Warnings**: 0
 - **Core Types**: 8 (Int, Bool, String, Unit, List, Tuple, Record, Function)
-- **Built-in Functions**: 26
+- **Built-in Functions**: 27
 - **Reserved Keywords**: 45+
 - **Operator Precedence Levels**: 11
 - **Example Scripts**: 8 working examples
@@ -458,7 +460,14 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ## Version History
 
-### v0.0.4 (Current - 2025-11-06)
+### v0.0.4.3 (Current - 2026-04-01)
+- Added generalized let-polymorphism for `let`, `letrec`, top-level, and imported definitions
+- Fixed CLI failure exit codes for parse, type, and runtime errors
+- Added shebang parsing support for script files
+- Fixed top-level `let ... in ...` expressions in program files
+- Added CLI and polymorphism regression coverage, bringing total examples to 540
+
+### v0.0.4.2 (2025-11-06)
 - **Performance optimizations**: Record access inlining (3-5% improvement), boolean syntax corrections (300x faster)
 - **Modular architecture**: Split Evaluator, Parser, and TypeChecker into focused submodules
 - **Comprehensive benchmarking**: Added Criterion speed benchmarks and Weigh memory profiling
@@ -470,7 +479,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - Added file I/O (readFile, writeFile)
 - Added command-line arguments (args)
 - Fixed keyword parsing bug
-- Increased tests from 352 to 435
+- Historical note: that release increased tests from 352 to 435
 
 ### v0.0.3.3 (2025-10-05)
 - Added wildcard variables (`_`)
@@ -490,7 +499,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### v0.0.3.0
 - Initial type system implementation
-- Hindley-Milner type inference
+- Unification-based type inference
 
 ---
 

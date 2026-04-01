@@ -23,6 +23,11 @@ import Parser.Types (syntaxType)
 
 type Parser = Parsec Void String
 
+stripShebang :: String -> String
+stripShebang content = case lines content of
+  firstLine : rest | "#!" `isPrefixOf` firstLine -> unlines rest
+  _ -> content
+
 statements :: Parser [Expr]
 statements = many (expr <* Lexer.sc <* (eol <|> eof))
   where
@@ -33,9 +38,9 @@ parseExpr = parse (Lexer.sc *> expr <* eof) ""
 
 parseStatements :: String -> Either (ParseErrorBundle String Void) [Expr]
 parseStatements content =
-  let contentLines = filter (not . null . dropWhile (== ' ')) $ lines content
+  let contentLines = filter (not . null . dropWhile isSpace) $ lines (stripShebang content)
       nonCommentLines = filter (not . isComment) contentLines
-      isComment line = "//" `isPrefixOf` dropWhile (== ' ') line
+      isComment line = "//" `isPrefixOf` dropWhile isSpace line
       isPrefixOf prefix str = take (length prefix) str == prefix
       parseLine = parse (Lexer.sc *> expr <* eof) ""
   in case mapM parseLine nonCommentLines of
@@ -44,23 +49,22 @@ parseStatements content =
 
 parseFileExpr :: String -> Either (ParseErrorBundle String Void) Expr
 parseFileExpr content =
-  let cleanContent = unlines $ filter (not . isComment) $ lines content
-      isComment line = "//" `isPrefixOf` dropWhile (== ' ') line
+  let cleanContent = unlines $ filter (not . isComment) $ lines (stripShebang content)
+      isComment line = "//" `isPrefixOf` dropWhile isSpace line
       isPrefixOf prefix str = take (length prefix) str == prefix
   in parse (Lexer.sc *> expr <* eof) "" cleanContent
 
 parseFile :: String -> String -> Either (ParseErrorBundle String Void) Expr
-parseFile = parse (Lexer.sc *> expr <* eof)
+parseFile sourceName = parse (Lexer.sc *> expr <* eof) sourceName . stripShebang
 
 parseFileStatements :: String -> String -> Either (ParseErrorBundle String Void) [Expr]
-parseFileStatements = parse (Lexer.sc *> statements <* eof)
+parseFileStatements sourceName = parse (Lexer.sc *> statements <* eof) sourceName . stripShebang
 
 topLevel :: Parser TopLevel
 topLevel = choice
   [ try $ do
       symbol "import"
-      moduleName <- identifier
-      return $ TLImport moduleName
+      TLImport <$> identifier
   , try $ do
       symbol "export"
       names <- sepBy identifier (symbol ",")
@@ -73,6 +77,7 @@ topLevel = choice
         syntaxType
       symbol "="
       val <- expr
+      lookAhead (Lexer.sc *> eof)
       return $ TLDef var maybeType val
   , try $ do
       symbol "letrec"
@@ -82,15 +87,16 @@ topLevel = choice
         syntaxType
       symbol "="
       val <- expr
+      lookAhead (Lexer.sc *> eof)
       return $ TLDef var maybeType (LetRec var maybeType val (Var var))
   , TLExpr <$> expr
   ]
 
 parseProgram :: String -> Either (ParseErrorBundle String Void) Program
 parseProgram content =
-  let lines = filter (not . isCommentOrEmpty) $ splitLines content
-      isCommentOrEmpty line = null (trim line) || "//" `isPrefixOf` (trim line)
-      trim = dropWhile (== ' ') . reverse . dropWhile (== ' ') . reverse
+  let lines = filter (not . isCommentOrEmpty) $ splitLines (stripShebang content)
+      isCommentOrEmpty line = null (trim line) || "//" `isPrefixOf` trim line
+      trim = dropWhile isSpace . reverse . dropWhile isSpace . reverse
       splitLines [] = []
       splitLines xs = let (line, rest) = break (== '\n') xs
                       in line : case rest of

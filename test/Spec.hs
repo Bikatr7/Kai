@@ -6,6 +6,7 @@ import qualified ArithmeticSpec
 import qualified BooleanSpec
 import qualified ComparisonSpec
 import qualified ConditionalSpec
+import qualified CLISpec
 import qualified EdgeCaseSpec
 import qualified IntegerOverflowSpec
 import qualified InputSpec
@@ -35,6 +36,7 @@ main = hspec $ do
   BooleanSpec.spec
   ComparisonSpec.spec
   ConditionalSpec.spec
+  CLISpec.spec
   EdgeCaseSpec.spec
   IntegerOverflowSpec.spec
   InputSpec.spec

@@ -1,9 +1,9 @@
-# Kai Language Specification (v0.0.4.2)
+# Kai Language Specification (v0.0.4.3)
 
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
-**Version**: 0.0.4.2
-**Last Updated**: 2025-12-13
+**Version**: 0.0.4.3
+**Last Updated**: 2026-04-01
 
 **Note**: Kai uses a modular architecture with 28 focused submodules across Parser, TypeChecker, and Evaluator components. Performance benchmarks are available via `stack bench`.
 
@@ -27,7 +27,7 @@ This document provides a comprehensive technical specification of the Kai progra
 Kai is a functional-first scripting language with static typing, implemented in Haskell. The language features:
 
 - **Evaluation**: Strict (call-by-value) evaluation
-- **Type System**: Hindley-Milner type inference with unification and occurs check
+- **Type System**: Unification-based type inference with occurs check and generalized let-polymorphism
 - **Paradigm**: Expression-oriented with immutable data by default
 - **File Format**: Single-file scripts with `.kai` extension, or multi-file modules with imports
 
@@ -39,6 +39,8 @@ Kai is a functional-first scripting language with static typing, implemented in 
 // Line comments start with double slash
 /* Block comments are enclosed in /* */ */
 ```
+
+- A leading shebang line such as `#!/usr/bin/env kai` is ignored when parsing files.
 
 ### Literals
 
@@ -225,10 +227,11 @@ add5 10  // => 15
 ## Type System
 
 ### Type Inference
-Kai uses Hindley-Milner type inference:
+Kai uses unification-based type inference:
 - Types are inferred without explicit annotations
 - Type annotations are optional but checked when provided
-- Polymorphic functions are supported
+- Function signatures can contain inferred type variables
+- Let, letrec, top-level, and imported definitions are generalized over free type variables
 
 ### Unification
 - Occurs check prevents infinite types

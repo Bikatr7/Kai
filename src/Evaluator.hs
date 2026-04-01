@@ -19,6 +19,7 @@ import System.IO (getLine, readFile, writeFile)
 import Control.Monad (foldM)
 import Control.Exception (try, SomeException)
 import Data.Char (isSpace)
+import Data.Either (rights)
 import Data.List.Split (splitOn)
 import Data.List (intercalate)
 import Evaluator.Types
@@ -351,7 +352,7 @@ evalProgramWithEnv env currentDir (Program topLevels) = do
       case findError of
         Left err -> return $ Left err
         Right _ -> do
-          let recValues = [v | Right v <- results]
+          let recValues = rights results
           let checkAndUpdate (recValue, ref) =
                 case recValue of
                   VFun _ _ _ -> do

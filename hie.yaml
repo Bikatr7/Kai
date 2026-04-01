@@ -1,0 +1,10 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "kai-lang:lib"
+    - path: "./test"
+      component: "kai-lang:test:kai-test"
+    - path: "./website"
+      component: "kai-lang:exe:kai-website"
+    - path: "./benchmarks"
+      component: "kai-lang:bench:kai-bench"

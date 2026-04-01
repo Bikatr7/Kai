@@ -14,7 +14,7 @@ inferFunctions infer env (Lambda param maybeType body) = do
   paramType <- case maybeType of
     Just sType -> return $ syntaxTypeToType sType
     Nothing -> freshTVar
-  let env' = Map.insert param paramType env
+  let env' = Map.insert param (monoScheme paramType) env
   (s1, bodyType) <- infer env' body
   let finalParamType = applySubst s1 paramType
   return (s1, TFun finalParamType bodyType)
@@ -22,9 +22,9 @@ inferFunctions infer env (Lambda param maybeType body) = do
 inferFunctions infer env (App fun arg) = do
   resultType <- freshTVar
   (s1, funType) <- infer env fun
-  (s2, argType) <- infer env arg
+  (s2, argType) <- infer (applySubstEnv s1 env) arg
   s3 <- lift $ unify (applySubst s2 funType) (TFun argType resultType)
-  let finalSubst = composeSubstList [s1, s2, s3]
-  return (finalSubst, applySubst s3 resultType)
+  let finalSubst = composeSubst s3 (composeSubst s2 s1)
+  return (finalSubst, applySubst finalSubst resultType)
 
 inferFunctions _ _ _ = error "inferFunctions called on non-function expression"

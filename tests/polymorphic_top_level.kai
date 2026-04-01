@@ -1,0 +1,3 @@
+// expect: (1, true)
+let id = \x -> x
+(id 1, id true)

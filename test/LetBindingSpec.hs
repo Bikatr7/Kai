@@ -4,7 +4,7 @@ import Test.Hspec
 import Test.QuickCheck
 
 import Parser
-import Evaluator (evalPure, Value(VInt))
+import Evaluator (evalPure, Value(..))
 import qualified Evaluator as E
 import TypeChecker
 import Syntax
@@ -58,6 +58,22 @@ spec = do
             Right (TFun TInt TInt) -> return ()
             Right other -> expectationFailure $ "Expected TFun TInt TInt, got " ++ show other
             Left err -> expectationFailure $ "Type error: " ++ show err
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "generalizes let-bound functions across distinct uses" $ do
+        let expr = "let id = \\x -> x in (id 1, id true)"
+        case parseExpr expr of
+          Right ast -> do
+            typeCheck ast `shouldBe` Right (TTuple [TInt, TBool])
+            evalPure ast `shouldBe` Right (E.VTuple [VInt 1, E.VBool True])
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "generalizes recursive let-bound functions across distinct uses" $ do
+        let expr = "letrec id = \\x -> x in (id 1, id true)"
+        case parseExpr expr of
+          Right ast -> do
+            typeCheck ast `shouldBe` Right (TTuple [TInt, TBool])
+            E.eval ast `shouldReturn` Right (E.VTuple [VInt 1, E.VBool True])
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "catches type errors in let bindings" $ do

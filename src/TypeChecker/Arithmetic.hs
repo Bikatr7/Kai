@@ -1,6 +1,5 @@
 module TypeChecker.Arithmetic where
 
-import qualified Data.Map as Map
 import Control.Monad.Trans (lift)
 import Control.Monad.Except (throwError)
 import Syntax (Expr(..))
@@ -11,75 +10,44 @@ import TypeChecker.Unification
 type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 
 inferArithmetic :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
--- Helper: check if a type variable is a recursive function type variable
-isRecursiveTypeVar :: Type -> TypeEnv -> Bool
-isRecursiveTypeVar (TVar name) env = case Map.lookup name env of
-  Just (TVar _) -> True  -- Type variable in environment, likely recursive
-  _ -> False
-isRecursiveTypeVar _ _ = False
 inferArithmetic infer env (Add e1 e2) = do
   (s1, t1) <- infer env e1
-  (s2, t2) <- infer env e2
-  let t1Applied = applySubst s2 t1
-  -- CRITICAL: If first operand is a recursive type variable, don't unify it with TInt
-  -- This prevents constraining recursive function type variables during arithmetic
-  s3 <- if isRecursiveTypeVar t1Applied env
-        then return Map.empty  -- Don't unify recursive type variables
-        else lift $ unify t1Applied TInt
-  let t2AppliedFinal = applySubst s3 t2
-  s4 <- if isRecursiveTypeVar t2AppliedFinal env
-        then return Map.empty  -- Don't unify recursive type variables
-        else lift $ unify t2AppliedFinal TInt
+  (s2, t2) <- infer (applySubstEnv s1 env) e2
+  s3 <- lift $ unify (applySubst s2 t1) TInt
+  s4 <- lift $ unify (applySubst s3 t2) TInt
   let finalSubst = composeSubstList [s1, s2, s3, s4]
   return (finalSubst, TInt)
 
 inferArithmetic infer env (Sub e1 e2) = do
   (s1, t1) <- infer env e1
-  (s2, t2) <- infer env e2
-  let t1Applied = applySubst s2 t1
-  s3 <- if isRecursiveTypeVar t1Applied env
-        then return Map.empty
-        else lift $ unify t1Applied TInt
-  let t2AppliedFinal = applySubst s3 t2
-  s4 <- if isRecursiveTypeVar t2AppliedFinal env
-        then return Map.empty
-        else lift $ unify t2AppliedFinal TInt
+  (s2, t2) <- infer (applySubstEnv s1 env) e2
+  s3 <- lift $ unify (applySubst s2 t1) TInt
+  s4 <- lift $ unify (applySubst s3 t2) TInt
   let finalSubst = composeSubstList [s1, s2, s3, s4]
   return (finalSubst, TInt)
 
 inferArithmetic infer env (Mul e1 e2) = do
   (s1, t1) <- infer env e1
-  (s2, t2) <- infer env e2
-  let t1Applied = applySubst s2 t1
-  s3 <- if isRecursiveTypeVar t1Applied env
-        then return Map.empty
-        else lift $ unify t1Applied TInt
-  let t2AppliedFinal = applySubst s3 t2
-  s4 <- if isRecursiveTypeVar t2AppliedFinal env
-        then return Map.empty
-        else lift $ unify t2AppliedFinal TInt
+  (s2, t2) <- infer (applySubstEnv s1 env) e2
+  s3 <- lift $ unify (applySubst s2 t1) TInt
+  s4 <- lift $ unify (applySubst s3 t2) TInt
   let finalSubst = composeSubstList [s1, s2, s3, s4]
   return (finalSubst, TInt)
 
 inferArithmetic infer env (Div e1 e2) = do
   (s1, t1) <- infer env e1
-  (s2, t2) <- infer env e2
-  let t1Applied = applySubst s2 t1
-  s3 <- if isRecursiveTypeVar t1Applied env
-        then return Map.empty
-        else lift $ unify t1Applied TInt
-  let t2AppliedFinal = applySubst s3 t2
-  s4 <- if isRecursiveTypeVar t2AppliedFinal env
-        then return Map.empty
-        else lift $ unify t2AppliedFinal TInt
+  (s2, t2) <- infer (applySubstEnv s1 env) e2
+  s3 <- lift $ unify (applySubst s2 t1) TInt
+  s4 <- lift $ unify (applySubst s3 t2) TInt
   let finalSubst = composeSubstList [s1, s2, s3, s4]
   return (finalSubst, TInt)
 
 inferArithmetic infer env (Concat e1 e2) = do
   (s1, t1) <- infer env e1
-  (s2, t2) <- infer env e2
+  (s2, t2) <- infer (applySubstEnv s1 env) e2
   s3 <- lift $ unify (applySubst s2 t1) (applySubst s2 t2)
-  case applySubst s3 t1 of
-    TString -> return (s3, TString)
-    TList _ -> return (s3, applySubst s3 t1)
-    _ -> lift $ throwError $ UnificationError (applySubst s3 t1) (applySubst s3 t2)
+  let finalSubst = composeSubst s3 (composeSubst s2 s1)
+  case applySubst finalSubst t1 of
+    TString -> return (finalSubst, TString)
+    TList _ -> return (finalSubst, applySubst finalSubst t1)
+    finalType -> lift $ throwError $ UnificationError finalType (applySubst finalSubst t2)

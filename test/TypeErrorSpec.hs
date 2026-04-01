@@ -74,6 +74,20 @@ spec = describe "Type Errors" $ do
         Left (UnificationError TInt TBool) -> True `shouldBe` True
         _ -> expectationFailure "Should be unification error: wrong arg type"
 
+    it "rejects reusing a lambda parameter at inconsistent types" $ do
+      case parseAndTypeCheck "\\f -> (f 1, f true)" of
+        Left (UnificationError TInt TBool) -> True `shouldBe` True
+        Left (UnificationError TBool TInt) -> True `shouldBe` True
+        Left err -> expectationFailure $ "Expected unification error, got: " ++ show err
+        Right ty -> expectationFailure $ "Should fail, but got type: " ++ show ty
+
+    it "rejects incompatible use of a let-bound polymorphic function in arithmetic" $ do
+      case parseAndTypeCheck "let id = \\x -> x in id 1 + id true" of
+        Left (UnificationError TInt TBool) -> True `shouldBe` True
+        Left (UnificationError TBool TInt) -> True `shouldBe` True
+        Left err -> expectationFailure $ "Expected unification error, got: " ++ show err
+        Right ty -> expectationFailure $ "Should fail, but got type: " ++ show ty
+
 parseAndTypeCheck :: String -> Either TypeError Type
 parseAndTypeCheck input = case parseExpr input of
   Left _ -> Left (TypeMismatch TInt TBool)  -- dummy error for parse failures, will be replaced with a more specific error eventually

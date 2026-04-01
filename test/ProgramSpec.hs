@@ -60,6 +60,14 @@ spec = do
             Left err -> expectationFailure $ "Type error: " ++ show err
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
+      it "generalizes top-level definitions across distinct uses" $ do
+        let program = "let id = \\x -> x\n(id 1, id true)"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right (TTuple [TInt, TBool])
+            evalProgram ast `shouldReturn` Right (VTuple [VInt 1, VBool True])
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
       it "catches type errors in definitions" $ do
         let program = "let x = true\nlet y = 5\nx + y"
         case parseProgram program of
@@ -73,6 +81,14 @@ spec = do
         let program = "letrec factorial = \\n -> if n == 0 then 1 else n * factorial (n - 1)\nfactorial 5"
         case parseProgram program of
           Right ast -> evalProgram ast `shouldReturn` Right (VInt 120)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "generalizes recursive top-level definitions across distinct uses" $ do
+        let program = "letrec id = \\x -> x\n(id 1, id true)"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right (TTuple [TInt, TBool])
+            evalProgram ast `shouldReturn` Right (VTuple [VInt 1, VBool True])
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "handles recursive functions with case expressions" $ do
@@ -140,6 +156,18 @@ spec = do
         let program = "// This is a comment\nlet x = 42\n// Another comment\nx"
         case parseProgram program of
           Right ast -> evalProgram ast `shouldReturn` Right (VInt 42)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "handles a final top-level let expression" $ do
+        let program = "let x = 1\nlet y = x in y + 1"
+        case parseProgram program of
+          Right ast -> evalProgram ast `shouldReturn` Right (VInt 2)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "ignores a shebang line when parsing a program file" $ do
+        let program = "#!/usr/bin/env kai\nprint \"hello\""
+        case parseProgram program of
+          Right ast -> evalProgram ast `shouldReturn` Right VUnit
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Error Cases" $ do
@@ -231,6 +259,14 @@ spec = do
         let program = "letrec x = 42\nx"
         case parseProgram program of
           Right ast -> evalProgram ast `shouldReturn` Left (E.TypeError "LetRec value must be a function, got: 42")
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "reports mutual recursion type errors without crashing" $ do
+        let program = "letrec f = \\n -> if n == 0 then 0 else g true\nletrec g = \\x -> x + 1\nf 1"
+        case parseProgram program of
+          Right ast -> case typeCheckProgram ast of
+            Left _ -> return ()
+            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "reports error when expression appears before final expression" $ do

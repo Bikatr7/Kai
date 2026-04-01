@@ -3,7 +3,7 @@ module Evaluator.IOOps where
 import Evaluator.Types
 import Evaluator.Helpers (showValue)
 import Syntax
-import System.IO (getLine, stdin, hGetLine)
+import System.IO (getLine)
 import qualified System.IO as IO
 import Control.Exception (try, SomeException)
 import qualified Data.Map as Map
@@ -12,11 +12,17 @@ import Data.IORef (readIORef, newIORef, writeIORef)
 type EvalFunc = Env -> Expr -> Either RuntimeError Value
 type EvalIOFunc = Env -> Expr -> IO (Either RuntimeError Value)
 
+lookupArgs :: Env -> Value
+lookupArgs env =
+  case Map.lookup "__args__" env of
+    Just v -> v
+    Nothing -> case Map.lookup "args" env of
+      Just v -> v
+      Nothing -> VList []
+
 evalIOPure :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
 evalIOPure _ _ Input = Right $ VStr "World" -- For test compatibility
-evalIOPure _ env Args = case Map.lookup "__args__" env of
-  Just v -> Right v
-  Nothing -> Right $ VList []
+evalIOPure _ env Args = Right $ lookupArgs env
 evalIOPure eval env (Print e) = do
   _ <- eval env e
   Right VUnit
@@ -32,10 +38,8 @@ evalIOWithEnv eval env (Var x) = do
       return $ Right val
     Just v -> return $ Right v
     Nothing -> return $ Left $ UnboundVariable x
-evalIOWithEnv _ _ Input = Right . VStr <$> hGetLine stdin
-evalIOWithEnv _ env Args = case Map.lookup "__args__" env of
-  Just v -> return $ Right v
-  Nothing -> return $ Right $ VList []
+evalIOWithEnv _ _ Input = Right . VStr <$> getLine
+evalIOWithEnv _ env Args = return $ Right $ lookupArgs env
 evalIOWithEnv eval env (Print e) = do
   result <- eval env e
   case result of
