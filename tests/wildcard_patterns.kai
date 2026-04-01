@@ -13,3 +13,4 @@ case (1, "hello") of _ -> "tuple matched"
 // Wildcard should not bind to environment
 let _ = case Just 42 of _ -> "bound" | Nothing -> "none" in
 case Nothing of _ -> "wildcard works" | Just x -> "should not match"
+
