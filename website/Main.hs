@@ -39,16 +39,16 @@ getHomeR = defaultLayout $ do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>521
+            <div .stat-number>540
             <div .stat-label>Tests Passing
           <div .stat-item>
             <div .stat-number>8
             <div .stat-label>Core Types
           <div .stat-item>
-            <div .stat-number>26
+            <div .stat-number>27
             <div .stat-label>Built-in Functions
           <div .stat-item>
-            <div .stat-number>v0.0.4.2
+            <div .stat-number>v0.0.4.3
             <div .stat-label>Current Version
 
       <nav>
@@ -65,7 +65,7 @@ getHomeR = defaultLayout $ do
         <div .features-grid>
           <div .feature>
             <h3>Static Typing & Inference
-            <p>Full Hindley-Milner type inference with unification and occurs check for ints, bools, strings, and functions.
+            <p>Static type inference with unification, occurs check, and generalized let-polymorphism for ints, bools, strings, functions, and data structures.
           <div .feature>
             <h3>Clean Syntax
             <p>Haskell-like lambdas, precedence, keywords, and multi-statement files with expression-only core.
@@ -74,7 +74,7 @@ getHomeR = defaultLayout $ do
             <p>User input with `input`, type conversions (`parseInt`, `toString`, `show`), and interactive calculator example.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>521 tests with clear pass/fail indicators, property-based testing, and script evaluation for robust quality.
+            <p>540 passing examples with property-based testing, script evaluation, CLI coverage, and stress checks.
           <div .feature>
             <h3>Developer Experience
             <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
@@ -375,9 +375,12 @@ getHomeR = defaultLayout $ do
             <br>
             <span .limitation>×
             <span>No custom data types (only built-in types)
+            <br>
+            <span .limitation>×
+            <span>No polymorphic recursion for recursively-defined functions
 
       <section #roadmap>
-        <h2>Current Status (v0.0.4.2) & Roadmap
+        <h2>Current Status (v0.0.4.3) & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -398,7 +401,7 @@ getHomeR = defaultLayout $ do
             <div .timeline-marker data-step="4">
             <div .timeline-content>
               <h3>Type System (Done)
-              <p>Hindley-Milner inference with unification and occurs check
+              <p>Static type inference with unification and occurs check
           <div .timeline-item>
             <div .timeline-marker data-step="5">
             <div .timeline-content>
@@ -418,7 +421,7 @@ getHomeR = defaultLayout $ do
             <div .timeline-marker data-step="8">
             <div .timeline-content>
               <h3>Standard Library (Done)
-              <p>List functions (map, filter, fold, zip), string functions (split, join, trim), 26 built-ins
+              <p>List functions (map, filter, fold, zip), string functions (split, join, trim), 27 built-ins
           <div .timeline-item>
             <div .timeline-marker data-step="9">
             <div .timeline-content>
