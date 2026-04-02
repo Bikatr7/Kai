@@ -1,0 +1,5 @@
+// expect: 9
+do {
+  print "trail";
+  9;
+}

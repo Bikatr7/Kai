@@ -1,9 +1,9 @@
-// Wildcard Patterns Example
-// Demonstrates wildcard (_) pattern matching in case expressions
-
-let _ = print "=== Wildcard Patterns Demo ===" in
-let _ = print (case Just 42 of _ -> "Matches any value!") in
-let _ = print (case Nothing of Just x -> "Has value" | _ -> "No value") in
-let _ = print (case [] of _ -> "Any list") in
-let _ = print (case [1,2,3] of _ -> "Any non-empty list") in
-print "Wildcard patterns work!"
+// Wildcards across Either, records, tuples, and lists.
+let result = case Right {ok = true, message = "loaded"} of Right {ok = true, message = _} -> "status: success" | Left _ -> "status: failure" | Right _ -> "status: unexpected"
+let tupleSummary = case (42, "kai", true) of (_, name, true) -> "tuple for " ++ name | _ -> "tuple mismatch"
+let listSummary = case [1, 2, 3, 4] of _ :: _ -> "list has values" | [] -> "list is empty"
+do {
+  print result;
+  print tupleSummary;
+  print listSummary
+}

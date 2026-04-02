@@ -77,6 +77,7 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - Tuple functions: `fst`, `snd` for pairs.
 - Type annotations: Optional Haskell-style type annotations for lambdas and let bindings.
 - Let, letrec, top-level, and imported definitions are generalized; lambda parameters and pattern bindings remain monomorphic within each use site.
+- `do { ... }` blocks are syntactic sugar for sequencing; entries are separated by `;`, and `do {}` evaluates to `()`.
 - Strings: escapes `\"`, `\\`, `\n`. Unknown escapes are errors with a helpful message.
 - Precedence (highest to lowest):
   1) application (left)
@@ -100,10 +101,11 @@ Notes:
 Prereqs: Stack + GHC.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 540 examples)
+- Tests: `stack test --fast` (all 583 examples)
 - Run CLI: `stack exec kai -- --help`
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
-- Try interactive calculator: `stack exec kai examples/calculator.kai`
+- Try module-based example: `stack exec kai -- examples/text_analysis.kai`
+- Try interactive calculator: `stack exec kai -- examples/calculator.kai`
 - Run website locally: `stack exec kai-website` (visit http://localhost:3000)
 
 ### Test Suite Structure
@@ -161,7 +163,7 @@ stack bench --benchmark-arguments="--csv=results.csv"
 ## Linting & Style
 
 - HLint: `hlint .`
-  - Examples already applied: `void (symbol "()")`, avoid trivial lambdas in operator table, use `Right . VStr <$> getLine` over do-notation.
+  - Examples already applied: `void (symbol "()")`, avoid trivial lambdas in operator table, use `Right . VStr <$> getLine` over unnecessary Haskell do-notation.
 - Keep changes minimal and focused. Follow existing code style.
 
 ## Adding Features (playbook)
@@ -204,17 +206,21 @@ stack bench --benchmark-arguments="--csv=results.csv"
 - **Error handling system**: Full Maybe/Either types with pattern matching for graceful error handling instead of runtime crashes
 - **Safe conversion functions**: `parseInt : String -> Maybe Int` returns `Nothing` for invalid input instead of crashing
 - **Case expressions**: Pattern matching for handling Maybe/Either and other data types safely
-- **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
-- **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
+- **Do blocks**: `do { print "hello"; 42 }` gives Kai a readable sequencing form for effectful scripts
+- **Wildcard variables**: `_` is still available in let bindings when explicit discard is the clearest fit (`let _ = expensiveCall in body`)
+- **Expression sequencing**: `;` remains the underlying sequencing operator, with `do` blocks as the ergonomic surface form
 - **Interactive I/O**: `input` function reads from stdin, enabling interactive applications like the calculator example
 - **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
 - **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels) through parser and type checker optimizations
 - **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed for development
-- **Comprehensive testing**: 540 passing examples spanning unit, property, script, CLI, and stress coverage
+- **Comprehensive testing**: 583 passing examples spanning unit, property, script, CLI, stress, and example smoke coverage
 
 ## Notes / TODOs
 
-- **Next priority features**: REPL implementation, custom data types, enhanced pattern matching
+- **v0.0.4.4 scope**: REPL first (`:type`, `:load`, `:reload`, multiline input)
+- **v0.0.4.4 scope**: Custom data types plus the pattern matching needed to make them practical
+- **v0.0.4.4 scope**: Essential scripting stdlib additions (`appendFile`, file/directory helpers, process/environment access)
+- **Defer by default**: Package manager, formatter/linter/LSP, HTTP/JSON, and advanced type-system work unless the core v0.0.4.4 goals land comfortably
 - When changing semantics, align README.md, SPEC.md, website, and DEVELOPING.md immediately.
 - Always verify that stress tests pass after performance-critical changes.
 - Cross-platform support: Conditional dependencies for Windows compatibility

@@ -4,6 +4,7 @@ import Test.Hspec
 import Syntax
 import Parser
 import Evaluator
+import TypeChecker
 import qualified Data.Map as Map
 
 spec :: Spec
@@ -46,3 +47,19 @@ spec = describe "Data Structures" $ do
     it "accesses a record field" $ do
       let Right record = parseExpr "{a = 1, b = true}"
       evalPure (RecordAccess record "a") `shouldBe` Right (VInt 1)
+
+    it "accesses nested record fields" $ do
+      let Right expr = parseExpr "{outer = {inner = 7}}.outer.inner"
+      evalPure expr `shouldBe` Right (VInt 7)
+
+    it "type checks access to existing fields on closed records" $ do
+      let Right expr = parseExpr "let r = {a = 1, b = true} in (r.a, r.b)"
+      typeCheck expr `shouldBe` Right (TTuple [TInt, TBool])
+
+    it "type checks nested record field access" $ do
+      let Right expr = parseExpr "let r = {outer = {inner = 7}} in r.outer.inner"
+      typeCheck expr `shouldBe` Right TInt
+
+    it "rejects access to missing record fields" $ do
+      let Right expr = parseExpr "let r = {a = 1} in r.b"
+      typeCheck expr `shouldBe` Left (RecordFieldMismatch "b")

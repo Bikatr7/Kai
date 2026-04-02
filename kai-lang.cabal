@@ -226,6 +226,7 @@ test-suite kai-test
       ConditionalSpec
       DataStructureSpec
       EdgeCaseSpec
+      ExampleSpec
       InputSpec
       IntegerOverflowSpec
       LambdaSpec

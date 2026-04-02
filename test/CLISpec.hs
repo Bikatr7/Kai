@@ -64,3 +64,40 @@ spec = describe "CLI" $ do
       (exitCode, output) <- captureOutput $ runCLI [path]
       exitCode `shouldBe` ExitSuccess
       output `shouldContain` "1\n"
+
+  it "type checks record field access in program files" $ do
+    withTempKaiFile "print ({a = 1, b = true}.a)\n" $ \path -> do
+      (exitCode, output) <- captureOutput $ runCLI [path]
+      exitCode `shouldBe` ExitSuccess
+      output `shouldContain` "1\n"
+
+  it "returns a non-zero exit code for missing record fields in program files" $ do
+    withTempKaiFile "print ({a = 1}.b)\n" $ \path -> do
+      (exitCode, output) <- captureOutput $ runCLI [path]
+      exitCode `shouldBe` ExitFailure 1
+      output `shouldContain` "Type error: RecordFieldMismatch \"b\""
+
+  it "runs wildcard-pattern scripts through the real CLI path" $ do
+    withTempKaiFile
+      "let _ = case Just 42 of _ -> \"matched\" | Nothing -> \"not matched\"\n\
+      \let _ = case [1, 2, 3] of _ -> \"list matched\" | [] -> \"empty\"\n\
+      \let _ = case (1, \"hello\") of _ -> \"tuple matched\"\n\
+      \let _ = case Just 42 of _ -> \"bound\" | Nothing -> \"none\"\n\
+      \case Nothing of _ -> print \"wildcard works\" | Just x -> print \"should not match\"\n"
+      $ \path -> do
+          (exitCode, output) <- captureOutput $ runCLI [path]
+          exitCode `shouldBe` ExitSuccess
+          output `shouldContain` "wildcard works\n"
+
+  it "runs nested record-access scripts through the real CLI path" $ do
+    withTempKaiFile "let r = {outer = {inner = 7}, ok = true}\nprint r.outer.inner\n" $ \path -> do
+      (exitCode, output) <- captureOutput $ runCLI [path]
+      exitCode `shouldBe` ExitSuccess
+      output `shouldContain` "7\n"
+
+  it "runs multiline do-block scripts through the real CLI path" $ do
+    withTempKaiFile "let result = do {\n  print \"hello from block\";\n  7\n}\nprint result\n" $ \path -> do
+      (exitCode, output) <- captureOutput $ runCLI [path]
+      exitCode `shouldBe` ExitSuccess
+      output `shouldContain` "hello from block\n"
+      output `shouldContain` "7\n"

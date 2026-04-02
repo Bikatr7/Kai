@@ -102,6 +102,26 @@ spec = describe "Parser Tests" $ do
         `shouldBe` Right (If (Gt (IntLit 5) (IntLit 3)) 
                             (Add (IntLit 2) (IntLit 3)) 
                             (Mul (IntLit 4) (IntLit 1)))
+
+    it "parses chained record field access" $ do
+      parseExpr "{outer = {inner = 7}}.outer.inner"
+        `shouldBe` Right
+          (RecordAccess
+            (RecordAccess
+              (RecordLit [("outer", RecordLit [("inner", IntLit 7)])])
+              "outer")
+            "inner")
+
+    it "parses do blocks into sequencing expressions" $ do
+      parseExpr "do { print \"hello\"; 42 }"
+        `shouldBe` Right (Seq (Print (StrLit "hello")) (IntLit 42))
+
+    it "parses empty do blocks as unit" $ do
+      parseExpr "do {}" `shouldBe` Right UnitLit
+
+    it "parses do blocks with trailing semicolons" $ do
+      parseExpr "do { print \"hello\"; 42; }"
+        `shouldBe` Right (Seq (Print (StrLit "hello")) (IntLit 42))
   
   describe "Parse Errors" $ do
     it "rejects empty input" $ do

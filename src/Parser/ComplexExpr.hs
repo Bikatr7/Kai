@@ -1,6 +1,7 @@
 module Parser.ComplexExpr where
 
 import Text.Megaparsec
+import Control.Monad.Combinators (sepEndBy)
 import Syntax
 import Parser.Lexer
 import Parser.Literals
@@ -66,3 +67,13 @@ casePattern expr = do
   symbol "->"
   e <- expr
   return (pat, e)
+
+blockExpr :: ExprParser -> Parser Expr
+blockExpr entryExpr = do
+  keyword "do"
+  exprs <- braces (sepEndBy entryExpr (symbol ";"))
+  return $ mkBlock exprs
+  where
+    mkBlock [] = UnitLit
+    mkBlock [e] = e
+    mkBlock (e:es) = Seq e (mkBlock es)

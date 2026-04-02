@@ -1,19 +1,8 @@
-// Discard Function Demo
-// Shows how discard provides a cleaner alternative to let _ = ...
-
-let _ = print "=== Discard vs let _ = ... ===" in
-let _ = print "Old way: let _ = print \"hello\" in 42" in
-let _ = print "New way: discard (print \"hello\"); 42" in
-let _ = print "" in
-
-// Old way
-let _ = print "Old way result:" in
-let _ = print "hello" in
-let oldResult = 42 in
-
-// New way
-let _ = print "New way result:" in
-discard (print "hello");
-let newResult = 42 in
-
-print ("Both return: " ++ toString oldResult)
+// Discard keeps side-effect-only helpers small and composable.
+let log = \message -> discard (print ("[log] " ++ message))
+let report = {user = "Kai", steps = ["read", "type-check", "run"]}
+do {
+  log "starting example";
+  log ("pipeline: " ++ join ", " (report.steps));
+  print ("Final report: " ++ show report)
+}

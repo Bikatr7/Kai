@@ -1,36 +1,12 @@
-// TextAnalysis.kai - Text analysis functions using StringUtils and MathUtils
+// TextAnalysis.kai - A small reusable analysis module built from StringUtils and MathUtils.
 import StringUtils
 import MathUtils
-
-let wordCount = \text -> length (words text)
-
-let characterCount = \text -> strLength text
-
-let averageWordLength = \text -> case words text of
-  [] -> 0
-  | ws -> let lengths = map strLength ws in
-          average lengths
-
-let mostCommonWord = \text -> case words text of
-  [] -> ""
-  | ws -> let lowerWords = map toLower ws in
-          let uniqueWords = foldl (\acc -> \w -> 
-            if null (filter (\x -> x == w) acc) then w :: acc else acc) [] lowerWords in
-          let wordFreq = \w -> count (\x -> x == w) lowerWords in
-          let frequencies = map (\w -> (w, wordFreq w)) uniqueWords in
-          let maxFreq = max (map (\p -> case p of (_, f) -> f) frequencies) in
-          case filter (\p -> case p of (_, f) -> f == maxFreq) frequencies of
-            [] -> ""
-            | (w, _) :: _ -> w
-
-let analyzeText = \text -> 
-  let wc = wordCount text in
-  let cc = characterCount text in
-  let awl = averageWordLength text in
-  let mcw = mostCommonWord text in
-  "Word count: " ++ toString wc ++ "\n" ++
-  "Character count: " ++ toString cc ++ "\n" ++
-  "Average word length: " ++ toString awl ++ "\n" ++
-  "Most common word: " ++ mcw
-
-
+let wordCount : String -> Int = \text -> length (words text)
+let characterCount : String -> Int = \text -> strLength text
+let averageWordLength : String -> Int = \text -> average (map (\word -> strLength word) (words text))
+let longestWordLength : String -> Int = \text -> case maximum (map (\word -> strLength word) (words text)) of Just n -> n | Nothing -> 0
+let firstLongWord : Int -> String -> Maybe String = \minLength -> \text -> case filter (\word -> strLength word > minLength) (words text) of [] -> Nothing | word :: _ -> Just word
+let preview : String -> String = \text -> previewWords 5 text
+let summarize : String -> {words: Int, characters: Int, averageWordLength: Int, longestWordLength: Int, preview: String, firstLongWord: Maybe String} = \text -> {words = wordCount text, characters = characterCount text, averageWordLength = averageWordLength text, longestWordLength = longestWordLength text, preview = preview text, firstLongWord = firstLongWord 4 text}
+let formatSummary : String -> String = \text -> let summary = summarize text in "Words: " ++ (toString (summary.words)) ++ "\nCharacters: " ++ (toString (summary.characters)) ++ "\nAverage word length: " ++ (toString (summary.averageWordLength)) ++ "\nLongest word length: " ++ (toString (summary.longestWordLength)) ++ "\nPreview: " ++ summary.preview ++ "\nFirst long word: " ++ (case summary.firstLongWord of Just word -> word | Nothing -> "none")
+export wordCount, characterCount, averageWordLength, longestWordLength, firstLongWord, preview, summarize, formatSummary

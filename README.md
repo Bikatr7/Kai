@@ -30,15 +30,16 @@ Features available today:
 - **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
 - **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`, `discard : a -> Unit`
 - **Pattern matching**: Case expressions for handling Maybe/Either, tuples, and other data types
-- **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
-- **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
-- **Parser**: Megaparsec with precedence/associativity, reserved keywords, multi-statement files
+- **Do blocks**: `do { expr1; expr2; expr3 }` for readable effect sequencing, with `do {}` evaluating to `()`
+- **Wildcard variables**: `_` still works in let bindings when you truly want to discard a value (`let _ = expensiveCall in body`)
+- **Expression sequencing**: `;` remains the primitive sequencing operator, with lowest precedence
+- **Parser**: Megaparsec with precedence/associativity, reserved keywords, multiline top-level files, and multiline `do` blocks
 - **CLI**: parse and evaluate expressions or files with `--help`, `-e`, and `--debug` options (clean output by default), supports passing arguments to scripts, and returns non-zero exit codes on failures
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
 - **Top-level definitions**: `let` and `letrec` at module level for defining functions and values
 - **Module system**: `import ModuleName` to import modules, module resolution supports `ModuleName.kai` and `ModuleName/ModuleName.kai`, full cross-module type checking, explicit exports with `export name1, name2`
-- **Tests**: Hspec + QuickCheck (540 examples) — all passing with comprehensive coverage
-- **Working examples**: Interactive calculator, FizzBuzz, guess the number game, list processing, text processing, file I/O demonstrations, text analysis tool with modules
+- **Tests**: Hspec + QuickCheck (583 examples) — all passing with comprehensive coverage
+- **Working examples**: Module-based text analysis, validated CLI tools, interactive calculator and guessing game, list/record processing, text cleanup, file I/O, wildcard matching, and discard/logging demos
 
 Current limitations:
 
@@ -63,10 +64,11 @@ stack exec kai -- -e "print (42 + 1)"
 stack exec kai -- --debug -e "42 + 1"
 
 ## Run a file
-stack exec kai path/to/script.kai
+stack exec kai -- path/to/script.kai
 
-## Try the interactive calculator
-stack exec kai examples/calculator.kai
+## Try practical examples
+stack exec kai -- examples/text_analysis.kai
+stack exec kai -- examples/calculator.kai
 
 ## Website demo (intro page)
 stack exec kai-website  # visit http://localhost:3000
@@ -122,19 +124,25 @@ print ("The answer is " ++ "42")  // returns ()
 print (if 5 > 3 then "yes" else "no")
 ```
 
-Wildcard variables and expression sequencing:
+Do blocks, sequencing, and wildcards:
 
 ```kai
-let _ = print "Setting up..." in
-let _ = print "Processing..." in
-42  // Result: prints setup messages, returns 42
+do {
+  print "Setting up...";
+  print "Processing...";
+  42
+}  // Result: prints setup messages, returns 42
 
-print "First"; print "Second"; print "Done"
-// Prints all three messages in sequence
+(print "First"); (print "Second"); print "Done"
+// Parenthesize print when sequencing it
 
-let x = 10 in
-let _ = print ("x is " ++ toString x) in
-x * 2  // Prints message, returns 20
+let x = 10 in do {
+  print ("x is " ++ (toString x));
+  x * 2
+}  // Prints message, returns 20
+
+discard (show [1, 2, 3]); 99
+// Explicitly ignore a non-Unit result when needed
 ```
 
 Lambdas and application:
@@ -218,6 +226,16 @@ let y = 20
 x + y           // => 30
 ```
 
+Runnable example scripts in `examples/`:
+
+- `examples/text_analysis.kai`: modules, records, `Maybe`, and file-or-stdin-style scripting with `args`
+- `examples/file_counter.kai`: `Either`-based CLI validation plus reusable text-analysis helpers
+- `examples/list_processing.kai`: lists, records, `zip`, and a let-polymorphic tagging helper
+- `examples/calculator.kai` and `examples/guess_the_number.kai`: interactive input with typed parsing and recursion
+- `examples/file_io.kai`, `examples/text_processing.kai`, `examples/wildcard_patterns.kai`, and `examples/discard_demo.kai`: practical file scripting, text cleanup, wildcard matching, and discard-based logging
+
+Reusable example modules live in `examples/MathUtils.kai`, `examples/StringUtils.kai`, and `examples/TextAnalysis.kai`.
+
 Shebang support for executable scripts:
 
 ```kai
@@ -232,8 +250,10 @@ File I/O and command-line arguments:
 
 ```kai
 // Write to a file
-let _ = writeFile "output.txt" "Hello, world!" in
-print "File written"
+do {
+  writeFile "output.txt" "Hello, world!";
+  print "File written"
+}
 
 // Read from a file
 let content = readFile "input.txt" in
@@ -282,15 +302,16 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 
 ## Language Notes
 
-- Keywords are reserved (`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`).
+- Keywords are reserved. The current list includes control-flow, I/O, module, and data constructors such as `if`, `let`, `letrec`, `do`, `case`, `import`, `export`, `Just`, `Nothing`, `Left`, and `Right`; see `SPEC.md` for the exact list.
 - Wildcard variable `_` can be used in let bindings and pattern matching to discard values: `let _ = expression in body`, `case x of _ -> "any" | Just val -> "some"`.
+- `do { ... }` is the idiomatic way to sequence effects. Entries are separated by semicolons, and `do {}` evaluates to `()`.
 - Expression sequencing with `;` has lowest precedence and is right-associative: `a; b; c` = `a; (b; c)`.
 - Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
 - Concatenation (`++`) works for both strings and lists, right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`, `[1, 2] ++ [3, 4]` parses as `[1, 2] ++ [3, 4]`.
 - Supported string escapes: `\"`, `\\`, `\n`. Unknown escapes are errors.
 - `print` evaluates its argument, prints it, and returns unit `()`.
 - Application binds tighter than infix operators (`f x + y` parses as `(f x) + y`).
-- Multi-statement files are supported: each line is parsed as a separate expression.
+- Multi-statement files are supported: top-level newlines split expressions, while nested `()`, `[]`, `{}`, strings, and comments stay intact.
 
 ## Project Structure
 
@@ -367,82 +388,44 @@ Design philosophy:
 - **Scriptable**: Fast edit‑run cycle, ergonomic CLI, shebang support, no compilation step
 - **Practical**: Batteries-included standard library for real-world scripting tasks
 
-Planned functional-first features:
+Roadmap:
 
-**Core Language**
-- ~~Let‑bindings and recursion~~ ✅ **DONE** (`let` and `letrec`)
-- ~~Unification-based type inference~~ ✅ **DONE**
-- ~~Basic pattern matching~~ ✅ **DONE** (`case` expressions for Maybe/Either)
-- ~~Lists and records~~ ✅ **DONE** (with basic operations)
-- ~~Tuples~~ ✅ **DONE** (with `fst` and `snd` for pairs)
-- ~~Top‑level definitions and module system~~ ✅ **DONE**
-- Enhanced pattern matching (tuple destructuring in case, guards)
-- Do-notation or block syntax for I/O sequencing
-- Match expressions as alternative to nested conditionals
-- Maps and advanced data structures
+Kai's next release should make the language materially better for day-to-day typed scripting. The priority is workflow and practical data modeling, not advanced type theory.
 
-**Functional-First Standard Library**
-- ~~List operations: `map`, `filter`, `fold`, `zip`~~ ✅ **DONE** (immutable by default)
-- ~~String utilities: `split`, `join`, `trim`, `replace`~~ ✅ **DONE**
-- Math functions: `abs`, `min`, `max`, `sqrt`
-- ~~Option/Result types for error handling~~ ✅ **DONE** (Maybe/Either)
-- Function composition and pipeline operators
+**v0.0.4.4 release focus**
+- Interactive REPL with multiline input plus `:type`, `:load`, and `:reload`
+- Custom data types so scripts can define their own algebraic models instead of only using built-in containers
+- Stronger pattern matching, starting with the forms that make ADTs and tuples ergonomic
+- Essential scripting stdlib additions: `appendFile`, `fileExists`, basic directory operations, and process/environment access
 
-**I/O and Effects (Controlled Imperative)**
-- ~~Wildcard variables (`_`) for unused bindings in let expressions~~ ✅ **DONE**
-- ~~Statement blocks with semicolon syntax for imperative-style code~~ ✅ **DONE** (expression sequencing)
-- ~~File I/O: `readFile`, `writeFile`~~ ✅ **DONE**
-- ~~Command-line arguments~~ ✅ **DONE** (`args`)
-- Do-notation for clean I/O sequencing (addressing calculator verbosity)
-- File I/O: `appendFile` and additional operations
-- Network operations: HTTP requests, JSON parsing
-- Process utilities: run external commands
-- Mutable references when needed: `ref`, `var`
+**Likely stretch work if the core lands early**
+- Better parse and type error messages
+- More math, list, and string helpers
+- Small ergonomics improvements around scripting workflows
 
-**Scripting Conveniences**
-- REPL with multiline input and `:type` command
-- Better error messages with suggestions
-- Formatter and basic linter
-- ~~Shebang support for executable scripts~~ ✅ **DONE**
-- Package manager for reusable code
+**Explicitly after v0.0.4.4**
+- Package manager and reusable dependency story
+- Formatter, linter, and IDE/LSP support
+- HTTP/JSON/networking work
+- Mutable performance escape hatches and deeper compiler/runtime optimization
+- Advanced type-system work such as polymorphic recursion, row polymorphism, GADTs, and rank-N types
 
-**Performance Escape Hatches**
-- Mutable arrays/buffers for hot paths
-- Imperative loops when performance matters
-- Lazy evaluation controls
-
-Example future script (functional-first with imperative I/O):
+Example current Kai script style:
 
 ```kai
 #!/usr/bin/env kai
 
-import System (args, readFile, writeFile)
-import List (map, filter)
+let processLines = \text -> filter (\line -> not (trim line == "")) (map trim (split "\n" text))
+let greet = \name -> if name == "" then "Hello, world!" else "Hello, " ++ name
 
-// Functional by default
-let processLines lines = 
-  lines |> filter (not . isEmpty) |> map trim
+let inputText = readFile "input.txt"
+let processed = processLines inputText
+let greeting = case processed of name :: _ -> greet name | [] -> greet ""
 
-let greet name =
-  if name == "" then "Hello, world!" else "Hello, " ++ name
-
-// Imperative when needed (I/O) - proposed do-notation
-let main = do {
-  input <- readFile "input.txt"
-  let processed = processLines (split "\n" input)
-  let greeting = greet (head processed)
-  writeFile "output.txt" greeting
+do {
+  writeFile "output.txt" greeting;
   print greeting
 }
-
-// Alternative: expression sequencing for imperative style
-let main =
-  let input = readFile "input.txt" in
-  let processed = processLines (split "\n" input) in
-  let greeting = greet (head processed) in
-  let _ = writeFile "output.txt" greeting in
-  let _ = print greeting in
-  ()
 ```
 
 ## Contributing

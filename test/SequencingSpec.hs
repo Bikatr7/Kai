@@ -101,6 +101,46 @@ spec = do
           Right ast -> expectationFailure $ "Wrong AST structure: " ++ show ast
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
+      it "do blocks sequence print statements without parentheses" $ do
+        let expr = "do { print \"first\"; print \"second\"; 42 }"
+        case parseExpr expr of
+          Right ast -> do
+            result <- evalWithEnv Map.empty ast
+            case result of
+              Right val -> val `shouldBe` VInt 42
+              Left err -> expectationFailure $ "Eval error: " ++ show err
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "empty do blocks evaluate to unit" $ do
+        let expr = "do {}"
+        case parseExpr expr of
+          Right ast -> do
+            typeCheck ast `shouldBe` Right TUnit
+            evalPure ast `shouldBe` Right VUnit
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "do blocks can nest" $ do
+        let expr = "do { print \"outer\"; do { print \"inner\"; 9 } }"
+        case parseExpr expr of
+          Right ast -> do
+            typeCheck ast `shouldBe` Right TInt
+            result <- evalWithEnv Map.empty ast
+            case result of
+              Right val -> val `shouldBe` VInt 9
+              Left err -> expectationFailure $ "Eval error: " ++ show err
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "do blocks work in conditional branches" $ do
+        let expr = "if true then do { print \"branch\"; 1 } else 2"
+        case parseExpr expr of
+          Right ast -> do
+            typeCheck ast `shouldBe` Right TInt
+            result <- evalWithEnv Map.empty ast
+            case result of
+              Right val -> val `shouldBe` VInt 1
+              Left err -> expectationFailure $ "Eval error: " ++ show err
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
     describe "Sequencing with Complex Expressions" $ do
       it "sequences let bindings" $ do
         let expr = "let x = 10 in x; let y = 20 in y"

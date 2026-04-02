@@ -1,5 +1,13 @@
-// Practical example: Text Analysis Tool
-// Demonstrates module system with StringUtils, MathUtils, and TextAnalysis
+// Analyze a file or a built-in sample with records, modules, and Maybe handling.
 import TextAnalysis
-let sampleText = "Hello world"
-print (analyzeText sampleText)
+let sample = "Kai examples should stay practical, typed, and honest."
+let text = case args of [] -> sample | path :: _ -> readFile path
+let summary = summarize text
+do {
+  print ("Preview: " ++ summary.preview);
+  print ("Words: " ++ toString (summary.words));
+  print ("Characters: " ++ toString (summary.characters));
+  print ("Average word length: " ++ toString (summary.averageWordLength));
+  print ("Longest word length: " ++ toString (summary.longestWordLength));
+  case summary.firstLongWord of Just word -> print ("First long word: " ++ word) | Nothing -> print "First long word: none"
+}

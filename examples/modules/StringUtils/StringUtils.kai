@@ -1,15 +1,6 @@
-// StringUtils.kai - String manipulation utilities
-let words = \s -> filter (\w -> w != "") (split " " (trim s))
-
-let toLower = \s ->
-  let lowerMap = [
-    ("A", "a"), ("B", "b"), ("C", "c"), ("D", "d"), ("E", "e"),
-    ("F", "f"), ("G", "g"), ("H", "h"), ("I", "i"), ("J", "j"),
-    ("K", "k"), ("L", "l"), ("M", "m"), ("N", "n"), ("O", "o"),
-    ("P", "p"), ("Q", "q"), ("R", "r"), ("S", "s"), ("T", "t"),
-    ("U", "u"), ("V", "v"), ("W", "w"), ("X", "x"), ("Y", "y"),
-    ("Z", "z")
-  ] in
-  foldl (\acc -> \(upper, lower) -> replace upper lower acc) s lowerMap
-
-export words, toLower
+// StringUtils.kai - Text helpers for scripts.
+let words : String -> [String] = \text -> filter (\word -> not (word == "")) (split " " (trim text))
+let csvFields : String -> [String] = \line -> filter (\field -> not (field == "")) (map (\field -> trim field) (split "," line))
+let previewWords : Int -> String -> String = \limit -> \text -> join " | " (take limit (words text))
+let firstNonEmpty : [String] -> Maybe String = \values -> case filter (\value -> not (trim value == "")) values of [] -> Nothing | value :: _ -> Just (trim value)
+export words, csvFields, previewWords, firstNonEmpty

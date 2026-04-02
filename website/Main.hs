@@ -39,7 +39,7 @@ getHomeR = defaultLayout $ do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>540
+            <div .stat-number>583
             <div .stat-label>Tests Passing
           <div .stat-item>
             <div .stat-number>8
@@ -68,13 +68,13 @@ getHomeR = defaultLayout $ do
             <p>Static type inference with unification, occurs check, and generalized let-polymorphism for ints, bools, strings, functions, and data structures.
           <div .feature>
             <h3>Clean Syntax
-            <p>Haskell-like lambdas, precedence, keywords, and multi-statement files with expression-only core.
+            <p>Haskell-like lambdas, `do { ... }` blocks, precedence, keywords, and multi-statement files with expression-only core.
           <div .feature>
             <h3>Interactive I/O & Conversions
-            <p>User input with `input`, type conversions (`parseInt`, `toString`, `show`), and interactive calculator example.
+            <p>User input with `input`, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, and interactive workflows.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>540 passing examples with property-based testing, script evaluation, CLI coverage, and stress checks.
+            <p>583 passing examples with property-based testing, script evaluation, CLI coverage, stress checks, and example smoke coverage.
           <div .feature>
             <h3>Developer Experience
             <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
@@ -95,9 +95,11 @@ getHomeR = defaultLayout $ do
             <br>
             <code>stack exec kai -- --debug -e "42 + 1"
             <br>
-            <code>stack exec kai path/to/script.kai
+            <code>stack exec kai -- path/to/script.kai
             <br>
-            <code>stack exec kai examples/calculator.kai
+            <code>stack exec kai -- examples/text_analysis.kai
+            <br>
+            <code>stack exec kai -- examples/calculator.kai
 
         <div .element-block>
           <h3>Install CLI
@@ -148,10 +150,11 @@ getHomeR = defaultLayout $ do
             <code>\\f -> f 42
 
         <div .element-block>
-          <h3>Let Bindings & Wildcards
+          <h3>Let Bindings, Blocks & Wildcards
           <div .code-example>
             <code>let x = 42 in x + 1
-            <code>let _ = print "hello" in 42  <!-- Wildcard variable -->
+            <code>do { print "hello"; 42 }      <!-- Preferred sequencing form -->
+            <code>let _ = expensiveCall in 42   <!-- Explicit discard when needed -->
             <code>letrec factorial = \\n -> if n == 0 then 1 else n * (factorial (n - 1)) in factorial 5
 
         <div .element-block>
@@ -188,167 +191,55 @@ getHomeR = defaultLayout $ do
             <code>readFile "path"   <!-- Read file contents -->
             <code>writeFile "path" "content"  <!-- Write to file -->
             <code>args              <!-- Command-line arguments -->
-            <code>print "A"; print "B"; 42  <!-- Sequence expressions -->
+            <code>do { print "A"; print "B"; 42 }  <!-- Sequence expressions -->
 
       <section #examples>
-        <h2>Example Expressions
+        <h2>Example Scripts & Patterns
         <div .element-block>
-          <h3>Arithmetic & Logic
+          <h3>Module-Based Text Analysis
           <div .code-example>
-            <code>42 * (10 - 3)
-            <code>5 > 3 and true
-            <code>not false
-            <br>
-            <code>-5 + 3
-            <code>10 / 2
-            <code>7 == 7
+            <code>import TextAnalysis
+            <code>let text = case args of [] -> "Kai examples should stay practical, typed, and honest." | path :: _ -> readFile path
+            <code>let summary = summarize text
+            <code>print ("Preview: " ++ summary.preview)
+            <code>case summary.firstLongWord of Just word -> print ("First long word: " ++ word) | Nothing -> print "First long word: none"
 
         <div .element-block>
-          <h3>Conditionals
+          <h3>Validated CLI Scripts
           <div .code-example>
-            <code>if 5 > 3 then 42 * 2 else 0
-            <br>
-            <code>if true and false then 1 else 2
+            <code>let validateNames : [String] -> Either String [String] = \\cliArgs -> if null cliArgs then Left "Usage..." else Right cliArgs
+            <code>letrec greetAll : [String] -> Unit = \\names -> case names of [] -> print "All greetings sent." | name :: rest -> do { print ("Hello, " ++ name ++ "!"); greetAll rest }
+            <code>case validateNames args of Left message -> print message | Right names -> greetAll names
 
         <div .element-block>
-          <h3>Lambda Functions & Application
+          <h3>List Processing & Let Polymorphism
           <div .code-example>
-            <code>\\x -> x + 1
-            <br>
-            <code>(\\x -> x + 1) 5
-            <code>(\\x -> x * x) 4
-            <br>
-            <code>(\\f -> f 10) (\\n -> n * 2)
+            <code>let report = {count = length numbers, evenCount = length (filter even numbers), total = foldl (\\acc -> \\n -> acc + n) 0 numbers, labels = zip numbers (map (\\n -> if n > 20 then "high" else "steady") numbers)}
+            <code>let tag = \\label -> \\value -> {label = label, value = value}
+            <code>show (tag "total" (report.total))
+            <code>show (tag "status" "ready")
 
         <div .element-block>
-          <h3>Let Bindings & Recursion
+          <h3>Interactive Input & Parsing
           <div .code-example>
-            <code>let add = \\x -> \\y -> x + y in add 5 3
-            <br>
-            <code>letrec factorial = \\n -> if n == 0 then 1 else n * (factorial (n - 1)) in factorial 5
-            <br>
-            <code>let compose = \\f -> \\g -> \\x -> f (g x) in compose (\\x -> x * 2) (\\x -> x + 1) 10
-
-        <div .element-block>
-          <h3>Top-Level Definitions & Modules
-          <div .code-example>
-            <code>let x = 42
-            <code>let y = x + 1
-            <br>
-            <code>letrec factorial = \\n -> if n == 0 then 1 else n * factorial (n - 1)
-            <code>factorial 5
-            <br>
-            <code>import Math
-            <code>add 2 3
-
-        <div .element-block>
-          <h3>Strings & Print
-          <div .code-example>
-            <code>"Hello, " ++ "World"
-            <br>
-            <code>print ("The answer is " ++ "42")
-            <br>
-            <code>print (if 5 > 3 then "yes" else "no")
-            <br>
-            <code>(\\x -> print (x ++ "!")) "Hi"
-
-        <div .element-block>
-          <h3>Interactive I/O & Conversions
-          <div .code-example>
-            <code>let name = input in print ("Hello, " ++ name)
-            <br>
-            <code>let numStr = input in case parseInt numStr of Just num -> toString (num * 2) | Nothing -> "Invalid number"
-            <br>
-            <code>show (42 + 3)   <!-- Returns "45" -->
-
-        <div .element-block>
-          <h3>Wildcard Variables & Sequencing
-          <div .code-example>
-            <code>let _ = print "Setup" in let _ = print "Process" in 42
-            <br>
-            <code>print "First"; print "Second"; print "Done"
-            <br>
-            <code>let x = 10 in let _ = print ("x is " ++ toString x) in x * 2
-
-        <div .element-block>
-          <h3>Type Annotations
-          <div .code-example>
-            <code>let add : Int -> Int -> Int = \\x : Int -> \\y : Int -> x + y
-            <br>
-            <code>(\\x : String -> case parseInt x of Just n -> n | Nothing -> 0) "42"
-
-        <div .element-block>
-          <h3>Pattern Matching
-          <div .code-example>
-            <code>case parseInt "42" of Just x -> x | Nothing -> 0
-            <br>
-            <code>case list of [] -> 0 | x :: xs -> x + length xs
-            <br>
-            <code>case tuple of (x, y) -> x + y
-            <br>
-            <code>case record of {a = x, b = y} -> x + y
-            <br>
-            <code>case Just 42 of _ -> "any value" | Nothing -> "none"
-
-        <div .element-block>
-          <h3>Lists & Tuples
-          <div .code-example>
-            <code>[1, 2, 3] ++ [4, 5]
-            <br>
-            <code>head([1, 2, 3])
-            <code>tail([1, 2, 3])
-            <br>
-            <code>(1, "hello", true)
-            <code>fst((42, "world"))
-
-        <div .element-block>
-          <h3>List Functions
-          <div .code-example>
-            <code>map (\\x -> x * 2) [1, 2, 3]
-            <span .comment>// [2, 4, 6]
-            <br>
-            <code>filter (\\x -> x > 2) [1, 2, 3, 4]
-            <span .comment>// [3, 4]
-            <br>
-            <code>zip [1, 2, 3] ["a", "b", "c"]
-            <span .comment>// [(1, "a"), (2, "b"), (3, "c")]
-
-        <div .element-block>
-          <h3>String Functions
-          <div .code-example>
-            <code>split " " "hello world"
-            <span .comment>// ["hello", "world"]
-            <br>
-            <code>join ", " ["apple", "banana"]
-            <span .comment>// "apple, banana"
-            <br>
-            <code>trim "  hello  "
-            <span .comment>// "hello"
-
-        <div .element-block>
-          <h3>Pattern Matching Examples
-          <div .code-example>
-            <code>case parseInt "42" of Just x -> x | Nothing -> 0
-            <span .comment>// Safe string to int conversion
-            <br>
-            <code>case list of [] -> 0 | x :: xs -> x + length xs
-            <span .comment>// List pattern matching
-            <br>
-            <code>case tuple of (x, y) -> x + y
-            <span .comment>// Tuple destructuring
-            <br>
-            <code>case record of {a = x, b = y} -> x + y
-            <span .comment>// Record pattern matching
+            <code>let parseSecret : [String] -> Int = \\cliArgs -> case cliArgs of value :: _ -> (case parseInt value of Just n -> n | Nothing -> 42) | [] -> 42
+            <code>let promptGuess : Int -> String = \\attempt -> do { print ("Attempt " ++ toString attempt ++ ": enter a guess"); input }
+            <code>case parseInt guessText of Just guess -> ... | Nothing -> do { print "Please enter an integer."; loop secret attempt }
 
         <div .element-block>
           <h3>File I/O & Arguments
           <div .code-example>
-            <code>let content = readFile "input.txt" in print content
-            <br>
-            <code>let _ = writeFile "output.txt" "Hello!" in print "Done"
-            <br>
-            <code>let firstArg = head args in print firstArg
-            <span .comment>// Access command-line arguments
+            <code>let outputPath = case args of path :: _ -> path | [] -> "kai_output.txt"
+            <code>let content = join "\n" ["Kai writes files", "Kai reads them back", "Kai keeps scripts typed"]
+            <code>do { writeFile outputPath content; print ("Wrote " ++ outputPath) }
+            <code>print ("Read back: " ++ replace "\n" " | " (readFile outputPath))
+
+        <div .element-block>
+          <h3>Wildcard Patterns
+          <div .code-example>
+            <code>case Right {ok = true, message = "loaded"} of Right {ok = true, message = _} -> "status: success" | Left _ -> "status: failure" | Right _ -> "status: unexpected"
+            <code>case (42, "kai", true) of (_, name, true) -> "tuple for " ++ name | _ -> "tuple mismatch"
+            <code>case [1, 2, 3, 4] of _ :: _ -> "list has values" | [] -> "list is empty"
 
         <div .element-block>
           <h3>Type Safety Examples
@@ -380,7 +271,7 @@ getHomeR = defaultLayout $ do
             <span>No polymorphic recursion for recursively-defined functions
 
       <section #roadmap>
-        <h2>Current Status (v0.0.4.3) & Roadmap
+        <h2>Current Status (v0.0.4.3) & v0.0.4.4 Focus
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -427,21 +318,21 @@ getHomeR = defaultLayout $ do
             <div .timeline-content>
               <h3>Top-Level Definitions & Modules (Done)
               <p>Module system with imports, top-level let/letrec definitions, mutual recursion support
-          <div .timeline-item .current>
-            <div .timeline-marker .current data-step="10">
+          <div .timeline-item>
+            <div .timeline-marker data-step="10">
             <div .timeline-content>
               <h3>File I/O & Scripting (Done)
               <p>readFile, writeFile, command-line arguments, practical scripting capabilities
-          <div .timeline-item>
-            <div .timeline-marker data-step="11">
+          <div .timeline-item .current>
+            <div .timeline-marker .current data-step="11">
             <div .timeline-content>
-              <h3>Advanced Stdlib (Planned)
-              <p>Math functions, more list/string operations
+              <h3>v0.0.4.4 Focus
+              <p>REPL, custom data types, stronger pattern matching, and essential scripting stdlib work
           <div .timeline-item>
             <div .timeline-marker data-step="12">
             <div .timeline-content>
-              <h3>Developer Tools (Planned)
-              <p>REPL, formatter, linter, IDE support, package manager
+              <h3>Later Releases
+              <p>Formatter, linter, IDE support, package manager, HTTP/JSON, and deeper optimization work
 
       <footer>
         <p .copyright>Kai Language · Functional-first scripting · Implemented in Haskell

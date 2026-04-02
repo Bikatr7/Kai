@@ -1,9 +1,10 @@
-// Text processing example: parse CSV data
-// Split CSV line, trim fields, filter empty values, join with pipes
-
-let csvLine = " apple , banana ,  , cherry " in
-let fields = split "," csvLine in
-let cleaned = map (\s -> trim s) fields in
-let nonEmpty = filter (\s -> strLength s > 0) cleaned in
-let result = join " | " nonEmpty in
-print result
+// Use the reusable StringUtils example module for practical text cleanup.
+import StringUtils
+let csvLine = " apples , bananas ,  pears ,  "
+let cleaned = csvFields csvLine
+let preview = previewWords 4 "Kai examples should stay typed and practical"
+do {
+  print ("Fields: " ++ show cleaned);
+  print ("Preview: " ++ preview);
+  case firstNonEmpty ["", "  ", "focus"] of Just value -> print ("First non-empty: " ++ value) | Nothing -> print "First non-empty: none"
+}

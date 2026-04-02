@@ -1,0 +1,5 @@
+// expect: 42
+do {
+  print "first";
+  42
+}

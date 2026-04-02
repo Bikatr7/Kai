@@ -1,6 +1,6 @@
-// StringUtils.kai - String manipulation utilities
-let words = \s -> filter (\w -> w != "") (split " " (trim s))
-
-let toLower = \s -> replace "A" "a" (replace "B" "b" (replace "C" "c" (replace "D" "d" (replace "E" "e" (replace "F" "f" (replace "G" "g" (replace "H" "h" (replace "I" "i" (replace "J" "j" (replace "K" "k" (replace "L" "l" (replace "M" "m" (replace "N" "n" (replace "O" "o" (replace "P" "p" (replace "Q" "q" (replace "R" "r" (replace "S" "s" (replace "T" "t" (replace "U" "u" (replace "V" "v" (replace "W" "w" (replace "X" "x" (replace "Y" "y" (replace "Z" "z" s))))))))))))))))))))))))
-
-
+// StringUtils.kai - Text helpers for scripts.
+let words : String -> [String] = \text -> filter (\word -> not (word == "")) (split " " (trim text))
+let csvFields : String -> [String] = \line -> filter (\field -> not (field == "")) (map (\field -> trim field) (split "," line))
+let previewWords : Int -> String -> String = \limit -> \text -> join " | " (take limit (words text))
+let firstNonEmpty : [String] -> Maybe String = \values -> case filter (\value -> not (trim value == "")) values of [] -> Nothing | value :: _ -> Just (trim value)
+export words, csvFields, previewWords, firstNonEmpty

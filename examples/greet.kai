@@ -1,9 +1,7 @@
-// Simple greeting script - demonstrates command-line arguments
-// Usage: kai greet.kai Alice Bob Charlie
-
-let greetPerson = \name -> print ("Hello, " ++ name ++ "!") in
-let greetAll = \names -> case null names of
-  true -> print "No names provided. Usage: kai greet.kai [names...]"
-  | false -> let _ = map greetPerson names in print "Done!"
-in
-greetAll args
+// Greet each provided name with explicit CLI validation.
+let validateNames : [String] -> Either String [String] = \cliArgs -> if null cliArgs then Left "Usage: kai examples/greet.kai <name> [name...]" else Right cliArgs
+letrec greetAll : [String] -> Unit = \names -> case names of [] -> print "All greetings sent." | name :: rest -> do {
+  print ("Hello, " ++ name ++ "!");
+  greetAll rest
+}
+case validateNames args of Left message -> print message | Right names -> greetAll names

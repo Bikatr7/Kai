@@ -11,13 +11,80 @@ import Parser.Builtins
 import Parser.ComplexExpr
 
 expr :: Parser Expr
-expr = makeExprParser appExpr operatorTable
+expr = buildExpr True
 
-appExpr :: Parser Expr
-appExpr = do
-  first <- atom
-  rest <- many (recordAccess <|> application)
-  return $ foldl (flip ($)) first rest
+exprNoSeq :: Parser Expr
+exprNoSeq = buildExpr False
+
+buildExpr :: Bool -> Parser Expr
+buildExpr allowSeq = exprParser
+  where
+    exprParser = makeExprParser appParser (operatorTable allowSeq)
+
+    appParser = do
+      first <- atomParser
+      rest <- many (recordAccess <|> application atomParser)
+      return $ foldl (flip ($)) first rest
+
+    atomParser = choice
+      [ UnitLit <$ unit
+      , IntLit <$> integer
+      , try (parensOrTuple exprParser)
+      , BoolLit <$> boolean
+      , StrLit <$> stringLit
+      , builtinExpr exprParser atomParser
+      , complexExprWithBlock exprParser
+      , try (listLitExpr exprParser)
+      , try (recordLitExpr exprParser)
+      , try (Var <$> identifier)
+      , try (typeAnnotationExpr exprParser)
+      ]
+
+builtinExpr :: Parser Expr -> Parser Expr -> Parser Expr
+builtinExpr exprParser atomParser = choice
+  [ printExpr exprParser
+  , discardExpr exprParser
+  , inputExpr
+  , argsExpr
+  , parseIntExpr exprParser
+  , toStringExpr exprParser
+  , showExpr exprParser
+  , headExpr exprParser
+  , tailExpr exprParser
+  , nullExpr exprParser
+  , fixExpr exprParser
+  , fstExpr exprParser
+  , sndExpr exprParser
+  , mapExpr atomParser
+  , filterExpr atomParser
+  , foldlExpr atomParser
+  , lengthExpr atomParser
+  , reverseExpr atomParser
+  , takeExpr atomParser
+  , dropExpr atomParser
+  , zipExpr atomParser
+  , splitExpr atomParser
+  , joinExpr atomParser
+  , trimExpr atomParser
+  , replaceExpr atomParser
+  , strLengthExpr atomParser
+  , readFileExpr atomParser
+  , writeFileExpr atomParser
+  , justExpr exprParser
+  , nothingExpr
+  , leftExpr exprParser
+  , rightExpr exprParser
+  ]
+
+complexExprWithBlock :: Parser Expr -> Parser Expr
+complexExprWithBlock exprParser = choice
+  [ lambdaExpr exprParser
+  , ifExpr exprParser
+  , letRecExpr exprParser
+  , letExpr exprParser
+  , caseExpr exprParser
+  , blockExpr exprNoSeq
+  ]
 
 recordAccess :: Parser (Expr -> Expr)
 recordAccess = do
@@ -25,104 +92,44 @@ recordAccess = do
   field <- identifier
   return (`RecordAccess` field)
 
-application :: Parser (Expr -> Expr)
-application = do
-  arg <- atom
+application :: Parser Expr -> Parser (Expr -> Expr)
+application atomParser = do
+  arg <- atomParser
   return (`App` arg)
 
-atom :: Parser Expr
-atom = choice
-  [ UnitLit <$ unit
-  , IntLit <$> integer
-  , try parensOrTuple
-  , BoolLit <$> boolean
-  , StrLit <$> stringLit
-  , builtinExpr
-  , complexExpr
-  , try listLitExpr
-  , try recordLitExpr
-  , try (Var <$> identifier)
-  , try typeAnnotationExpr
-  ]
-
-builtinExpr :: Parser Expr
-builtinExpr = choice
-  [ printExpr expr
-  , discardExpr expr
-  , inputExpr
-  , argsExpr
-  , parseIntExpr expr
-  , toStringExpr expr
-  , showExpr expr
-  , headExpr expr
-  , tailExpr expr
-  , nullExpr expr
-  , fixExpr expr
-  , fstExpr expr
-  , sndExpr expr
-  , mapExpr atom
-  , filterExpr atom
-  , foldlExpr atom
-  , lengthExpr atom
-  , reverseExpr atom
-  , takeExpr atom
-  , dropExpr atom
-  , zipExpr atom
-  , splitExpr atom
-  , joinExpr atom
-  , trimExpr atom
-  , replaceExpr atom
-  , strLengthExpr atom
-  , readFileExpr atom
-  , writeFileExpr atom
-  , justExpr expr
-  , nothingExpr
-  , leftExpr expr
-  , rightExpr expr
-  ]
-
-complexExpr :: Parser Expr
-complexExpr = choice
-  [ lambdaExpr expr
-  , ifExpr expr
-  , letRecExpr expr
-  , letExpr expr
-  , caseExpr expr
-  ]
-
-parensOrTuple :: Parser Expr
-parensOrTuple = do
+parensOrTuple :: Parser Expr -> Parser Expr
+parensOrTuple exprParser = do
   symbol "("
-  exprs <- sepBy expr (symbol ",")
+  exprs <- sepBy exprParser (symbol ",")
   symbol ")"
   case exprs of
     [e] -> return e
     _   -> return (TupleLit exprs)
 
-listLitExpr :: Parser Expr
-listLitExpr = ListLit <$> brackets (sepBy expr (symbol ","))
+listLitExpr :: Parser Expr -> Parser Expr
+listLitExpr exprParser = ListLit <$> brackets (sepBy exprParser (symbol ","))
 
-recordLitExpr :: Parser Expr
-recordLitExpr = RecordLit <$> braces (sepBy recordField (symbol ","))
+recordLitExpr :: Parser Expr -> Parser Expr
+recordLitExpr exprParser = RecordLit <$> braces (sepBy (recordField exprParser) (symbol ","))
 
-recordField :: Parser (String, Expr)
-recordField = do
+recordField :: Parser Expr -> Parser (String, Expr)
+recordField exprParser = do
   name <- identifier
   symbol "="
-  e <- expr
+  e <- exprParser
   return (name, e)
 
-typeAnnotationExpr :: Parser Expr
-typeAnnotationExpr = do
+typeAnnotationExpr :: Parser Expr -> Parser Expr
+typeAnnotationExpr exprParser = do
   symbol "("
-  e <- expr
+  e <- exprParser
   symbol ":"
   t <- syntaxType
   symbol ")"
   return $ TypeAnnotation e t
 
-operatorTable :: [[Operator Parser Expr]]
-operatorTable =
+operatorTable :: Bool -> [[Operator Parser Expr]]
+operatorTable allowSeq =
   [ [ Prefix (Not <$ symbol "not")
     , Prefix ( Sub (IntLit 0)
              <$ try (char '-' <* notFollowedBy digitChar <* sc)
@@ -142,5 +149,4 @@ operatorTable =
     ]
   , [ InfixR (And <$ symbol "and") ]
   , [ InfixR (Or <$ symbol "or") ]
-  , [ InfixR (Seq <$ symbol ";") ]
-  ]
+  ] ++ [[InfixR (Seq <$ symbol ";")] | allowSeq]

@@ -1,45 +1,52 @@
-// Interactive Calculator for Kai Language (Enhanced with wildcard variables)
-letrec calc = \ignored ->
-  let _ = print "=== Kai Calculator ===" in
-  let _ = print "1. Addition" in
-  let _ = print "2. Subtraction" in
-  let _ = print "3. Multiplication" in
-  let _ = print "4. Division" in
-  let _ = print "5. Exit" in
-  let _ = print "Choose option (1-5): " in
-  let choice = input in
-  if choice == "5" then
-    print "Goodbye! Thanks for using Kai Calculator!"
-  else
-    let _ = print "Enter first number: " in
-    let num1Input = input in
-    let _ = print "Enter second number: " in
-    let num2Input = input in
-    case parseInt num1Input of
-      Just n1 ->
-        case parseInt num2Input of
-          Just n2 ->
-            let answer = if choice == "1" then n1 + n2
-                        else if choice == "2" then n1 - n2
-                        else if choice == "3" then n1 * n2
-                        else if choice == "4" then n1 / n2
-                        else 0 in
-            let opName = if choice == "1" then "Addition"
-                        else if choice == "2" then "Subtraction"
-                        else if choice == "3" then "Multiplication"
-                        else if choice == "4" then "Division"
-                        else "Unknown" in
-            let _ = print (opName ++ " Result: " ++ toString answer) in
-            let _ = print "" in
-            calc ()
-          | Nothing ->
-            let _ = print "Invalid second number!" in
-            let _ = print "" in
-            calc ()
-      | Nothing ->
-        let _ = print "Invalid first number!" in
-        let _ = print "" in
-        calc ()
-in
-
-calc ()
+// Interactive calculator using typed validation and Either-driven control flow.
+let parseNumber : String -> String -> Either String Int = (\label -> \text ->
+  case parseInt text of
+    Just n -> Right n
+    | Nothing -> Left (label ++ " value must be an Int.")
+)
+let parseNumbers = (\leftText -> \rightText ->
+  case parseNumber "First" leftText of
+    Right left ->
+      case parseNumber "Second" rightText of
+        Right right -> Right (left, right)
+        | Left message -> Left message
+    | Left message -> Left message
+)
+let chooseOperation = (\choice ->
+  if choice == "1" then Right ("add", \x -> \y -> x + y)
+  else if choice == "2" then Right ("subtract", \x -> \y -> x - y)
+  else if choice == "3" then Right ("multiply", \x -> \y -> x * y)
+  else if choice == "4" then Right ("divide", \x -> \y -> x / y)
+  else if choice == "5" then Left "exit"
+  else Left "Choose 1, 2, 3, 4, or 5."
+)
+let prompt : String -> String = (\label -> do {
+  print label;
+  input
+})
+letrec loop : Unit -> Unit = (\_ ->
+  do {
+    print "=== Kai Calculator ===";
+    print "1) add  2) subtract  3) multiply  4) divide  5) exit";
+    let choice = prompt "Choose an option:" in
+      case chooseOperation choice of
+        Left "exit" -> print "Goodbye."
+        | Left message -> do {
+            print message;
+            loop ()
+          }
+        | Right (name, op) ->
+            let leftText = prompt "First number:" in
+            let rightText = prompt "Second number:" in
+            case parseNumbers leftText rightText of
+              Left message -> do {
+                print message;
+                loop ()
+              }
+              | Right (left, right) -> do {
+                  print (name ++ " => " ++ toString (op left right));
+                  loop ()
+                }
+  }
+)
+loop ()

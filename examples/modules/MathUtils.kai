@@ -1,18 +1,7 @@
-// MathUtils.kai - Mathematical utilities
-let sum = \xs -> foldl (\acc -> \x -> acc + x) 0 xs
-
-let average = \xs -> case xs of
-  [] -> 0
-  | xs -> sum xs / length xs
-
-let max = \xs -> case xs of
-  [] -> 0
-  | x :: xs -> foldl (\acc -> \x -> if x > acc then x else acc) x xs
-
-let min = \xs -> case xs of
-  [] -> 0
-  | x :: xs -> foldl (\acc -> \x -> if x < acc then x else acc) x xs
-
-let count = \pred -> \xs -> length (filter pred xs)
-
-
+// MathUtils.kai - Numeric helpers built from Kai's core list functions.
+let sum : [Int] -> Int = \xs -> foldl (\acc -> \x -> acc + x) 0 xs
+let average : [Int] -> Int = \xs -> if null xs then 0 else sum xs / length xs
+let maximum : [Int] -> Maybe Int = \xs -> case xs of [] -> Nothing | x :: rest -> Just (foldl (\best -> \value -> if value > best then value else best) x rest)
+let minimum : [Int] -> Maybe Int = \xs -> case xs of [] -> Nothing | x :: rest -> Just (foldl (\best -> \value -> if value < best then value else best) x rest)
+let countWhere : (Int -> Bool) -> [Int] -> Int = \pred -> \xs -> length (filter pred xs)
+export sum, average, maximum, minimum, countWhere

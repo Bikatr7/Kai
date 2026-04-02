@@ -30,6 +30,7 @@ This document provides a comprehensive overview of all implemented and planned f
 #### Control Flow
 - ✅ **Conditionals**: `if cond then e1 else e2`
 - ✅ **Pattern matching**: `case expr of pattern -> expr | pattern -> expr`
+- ✅ **Do blocks**: `do { expr1; expr2; expr3 }` for readable sequencing, with `do {}` evaluating to `()`
 
 #### Functions
 - ✅ **Lambda expressions**: `\x -> expr`
@@ -41,7 +42,7 @@ This document provides a comprehensive overview of all implemented and planned f
 #### Variable Bindings
 - ✅ **Let bindings**: `let x = value in body`
 - ✅ **Recursive bindings**: `letrec f = value in body`
-- ✅ **Wildcard variables**: `let _ = expr in body` to discard values
+- ✅ **Wildcard variables**: `let _ = expr in body` to explicitly discard values
 - ✅ **Type annotations**: Optional Haskell-style (`let x : Int = 42`, `\x : String -> expr`)
 - ✅ **Top-level definitions**: `let` and `letrec` at module level (v0.0.4.2)
 - ✅ **Mutual recursion**: Multiple consecutive `letrec` definitions support mutual recursion (v0.0.4.2)
@@ -134,8 +135,8 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Megaparsec-based parser**: With operator precedence and associativity
 - ✅ **Line comments**: `// comment`
 - ✅ **Block comments**: `/* comment */`
-- ✅ **Multi-statement files**: Each line parsed as separate expression
-- ✅ **Reserved keywords**: 45+ keywords properly recognized
+- ✅ **Multi-statement files**: Top-level newlines split expressions while respecting nested `()`, `[]`, `{}`, strings, and comments
+- ✅ **Reserved keywords**: 45+ keywords properly recognized, including `do`
 - ✅ **Keyword boundary checking**: Prevents `trimmed` from parsing as `trim` + `med`
 - ✅ **String escapes**: `\"`, `\\`, `\n` with helpful error messages for unknown escapes
 - ✅ **Integer overflow detection**: Parse errors for values outside 32-bit range
@@ -167,7 +168,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### Testing Infrastructure
 
-- ✅ **540 test examples**: Hspec, QuickCheck, script, CLI, and stress coverage
+- ✅ **583 test examples**: Hspec, QuickCheck, script, CLI, stress, and example smoke coverage
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
 - ✅ **Script tests**: `.kai` files with `// expect:` directives
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
@@ -182,7 +183,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **DEVELOPING.md**: Architecture, semantics, development workflow
 - ✅ **AGENTS.md**: Testing guidelines for AI assistants
 - ✅ **Website**: Yesod-based static site with examples
-- ✅ **Working examples**: 8 practical demonstration scripts
+- ✅ **Working examples**: 11 runnable scripts plus reusable module samples
 
 ### Performance & Optimization
 
@@ -212,196 +213,54 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ---
 
-## Planned Features
+## Roadmap
 
-### Core Language (Planned)
+Kai is now past the point where a giant feature wishlist is useful. The next release should sharpen the language as a practical typed scripting tool, not broaden it in every possible direction.
 
-#### Top Priority
-- ✅ ~~Top-level definitions~~ **DONE** (v0.0.4.2)
-- ✅ ~~Module system~~ **DONE** (v0.0.4.2)
-- ⏳ **Enhanced pattern matching**:
-  - Tuple destructuring in case expressions
-  - Guards in patterns (`case x of n | n > 0 -> ...`)
-  - As-patterns (`case xs of all@(x:xs) -> ...`)
-- ⏳ **Do-notation**: Clean syntax for I/O sequencing
-- ⏳ **Match expressions**: Alternative to nested conditionals
-- ⏳ **Integer patterns in case**: Currently only literals work
+### v0.0.4.4 Release Focus
 
-#### Data Structures
-- ⏳ **Maps/Dictionaries**: Key-value data structure
-- ⏳ **Sets**: Unique element collections
+#### 1. Interactive Workflow
+- ⏳ **Interactive REPL**: Core read-eval-print loop
+- ⏳ **Multiline input**: Usable for real expressions and definitions
+- ⏳ **`:type`, `:load`, `:reload`**: Enough commands to make exploration practical
+- ⏳ **History and completion**: Nice-to-have if the core REPL lands cleanly
+
+#### 2. Data Modeling and Pattern Matching
 - ⏳ **Custom data types**: User-defined algebraic data types
-- ⏳ **Type aliases**: `type String = [Char]`
-- ⏳ **Newtype wrappers**: Zero-cost abstractions
+- ⏳ **Constructor patterns**: Matching on user-defined variants
+- ⏳ **Tuple destructuring in `case`**: Make existing tuples less awkward
+- ⏳ **Simple guards and as-patterns**: Only if they keep the implementation coherent
 
-#### Advanced Type System
-- ⏳ **Type classes**: Ad-hoc polymorphism (Eq, Ord, Show, etc.)
-- ⏳ **Polymorphic recursion**: Better support for complex recursive types
-- ⏳ **Row polymorphism**: For extensible records
-- ⏳ **GADTs**: Generalized algebraic data types
-- ⏳ **Rank-N types**: Higher-rank polymorphism
+#### 3. Essential Scripting Stdlib
+- ⏳ **File additions**: `appendFile`, `fileExists`, line-oriented helpers
+- ⏳ **Directory operations**: `listDirectory`, `createDirectory`, `removeDirectory`, current-directory helpers
+- ⏳ **Process and environment access**: `system`, `getEnv`, `setEnv`, explicit exit helpers
+- ⏳ **Small stdlib gaps**: A few missing math/list/string helpers that matter in scripts
 
-#### Language Features
-- ⏳ **List comprehensions**: `[x * 2 | x <- [1..10], x > 5]`
-- ⏳ **Range syntax**: `[1..10]`, `[1,3..10]`
-- ⏳ **Lambda case**: `\case Just x -> x; Nothing -> 0`
-- ⏳ **Section syntax**: `(+1)`, `(2*)` for partial application
-- ⏳ **Operator sections**: More ergonomic partial application
-- ⏳ **Where clauses**: Alternative to let for local bindings
-- ⏳ **Multi-way if**: `if | cond1 -> e1 | cond2 -> e2 | otherwise -> e3`
+#### 4. Stretch Work If v0.0.4.4 Lands Early
+- ⏳ **Better parse and type errors**: Better wording and code context
+- ⏳ **Function composition and pipeline operators**: Worth adding once REPL and scripting flow are stronger
+- ⏳ **More ergonomic pattern forms**: Only after ADTs are solid
 
-### Standard Library (Planned)
+### Deferred Until After v0.0.4.4
 
-#### List Functions
-- ⏳ `foldr : (a -> b -> b) -> b -> [a] -> b` - Right fold
-- ⏳ `concat : [[a]] -> [a]` - Flatten list of lists
-- ⏳ `concatMap : (a -> [b]) -> [a] -> [b]` - Map and flatten
-- ⏳ `elem : a -> [a] -> Bool` - Check if element in list
-- ⏳ `notElem : a -> [a] -> Bool` - Check if element not in list
-- ⏳ `find : (a -> Bool) -> [a] -> Maybe a` - Find first matching element
-- ⏳ `any : (a -> Bool) -> [a] -> Bool` - Check if any element matches
-- ⏳ `all : (a -> Bool) -> [a] -> Bool` - Check if all elements match
-- ⏳ `sort : [a] -> [a]` - Sort list
-- ⏳ `sortBy : (a -> a -> Ordering) -> [a] -> [a]` - Sort with custom comparator
-- ⏳ `group : [a] -> [[a]]` - Group consecutive equal elements
-- ⏳ `nub : [a] -> [a]` - Remove duplicates
-- ⏳ `intersperse : a -> [a] -> [a]` - Insert element between list elements
-- ⏳ `intercalate : [a] -> [[a]] -> [a]` - Insert list between lists
-- ⏳ `transpose : [[a]] -> [[a]]` - Transpose matrix
-- ⏳ `partition : (a -> Bool) -> [a] -> ([a], [a])` - Split by predicate
-- ⏳ `span : (a -> Bool) -> [a] -> ([a], [a])` - Split at first non-matching
-- ⏳ `break : (a -> Bool) -> [a] -> ([a], [a])` - Split at first matching
-- ⏳ `dropWhile : (a -> Bool) -> [a] -> [a]` - Drop while predicate holds
-- ⏳ `takeWhile : (a -> Bool) -> [a] -> [a]` - Take while predicate holds
-- ⏳ `zipWith : (a -> b -> c) -> [a] -> [b] -> [c]` - Zip with custom function
-- ⏳ `unzip : [(a, b)] -> ([a], [b])` - Opposite of zip
+#### Tooling and Distribution
+- ⏳ **Formatter and linter**: Useful, but not before the interactive workflow is solid
+- ⏳ **Language server / IDE support**: Valuable after the surface syntax settles
+- ⏳ **Package manager**: Important later, but premature before the module and stdlib story is more mature
 
-#### Math Functions
-- ⏳ `abs : Int -> Int` - Absolute value
-- ⏳ `min : Int -> Int -> Int` - Minimum of two values
-- ⏳ `max : Int -> Int -> Int` - Maximum of two values
-- ⏳ `sqrt : Int -> Int` - Square root (integer)
-- ⏳ `pow : Int -> Int -> Int` - Exponentiation
-- ⏳ `mod : Int -> Int -> Int` - Modulo operation
-- ⏳ `gcd : Int -> Int -> Int` - Greatest common divisor
-- ⏳ `lcm : Int -> Int -> Int` - Least common multiple
-- ⏳ `even : Int -> Bool` - Check if even
-- ⏳ `odd : Int -> Bool` - Check if odd
+#### Networking and Richer I/O
+- ⏳ **HTTP and JSON support**: Desirable, but behind local file/process scripting basics
+- ⏳ **Mutable references**: Only if the scripting story proves it needs them
 
-#### String Functions
-- ⏳ `lines : String -> [String]` - Split by newlines
-- ⏳ `unlines : [String] -> String` - Join with newlines
-- ⏳ `words : String -> [String]` - Split by whitespace
-- ⏳ `unwords : [String] -> String` - Join with spaces
-- ⏳ `toUpper : String -> String` - Convert to uppercase
-- ⏳ `toLower : String -> String` - Convert to lowercase
-- ⏳ `reverse : String -> String` - Reverse string
-- ⏳ `isPrefixOf : String -> String -> Bool` - Check prefix
-- ⏳ `isSuffixOf : String -> String -> Bool` - Check suffix
-- ⏳ `isInfixOf : String -> String -> Bool` - Check substring
-- ⏳ `stripPrefix : String -> String -> Maybe String` - Remove prefix
-- ⏳ `stripSuffix : String -> String -> Maybe String` - Remove suffix
+#### Advanced Type System and Syntax
+- ⏳ **Polymorphic recursion**: Explicitly not a near-term priority
+- ⏳ **Type classes, row polymorphism, GADTs, rank-N types**: Out of scope for the next release
+- ⏳ **List comprehensions, ranges, `where`, multi-way `if`**: Backlog ideas, not core release goals
 
-#### Function Composition
-- ⏳ `(.) : (b -> c) -> (a -> b) -> (a -> c)` - Function composition
-- ⏳ `($) : (a -> b) -> a -> b` - Function application (low precedence)
-- ⏳ `(&) : a -> (a -> b) -> b` - Reverse application
-- ⏳ `(|>) : a -> (a -> b) -> b` - Pipeline operator (F#-style)
-- ⏳ `flip : (a -> b -> c) -> (b -> a -> c)` - Flip argument order
-- ⏳ `const : a -> b -> a` - Constant function
-- ⏳ `id : a -> a` - Identity function
-- ⏳ `curry : ((a, b) -> c) -> (a -> b -> c)` - Curry function
-- ⏳ `uncurry : (a -> b -> c) -> ((a, b) -> c)` - Uncurry function
-
-#### Tuple Functions
-- ⏳ `swap : (a, b) -> (b, a)` - Swap tuple elements
-- ⏳ `curry3 : ((a, b, c) -> d) -> (a -> b -> c -> d)` - Curry 3-tuple
-- ⏳ `uncurry3 : (a -> b -> c -> d) -> ((a, b, c) -> d)` - Uncurry to 3-tuple
-
-### I/O and Effects (Planned)
-
-#### File Operations
-- ⏳ `appendFile : String -> String -> Unit` - Append to file
-- ⏳ `deleteFile : String -> Unit` - Delete file
-- ⏳ `renameFile : String -> String -> Unit` - Rename/move file
-- ⏳ `fileExists : String -> Bool` - Check if file exists
-- ⏳ `readLines : String -> [String]` - Read file as lines
-- ⏳ `writeLines : String -> [String] -> Unit` - Write lines to file
-- ⏳ `readBytes : String -> [Int]` - Read file as bytes
-- ⏳ `writeBytes : String -> [Int] -> Unit` - Write bytes to file
-
-#### Directory Operations
-- ⏳ `listDirectory : String -> [String]` - List files in directory
-- ⏳ `createDirectory : String -> Unit` - Create directory
-- ⏳ `removeDirectory : String -> Unit` - Remove directory
-- ⏳ `directoryExists : String -> Bool` - Check if directory exists
-- ⏳ `getCurrentDirectory : Unit -> String` - Get current working directory
-- ⏳ `setCurrentDirectory : String -> Unit` - Change working directory
-
-#### Process & System
-- ⏳ `system : String -> Int` - Run shell command, return exit code
-- ⏳ `getEnv : String -> Maybe String` - Get environment variable
-- ⏳ `setEnv : String -> String -> Unit` - Set environment variable
-- ⏳ `getArgs : [String]` - Get command-line arguments (already `args`)
-- ⏳ `exit : Int -> a` - Exit with code
-- ⏳ `exitSuccess : a` - Exit successfully
-- ⏳ `exitFailure : a` - Exit with failure
-
-#### Network (Future)
-- ⏳ `httpGet : String -> String` - Simple HTTP GET request
-- ⏳ `httpPost : String -> String -> String` - Simple HTTP POST
-- ⏳ JSON parsing/generation functions
-
-#### Mutable References (Controlled)
-- ⏳ `ref : a -> Ref a` - Create mutable reference
-- ⏳ `readRef : Ref a -> a` - Read reference
-- ⏳ `writeRef : Ref a -> a -> Unit` - Write to reference
-- ⏳ `modifyRef : Ref a -> (a -> a) -> Unit` - Modify reference
-
-### Scripting Conveniences (Planned)
-
-#### REPL
-- ⏳ **Interactive REPL**: Read-eval-print loop
-- ⏳ **Multiline input**: Support for multi-line expressions
-- ⏳ **:type command**: Query type of expression
-- ⏳ **:load command**: Load files into REPL
-- ⏳ **:reload command**: Reload current file
-- ⏳ **:browse command**: Browse module contents
-- ⏳ **History**: Command history with up/down arrows
-- ⏳ **Tab completion**: For identifiers and keywords
-
-#### Error Messages
-- ⏳ **Better parse errors**: With suggestions for fixes
-- ⏳ **Better type errors**: More helpful messages
-- ⏳ **Error context**: Show relevant code snippets
-- ⏳ **Did-you-mean suggestions**: For typos
-- ⏳ **Type hole support**: `_` in expressions for type inference hints
-
-#### Tooling
-- ⏳ **Formatter**: Automatic code formatting (`kai fmt`)
-- ⏳ **Linter**: Style suggestions (`kai lint`)
-- ⏳ **Language server**: LSP for IDE support
-- ⏳ **Package manager**: Dependency management
-- ⏳ **Documentation generator**: Generate docs from code
-- ⏳ **Test runner**: Built-in test framework
-- ⏳ **Benchmark framework**: Performance testing
-
-### Performance & Optimization (Planned)
-
-#### Performance Features
-- ⏳ **Tail call optimization**: For recursive functions
-- ⏳ **Strictness annotations**: Control evaluation strategy
-- ⏳ **Lazy evaluation**: Optional lazy evaluation
-- ⏳ **Mutable arrays**: For performance-critical code
-- ⏳ **Imperative loops**: `for`, `while` when needed
-- ⏳ **Bytecode compilation**: Faster than AST interpretation
-- ⏳ **JIT compilation**: Further performance gains
-
-#### Compiler Optimizations
-- ⏳ **Constant folding**: Evaluate constants at compile time
-- ⏳ **Dead code elimination**: Remove unused code
-- ⏳ **Inline expansion**: Inline small functions
-- ⏳ **Common subexpression elimination**: Reduce redundant computation
+#### Compiler and Runtime Work
+- ⏳ **Tail call optimization and strictness controls**: Worth revisiting later
+- ⏳ **Bytecode/JIT/optimization passes**: Not the next bottleneck for Kai
 
 ---
 
@@ -444,13 +303,13 @@ This document provides a comprehensive overview of all implemented and planned f
 ## Implementation Statistics
 
 - **Lines of Haskell**: ~4,200 (estimated, including benchmarks)
-- **Test Coverage**: 540 examples, 100% passing
+- **Test Coverage**: 583 examples, 100% passing
 - **HLint Warnings**: 0
 - **Core Types**: 8 (Int, Bool, String, Unit, List, Tuple, Record, Function)
 - **Built-in Functions**: 27
 - **Reserved Keywords**: 45+
 - **Operator Precedence Levels**: 11
-- **Example Scripts**: 8 working examples
+- **Example Scripts**: 11 runnable scripts plus reusable module samples
 - **Documentation**: 5 comprehensive markdown files
 - **Benchmark Suites**: 3 (Parser, Evaluator, TypeChecker)
 - **Performance Optimizations**: Record access inlining, boolean syntax fixes
@@ -465,7 +324,11 @@ This document provides a comprehensive overview of all implemented and planned f
 - Fixed CLI failure exit codes for parse, type, and runtime errors
 - Added shebang parsing support for script files
 - Fixed top-level `let ... in ...` expressions in program files
-- Added CLI and polymorphism regression coverage, bringing total examples to 540
+- Added `do { ... }` blocks as a readable sequencing form
+- Fixed multiline top-level parsing so nested braces/comments survive chunk splitting
+- Added CLI and polymorphism regression coverage
+- Refreshed the entire example suite around modules, records, Maybe/Either, file scripting, and interactive workflows
+- Added smoke tests for every runnable example and sync checks for duplicate example modules
 
 ### v0.0.4.2 (2025-11-06)
 - **Performance optimizations**: Record access inlining (3-5% improvement), boolean syntax corrections (300x faster)

@@ -8,6 +8,7 @@ import qualified ComparisonSpec
 import qualified ConditionalSpec
 import qualified CLISpec
 import qualified EdgeCaseSpec
+import qualified ExampleSpec
 import qualified IntegerOverflowSpec
 import qualified InputSpec
 import qualified LambdaSpec
@@ -38,6 +39,7 @@ main = hspec $ do
   ConditionalSpec.spec
   CLISpec.spec
   EdgeCaseSpec.spec
+  ExampleSpec.spec
   IntegerOverflowSpec.spec
   InputSpec.spec
   LambdaSpec.spec

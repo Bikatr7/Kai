@@ -1,0 +1,7 @@
+// expect: 42
+let result = do {
+  // block comments should not break top-level parsing
+  print "inside";
+  42
+}
+result

@@ -6,7 +6,7 @@ import Test.QuickCheck
 import Parser
 import Evaluator (evalProgram, Value(..))
 import qualified Evaluator as E
-import TypeChecker (Type(..), typeCheckProgram)
+import TypeChecker (Type(..), TypeError(..), typeCheckProgram)
 import Syntax
 
 spec :: Spec
@@ -191,6 +191,14 @@ spec = do
             Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
+      it "reports missing record fields in top-level programs" $ do
+        let program = "let r = {a = 1}\nr.b"
+        case parseProgram program of
+          Right ast -> case typeCheckProgram ast of
+            Left err -> err `shouldBe` RecordFieldMismatch "b"
+            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
     describe "Integration with Existing Features" $ do
       it "works with list operations" $ do
         let program = "let nums = [1, 2, 3]\nlet sum = foldl (\\acc -> \\x -> acc + x) 0 nums\nsum"
@@ -220,6 +228,52 @@ spec = do
         let program = "let r = {a = 1, b = 2}\ncase r of {a = x, b = y} -> x + y"
         case parseProgram program of
           Right ast -> evalProgram ast `shouldReturn` Right (VInt 3)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "works with record field access at top level" $ do
+        let program = "let r = {outer = {inner = 7}, flag = true}\nr.outer.inner"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TInt
+            evalProgram ast `shouldReturn` Right (VInt 7)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "works with wildcard top-level definitions feeding a final case expression" $ do
+        let program = "let _ = case Just 42 of _ -> \"matched\" | Nothing -> \"none\"\nlet _ = case (1, \"hello\") of _ -> \"tuple\"\ncase Nothing of _ -> \"done\" | Just x -> \"bad\""
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TString
+            evalProgram ast `shouldReturn` Right (VStr "done")
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports multiline do blocks in top-level definitions" $ do
+        let program = "let result = do {\n  print \"start\";\n  42\n}\nresult"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TInt
+            evalProgram ast `shouldReturn` Right (VInt 42)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports comments inside multiline do blocks" $ do
+        let program = "let result = do {\n  // keep this comment inside the block\n  print \"start\";\n  42\n}\nresult"
+        case parseProgram program of
+          Right ast -> evalProgram ast `shouldReturn` Right (VInt 42)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports multiline top-level helper definitions that continue after =" $ do
+        let program = "let parseDefaultSecret : String -> Int = (\\value ->\n  case parseInt value of\n    Just n -> n\n    | Nothing -> 42\n)\nlet parseSecret : [String] -> Int = (\\cliArgs ->\n  case cliArgs of\n    value :: _ -> parseDefaultSecret value\n    | [] -> 42\n)\nparseSecret [\"7\"]"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TInt
+            evalProgram ast `shouldReturn` Right (VInt 7)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports multiline top-level recursive definitions that continue after ->" $ do
+        let program = "letrec countDown : Int -> Int = \\n ->\n  if n == 0 then 0\n  else countDown (n - 1)\ncountDown 3"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TInt
+            evalProgram ast `shouldReturn` Right (VInt 0)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Mutual Recursion" $ do

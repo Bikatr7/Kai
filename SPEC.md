@@ -29,7 +29,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - **Evaluation**: Strict (call-by-value) evaluation
 - **Type System**: Unification-based type inference with occurs check and generalized let-polymorphism
 - **Paradigm**: Expression-oriented with immutable data by default
-- **File Format**: Single-file scripts with `.kai` extension, or multi-file modules with imports
+- **File Format**: Single-file scripts with `.kai` extension, or multi-file modules with imports; top-level newlines split expressions only outside nested forms
 
 ## Lexical Structure
 
@@ -66,7 +66,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - Special identifier: `_` (wildcard) can be used in let bindings to discard values
 
 ### Reserved Keywords
-`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `discard`, `let`, `letrec`, `in`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`, `import`, `export`
+`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `discard`, `let`, `letrec`, `in`, `do`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`, `import`, `export`
 
 **Note**: `_` is not a keyword but has special meaning as a wildcard identifier in let bindings.
 
@@ -123,6 +123,12 @@ All constructs in Kai are expressions that evaluate to values.
 
 ### Expression Sequencing
 - `;` (sequencing, right-associative) - evaluates first expression for side effects, returns second expression
+
+### Do Blocks
+- `do { expr1; expr2; expr3 }` - ergonomic block syntax for sequencing
+- Entries are separated by semicolons
+- `do {}` evaluates to `()`
+- `do { expr1; expr2; expr3 }` desugars to `expr1; expr2; expr3`
 
 ### List Operations
 - `[elem1, elem2, ...]` - list literals
@@ -191,6 +197,13 @@ letrec var : Type = value in body
 ```kai
 expr1; expr2         -- Evaluate expr1, discard result, return expr2
 expr1; expr2; expr3  -- Right-associative: expr1; (expr2; expr3)
+```
+
+### Do Blocks
+```kai
+do {}                        -- ()
+do { print "start"; 42 }     -- Prints then returns 42
+do { expr1; expr2; expr3; }  -- Optional trailing semicolon
 ```
 
 ### Lambda Expressions
@@ -327,9 +340,11 @@ args : [String]             // List of command-line arguments passed to script
 **Example**:
 ```kai
 let content = "Hello, world!" in
-let _ = writeFile "output.txt" content in
-let read = readFile "output.txt" in
-print read
+do {
+  writeFile "output.txt" content;
+  let read = readFile "output.txt" in
+    print read
+}
 ```
 
 ### Command-Line Arguments
@@ -430,6 +445,7 @@ Expr ::= 'let' Ident (':' Type)? '=' Expr 'in' Expr
        | 'letrec' Ident (':' Type)? '=' Expr 'in' Expr
        | 'if' Expr 'then' Expr 'else' Expr
        | 'case' Expr 'of' Pattern '->' Expr ('|' Pattern '->' Expr)*
+       | 'do' '{' (Expr (';' Expr)* ';'?)? '}'
        | '\' Ident (':' Type)? '->' Expr
        | '(' Expr ':' Type ')'
        | SeqExpr

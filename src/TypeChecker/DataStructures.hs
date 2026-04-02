@@ -63,10 +63,15 @@ inferDataStructures infer env (RecordLit fields) = do
 
 inferDataStructures infer env (RecordAccess r field) = do
     (s, rType) <- infer env r
-    fieldType <- freshTVar
-    s' <- lift $ unify (applySubst s rType) (TRecord (Map.singleton field fieldType))
-    let finalSubst = composeSubst s' s
-    return (finalSubst, applySubst finalSubst fieldType)
+    case applySubst s rType of
+        TRecord fields -> case Map.lookup field fields of
+            Just fieldType -> return (s, fieldType)
+            Nothing -> lift $ Left $ RecordFieldMismatch field
+        resolvedType -> do
+            fieldType <- freshTVar
+            s' <- lift $ unify resolvedType (TRecord (Map.singleton field fieldType))
+            let finalSubst = composeSubst s' s
+            return (finalSubst, applySubst finalSubst fieldType)
 
 inferDataStructures infer env (TupleLit exprs) = do
     (finalSubst, types) <- foldM inferTupleElem (Map.empty, []) exprs

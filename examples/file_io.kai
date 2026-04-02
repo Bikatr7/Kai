@@ -1,8 +1,9 @@
-// File I/O example: write to a file then read it back
-
-let content = "Hello from Kai!\nThis is a test file.\nLine 3." in
-let _ = writeFile "test_output.txt" content in
-let _ = print "File written successfully!" in
-let readContent = readFile "test_output.txt" in
-let _ = print "File contents:" in
-print readContent
+// File I/O example with an optional output path argument.
+let outputPath = case args of path :: _ -> path | [] -> "kai_output.txt"
+let content = join "\n" ["Kai writes files", "Kai reads them back", "Kai keeps scripts typed"]
+do {
+  writeFile outputPath content;
+  print ("Wrote " ++ outputPath);
+  let reloaded = readFile outputPath in
+    print ("Read back: " ++ replace "\n" " | " reloaded)
+}
