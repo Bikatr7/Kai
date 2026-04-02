@@ -38,7 +38,7 @@ Features available today:
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
 - **Top-level definitions**: `let` and `letrec` at module level for defining functions and values
 - **Module system**: `import ModuleName` to import modules, module resolution supports `ModuleName.kai` and `ModuleName/ModuleName.kai`, full cross-module type checking, explicit exports with `export name1, name2`
-- **Tests**: Hspec + QuickCheck (583 examples) — all passing with comprehensive coverage
+- **Tests**: Hspec + QuickCheck (588 examples) — all passing with comprehensive coverage
 - **Working examples**: Module-based text analysis, validated CLI tools, interactive calculator and guessing game, list/record processing, text cleanup, file I/O, wildcard matching, and discard/logging demos
 
 Current limitations:
@@ -89,7 +89,7 @@ kai path/to/script.kai
 Prebuilt binaries (CI Releases):
 
 - Update the version in `package.yaml` and push to master. GitHub Actions will automatically create a release with binaries for Linux, macOS, and Windows.
-- Download the appropriate `kai-<platform>` binary from the Releases page, `chmod +x` (Linux/macOS), and place it on your `PATH`.
+- Download the appropriate `kai-<platform>-<arch>` binary from the Releases page, `chmod +x` (Linux/macOS), and place it on your `PATH`.
 - From source, `stack install` also produces a native binary in your local Stack install path.
 
 Export a static site bundle:

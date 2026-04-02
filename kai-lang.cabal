@@ -236,6 +236,7 @@ test-suite kai-test
       ParserSpec
       ProgramSpec
       PropertyBasedSpec
+      ReleaseWorkflowSpec
       RuntimeErrorSpec
       ScriptSpec
       SequencingSpec
@@ -269,6 +270,7 @@ test-suite kai-test
     , megaparsec
     , mtl
     , parser-combinators
+    , process
     , split
     , text
     , weigh

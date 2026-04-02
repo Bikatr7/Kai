@@ -78,6 +78,7 @@ jobs:
         run: |
           stack --no-terminal build :kai
           mkdir -p dist
+          BINARY_NAME=$(bash scripts/release-asset-name.sh "${{ runner.os }}" "${{ runner.arch }}")
           # Locate the built binary (Windows adds .exe extension)
           if [ "${{ runner.os }}" = "Windows" ]; then
             BIN_PATH=$(stack path --local-install-root)/bin/kai.exe || true
@@ -93,18 +94,8 @@ jobs:
           if [ ! -x "$BIN_PATH" ]; then
             echo "Binary not found" >&2; exit 1
           fi
-          cp "$BIN_PATH" dist/
-          # Name artifact according to platform
-          if [ "${{ runner.os }}" = "macOS" ]; then
-            mv dist/kai dist/kai-macos-amd64
-            BINARY_NAME="kai-macos-amd64"
-          elif [ "${{ runner.os }}" = "Windows" ]; then
-            mv dist/kai.exe dist/kai-windows-amd64.exe
-            BINARY_NAME="kai-windows-amd64.exe"
-          else
-            mv dist/kai dist/kai-linux-amd64
-            BINARY_NAME="kai-linux-amd64"
-          fi
+          cp "$BIN_PATH" "dist/$BINARY_NAME"
+          echo "Prepared release binary: $BINARY_NAME"
           
           # Test the binary on all .kai test files
           echo "Testing binary functionality on all test files..."
@@ -179,7 +170,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kai-${{ runner.os }}
+          name: kai-${{ runner.os }}-${{ runner.arch }}
           path: dist/*
 
   release:
@@ -212,4 +203,3 @@ jobs:
             artifacts/**/kai-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

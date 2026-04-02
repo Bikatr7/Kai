@@ -101,7 +101,7 @@ Notes:
 Prereqs: Stack + GHC.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 583 examples)
+- Tests: `stack test --fast` (all 588 examples)
 - Run CLI: `stack exec kai -- --help`
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
 - Try module-based example: `stack exec kai -- examples/text_analysis.kai`
@@ -193,7 +193,7 @@ stack bench --benchmark-arguments="--csv=results.csv"
 
 - Bump version in `package.yaml` (hpack regenerates `.cabal`).
 - Update README header and website version display.
-- Tag and build via CI to produce binaries (see README’s install section).
+- Tag and build via CI to produce `kai-<platform>-<arch>` binaries (see README’s install section).
 
 ## Website Updates
 
@@ -213,7 +213,7 @@ stack bench --benchmark-arguments="--csv=results.csv"
 - **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
 - **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels) through parser and type checker optimizations
 - **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed for development
-- **Comprehensive testing**: 583 passing examples spanning unit, property, script, CLI, stress, and example smoke coverage
+- **Comprehensive testing**: 588 passing examples spanning unit, property, script, CLI, stress, and example smoke coverage
 
 ## Notes / TODOs
 

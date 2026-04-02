@@ -16,6 +16,7 @@ import qualified LetBindingSpec
 import qualified ParserSpec
 import qualified ProgramSpec
 import qualified PropertyBasedSpec
+import qualified ReleaseWorkflowSpec
 import qualified RuntimeErrorSpec
 import qualified ScriptSpec
 import qualified StressTestSpec
@@ -47,6 +48,7 @@ main = hspec $ do
   ParserSpec.spec
   ProgramSpec.spec
   PropertyBasedSpec.spec
+  ReleaseWorkflowSpec.spec
   RuntimeErrorSpec.spec
   -- Kai script files discovered under tests/ and test/
   ScriptSpec.spec

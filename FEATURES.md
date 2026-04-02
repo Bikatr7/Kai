@@ -168,7 +168,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### Testing Infrastructure
 
-- ✅ **583 test examples**: Hspec, QuickCheck, script, CLI, stress, and example smoke coverage
+- ✅ **588 test examples**: Hspec, QuickCheck, script, CLI, stress, and example smoke coverage
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
 - ✅ **Script tests**: `.kai` files with `// expect:` directives
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
@@ -303,7 +303,7 @@ Kai is now past the point where a giant feature wishlist is useful. The next rel
 ## Implementation Statistics
 
 - **Lines of Haskell**: ~4,200 (estimated, including benchmarks)
-- **Test Coverage**: 583 examples, 100% passing
+- **Test Coverage**: 588 examples, 100% passing
 - **HLint Warnings**: 0
 - **Core Types**: 8 (Int, Bool, String, Unit, List, Tuple, Record, Function)
 - **Built-in Functions**: 27

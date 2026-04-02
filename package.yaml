@@ -98,6 +98,7 @@ tests:
       - directory
       - filepath
       - containers
+      - process
     when:
       - condition: os(windows)
         then:

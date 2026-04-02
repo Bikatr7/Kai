@@ -39,7 +39,7 @@ getHomeR = defaultLayout $ do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>583
+            <div .stat-number>588
             <div .stat-label>Tests Passing
           <div .stat-item>
             <div .stat-number>8
@@ -74,7 +74,7 @@ getHomeR = defaultLayout $ do
             <p>User input with `input`, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, and interactive workflows.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>583 passing examples with property-based testing, script evaluation, CLI coverage, stress checks, and example smoke coverage.
+            <p>588 passing examples with property-based testing, script evaluation, CLI coverage, stress checks, and example smoke coverage.
           <div .feature>
             <h3>Developer Experience
             <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
