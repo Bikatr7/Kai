@@ -33,6 +33,7 @@ usageText = unlines
   , "  kai --debug FILE.kai [args...] # run a script file with debug output"
   , "  kai -e 'EXPR'                # evaluate a one-liner expression"
   , "  kai --debug -e 'EXPR'        # evaluate with debug output"
+  , "  kai --version, kai -V        # show the Kai version"
   , "  kai --help                   # this message"
   ]
 
@@ -162,17 +163,18 @@ runStatements debug scriptArgs stmts =
         Right _ -> evalStatements env rest
 
 runCLI :: [String] -> IO ExitCode
-runCLI args =
+runCLI ("--debug" : args) = runCLIWithDebug True args
+runCLI args = runCLIWithDebug False args
+
+runCLIWithDebug :: Bool -> [String] -> IO ExitCode
+runCLIWithDebug debug args =
   case args of
     ["--help"] -> putStrLn usageText >> return ExitSuccess
     ["-h"] -> putStrLn usageText >> return ExitSuccess
-    ["--debug"] -> runREPL True []
-    ("--debug" : "repl" : scriptArgs) -> runREPL True scriptArgs
-    ("--debug" : "--repl" : scriptArgs) -> runREPL True scriptArgs
-    ["-e", exprStr] -> runExpression False exprStr
-    ["--debug", "-e", exprStr] -> runExpression True exprStr
-    [] -> runREPL False []
-    ("repl" : scriptArgs) -> runREPL False scriptArgs
-    ("--repl" : scriptArgs) -> runREPL False scriptArgs
-    ("--debug" : filename : scriptArgs) -> runFile True filename scriptArgs
-    (filename : scriptArgs) -> runFile False filename scriptArgs
+    ["--version"] -> putStrLn versionString >> return ExitSuccess
+    ["-V"] -> putStrLn versionString >> return ExitSuccess
+    ["-e", exprStr] -> runExpression debug exprStr
+    [] -> runREPL debug []
+    ("repl" : scriptArgs) -> runREPL debug scriptArgs
+    ("--repl" : scriptArgs) -> runREPL debug scriptArgs
+    (filename : scriptArgs) -> runFile debug filename scriptArgs

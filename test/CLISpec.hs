@@ -6,7 +6,7 @@ import System.Directory (getTemporaryDirectory, removeFile)
 import System.Exit (ExitCode(..))
 import System.IO (hClose, hGetContents, hPutStr, openTempFile)
 
-import CLI (runCLI)
+import CLI (runCLI, versionString)
 
 -- POSIX-specific stdout capture, consistent with the existing input tests.
 import System.Posix.IO
@@ -37,6 +37,24 @@ withTempKaiFile content action = do
 
 spec :: Spec
 spec = describe "CLI" $ do
+  it "prints the exact version for --version and -V" $ do
+    mapM_ (assertVersionOutput . (: [])) ["--version", "-V"]
+
+  it "keeps version output clean in debug mode" $ do
+    mapM_ (assertVersionOutput . ("--debug" :) . (: [])) ["--version", "-V"]
+
+  it "documents both version flags in help output" $ do
+    (exitCode, output) <- captureOutput $ runCLI ["--help"]
+    exitCode `shouldBe` ExitSuccess
+    output `shouldContain` "kai --version"
+    output `shouldContain` "kai -V"
+
+  it "passes --version through as a script argument after the filename" $ do
+    withTempKaiFile "print (head args)\n" $ \path -> do
+      (exitCode, output) <- captureOutput $ runCLI [path, "--version"]
+      exitCode `shouldBe` ExitSuccess
+      output `shouldBe` "--version\n"
+
   it "returns a non-zero exit code for runtime errors" $ do
     (exitCode, output) <- captureOutput $ runCLI ["-e", "10 / 0"]
     exitCode `shouldBe` ExitFailure 1
@@ -110,3 +128,8 @@ spec = describe "CLI" $ do
           (exitCode, output) <- captureOutput $ runCLI [path]
           exitCode `shouldBe` ExitSuccess
           output `shouldContain` "3\n"
+  where
+    assertVersionOutput args = do
+      (exitCode, output) <- captureOutput $ runCLI args
+      exitCode `shouldBe` ExitSuccess
+      output `shouldBe` versionString ++ "\n"

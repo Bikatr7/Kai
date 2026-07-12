@@ -4,9 +4,9 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Release (v0.0.4.4)
+## Development Snapshot (v0.0.4.5)
 
-Kai `v0.0.4.4`, released on 2026-07-11, includes a real REPL, user-defined algebraic data types, constructor pattern matching, checked 32-bit integer arithmetic, and a broader scripting stdlib on top of the earlier module, polymorphism, and CLI work.
+Kai `v0.0.4.5` is the next patch release candidate. It adds explicit `--version`/`-V` CLI flags and hardens distribution with permission-preserving archives, SHA-256 manifests, pinned platform runners, a macOS 11.3 deployment target, and native verification of the exact downloaded release packages before publication. The current published release remains `v0.0.4.4` (2026-07-11).
 
 Features available today:
 
@@ -36,11 +36,11 @@ Features available today:
 - **Wildcard variables**: `_` still works in let bindings when you truly want to discard a value (`let _ = expensiveCall in body`)
 - **Expression sequencing**: `;` remains the primitive sequencing operator, with lowest precedence
 - **Parser**: Megaparsec with precedence/associativity, reserved keywords, multiline top-level files, and multiline `do` blocks
-- **CLI & REPL**: expression/file execution plus an interactive REPL with multiline input and `:type`, `:load`, `:reload`, and `:quit`
+- **CLI & REPL**: expression/file execution, `--version`/`-V`, plus an interactive REPL with multiline input and `:type`, `:load`, `:reload`, and `:quit`
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
 - **Top-level definitions**: `let` and `letrec` at module level for defining functions and values
 - **Module system**: `import ModuleName` to import modules, module resolution supports `ModuleName.kai` and `ModuleName/ModuleName.kai`, full cross-module type checking, explicit exports with `export name1, name2`
-- **Tests**: Hspec + QuickCheck (709 examples), asserted script results, CLI/REPL coverage, and 1000-level full-pipeline stress cases
+- **Tests**: Hspec + QuickCheck (722 examples), asserted script results, CLI/REPL coverage, and 1000-level full-pipeline stress cases
 - **Working examples**: Module-based text analysis, validated CLI tools, interactive calculator and guessing game, an expression-tree ADT pipeline, list/record processing, text cleanup, directory/env-aware file workflows, wildcard matching, and discard/logging demos
 
 Current limitations:
@@ -63,6 +63,7 @@ stack test
 ## Run interpreter
 stack exec kai --                # start the REPL
 stack exec kai -- --help
+stack exec kai -- --version
 stack exec kai -- -e "\"hi\" ++ \"!\""
 stack exec kai -- -e "print (42 + 1)"
 stack exec kai -- --debug -e "42 + 1"
@@ -91,10 +92,13 @@ export PATH="$HOME/.local/bin:$PATH"  # if not already set
 kai path/to/script.kai
 ```
 
-Prebuilt binaries (CI Releases):
+Prebuilt packages (CI Releases):
 
-- After updating the version and synchronizing docs/tests, manually run the **Build and Release Binaries** workflow. It runs the full suite and benchmark-input validation before creating the tag and Linux, macOS, and Windows binaries.
-- Download the appropriate `kai-<platform>-<arch>` binary from the Releases page, `chmod +x` (Linux/macOS), and place it on your `PATH`.
+- After updating the version and synchronizing docs/tests, push the `package.yaml` version bump to `master`. That change starts **Build and Release Binaries** automatically; manual dispatch remains available for retries. The workflow validates the release candidate, creates a draft, then downloads and tests each exact package on its native runner before publishing it.
+- Starting with v0.0.4.5, download `kai-linux-amd64.tar.gz`, `kai-macos-arm64.zip`, or `kai-windows-amd64.zip` from Releases and verify it against `SHA256SUMS`.
+- Extract the package and place `kai` (or `kai.exe`) on your `PATH`. Linux and macOS archives preserve the executable bit.
+- Release CI executes the exact packages on Ubuntu 22.04 x64, Apple Silicon macOS 15, and Windows Server 2022 x64. Linux is built and tested on Ubuntu 22.04 (glibc 2.35), and the macOS binary declares an 11.3 deployment target; compatibility with other matching systems is expected but not directly exercised by this workflow.
+- macOS Developer ID/notarization and Windows Authenticode support are built into the workflow but remain disabled until their repository variables and certificate secrets are configured.
 - From source, `stack install` also produces a native binary in your local Stack install path.
 
 Export a static site bundle:
@@ -409,9 +413,9 @@ Design philosophy:
 
 Roadmap:
 
-`v0.0.4.4` is the current release. The next work should sharpen the existing experience instead of widening the surface area again immediately.
+`v0.0.4.4` is the current published release. `v0.0.4.5` is the active release candidate for CLI and distribution hardening; feature work should continue to sharpen the existing experience instead of widening the surface area immediately.
 
-**Next focus after v0.0.4.4**
+**Next focus after v0.0.4.5**
 - Better REPL ergonomics: history, completion, and friendlier diagnostics
 - More stdlib depth: line-oriented file helpers, JSON/HTTP, and a few missing script-heavy helpers
 - Tooling: formatter/linter polish, editor support, and eventually package management

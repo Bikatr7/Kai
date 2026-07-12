@@ -61,7 +61,7 @@ The codebase follows a modular architecture with clear separation of concerns. E
 
 #### CLI (`src/CLI.hs`, `src/Main.hs`)
 - Command-line interface with expression evaluation, file execution, and REPL entry
-- Debug mode, clean output by default, argument passing support
+- Debug mode, clean output by default, argument passing support, and package-derived `--version`/`-V` output
 - Non-zero exit codes for parse, type, and runtime failures
 - `src/REPL.hs`: multiline REPL with `:type`, `:load`, `:reload`, and persistent environments
 - `website/`: Yesod-based static site generator used for the project website/demo.
@@ -112,7 +112,7 @@ Notes:
 Prereqs: Stack + GHC.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 709 examples)
+- Tests: `stack test --fast` (all 722 examples)
 - Run CLI: `stack exec kai -- --help`
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
 - Try module-based example: `stack exec kai -- examples/text_analysis.kai`
@@ -207,7 +207,11 @@ same machine and build profile.
 
 - Bump version in `package.yaml` (hpack regenerates `.cabal`).
 - Update README header and website version display.
-- Tag and build via CI to produce `kai-<platform>-<arch>` binaries (see README’s install section).
+- Push the synchronized `package.yaml` version bump to `master`; it automatically starts the release workflow. Manual dispatch remains available for retries. The workflow builds permission-preserving platform packages, writes `SHA256SUMS`, creates a draft, verifies the exact downloads natively, and only then publishes the release.
+- Release runners are pinned to Ubuntu 22.04, macOS 15 ARM64 with `MACOSX_DEPLOYMENT_TARGET=11.3`, and Windows Server 2022.
+- Set `APPLE_SIGNING_ENABLED=true` only after configuring `APPLE_DEVELOPER_ID_P12_BASE64`, `APPLE_DEVELOPER_ID_P12_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_NOTARY_KEY_P8_BASE64`, `APPLE_NOTARY_KEY_ID`, and `APPLE_NOTARY_ISSUER_ID`.
+- Set `WINDOWS_SIGNING_ENABLED=true` only after configuring `WINDOWS_CERTIFICATE_PFX_BASE64` and `WINDOWS_CERTIFICATE_PFX_PASSWORD`.
+- Signing paths fail closed when enabled. Without those variables, releases have no Developer ID/notarization or Authenticode trust signature and must not be described as trusted-platform signed.
 
 ## Website Updates
 
@@ -227,13 +231,13 @@ same machine and build profile.
 - **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
 - **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels) through parser and type checker optimizations
 - **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed for development
-- **Comprehensive testing**: 709 passing examples spanning unit, meaningful typed properties, asserted scripts, CLI, REPL, 1000-level stress, and example smoke coverage
+- **Comprehensive testing**: 722 passing examples spanning unit, meaningful typed properties, asserted scripts, CLI, REPL, 1000-level stress, and example smoke coverage
 
 ## Notes / TODOs
 
-- **For each release**: Keep package, docs, website, tests, and benchmark validation synchronized, then explicitly dispatch the **Build and Release Binaries** workflow. A push to `master` does not publish a release.
-- **Post-v0.0.4.4 focus**: REPL polish (`history`, `completion`, better diagnostics)
-- **Post-v0.0.4.4 focus**: Fill stdlib gaps that matter for scripts (line-oriented file helpers, JSON/HTTP, a few missing utilities)
+- **For each release**: Keep package, docs, website, tests, and benchmark validation synchronized, then push the `package.yaml` version bump to `master`. The release workflow starts automatically and publishes only after every validation gate passes.
+- **Post-v0.0.4.5 focus**: REPL polish (`history`, `completion`, better diagnostics)
+- **Post-v0.0.4.5 focus**: Fill stdlib gaps that matter for scripts (line-oriented file helpers, JSON/HTTP, a few missing utilities)
 - **Defer by default**: Package manager, formatter/linter/LSP, and full polymorphic-recursion inference or other advanced type-system work unless scripting ergonomics are already in good shape
 - When changing semantics, align README.md, SPEC.md, website, and DEVELOPING.md immediately.
 - Always verify that stress tests pass after performance-critical changes.

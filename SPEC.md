@@ -1,9 +1,9 @@
-# Kai Language Specification (v0.0.4.4)
+# Kai Language Specification (v0.0.4.5 development snapshot)
 
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
-**Version**: 0.0.4.4
-**Released**: 2026-07-11
+**Version**: 0.0.4.5 (development)
+**Current Release**: 0.0.4.4 (2026-07-11)
 **Last Updated**: 2026-07-11
 
 **Note**: Kai uses a modular architecture with focused Parser, TypeChecker, Evaluator, REPL, and module-loading components. Performance benchmarks are available via `stack bench`.
@@ -435,6 +435,9 @@ do {
 - `args` evaluates to list of command-line arguments
 - Arguments passed after script filename or after `kai repl`
 - Empty list if no arguments provided
+- `kai --version` and `kai -V` print the package-derived version and exit successfully
+- A version-looking token after a script filename remains a script argument (`kai script.kai --version`)
+- `kai --help` and `kai -h` print command usage; a leading `--debug` enables diagnostic output for the selected command
 
 **Example**:
 ```bash
@@ -614,4 +617,4 @@ String ::= '"' StringChar* '"'
 - **Performance**: Optimized for deeply nested expressions (1000+ levels), comprehensive benchmarking suite available
 - **Benchmarks**: Criterion (speed) and Weigh (memory) profiling with regression detection
 
-This specification documents the released Kai v0.0.4.4 language. Updates to language features should be reflected in this document immediately.
+This specification documents the Kai v0.0.4.5 development snapshot. Updates to language features should be reflected in this document immediately.

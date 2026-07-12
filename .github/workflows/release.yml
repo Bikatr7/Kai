@@ -1,14 +1,23 @@
 name: Build and Release Binaries
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - package.yaml
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: kai-release
+  cancel-in-progress: false
+
 jobs:
   check-version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/master'
     outputs:
       version: ${{ steps.get-version.outputs.version }}
@@ -19,15 +28,15 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Get version from package.yaml
         id: get-version
         run: |
           VERSION=$(grep '^version:' package.yaml | cut -d' ' -f2)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Found version: $VERSION"
-      
+
       - name: Check release completeness
         id: check-release
         env:
@@ -43,26 +52,32 @@ jobs:
             fi
           fi
 
+          IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null || echo "missing")
           EXISTING_ASSETS=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)
           MISSING_ASSETS=0
-          for ASSET_PATTERN in '^kai-linux-' '^kai-macos-' '^kai-windows-.*\.exe$'; do
-            if ! grep -Eq "$ASSET_PATTERN" <<< "$EXISTING_ASSETS"; then
-              echo "Release $TAG has no asset matching $ASSET_PATTERN"
+          for ASSET in \
+            kai-linux-amd64.tar.gz \
+            kai-macos-arm64.zip \
+            kai-windows-amd64.zip \
+            SHA256SUMS
+          do
+            if ! grep -Fqx "$ASSET" <<< "$EXISTING_ASSETS"; then
+              echo "Release $TAG is missing $ASSET"
               MISSING_ASSETS=$((MISSING_ASSETS + 1))
             fi
           done
 
-          if [ "$MISSING_ASSETS" -eq 0 ]; then
-            echo "Release $TAG already has every platform asset, skipping"
-            echo "should-release=false" >> $GITHUB_OUTPUT
+          if [ "$IS_DRAFT" = "false" ] && [ "$MISSING_ASSETS" -eq 0 ]; then
+            echo "Release $TAG is published with every expected asset, skipping"
+            echo "should-release=false" >> "$GITHUB_OUTPUT"
           else
-            echo "Release $TAG is absent or incomplete, proceeding"
-            echo "should-release=true" >> $GITHUB_OUTPUT
+            echo "Release $TAG is absent, draft, or incomplete; proceeding"
+            echo "should-release=true" >> "$GITHUB_OUTPUT"
           fi
 
   validate:
     name: Validate release candidate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: check-version
     if: needs.check-version.outputs.should-release == 'true'
     steps:
@@ -76,12 +91,12 @@ jobs:
           stack-version: 'latest'
 
       - name: Cache Stack
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.stack
             .stack-work
-          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock') }}
+          key: validate-ubuntu-22.04-stack-${{ hashFiles('stack.yaml.lock') }}
 
       - name: Run full test suite
         run: stack test --fast
@@ -95,17 +110,24 @@ jobs:
     needs: [check-version, validate]
     if: needs.check-version.outputs.should-release == 'true'
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-22.04
+            expected-package: kai-linux-amd64.tar.gz
+            macos-target: ''
+          - os: macos-15
+            expected-package: kai-macos-arm64.zip
+            macos-target: '11.3'
+          - os: windows-2022
+            expected-package: kai-windows-amd64.zip
+            macos-target: ''
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Haskell (Stack)
-      # Uses the same action as the Pages workflow
-      # Ensures GHC/Stack are available across platforms
-      
         uses: haskell-actions/setup@v2
         with:
           ghc-version: '9.4.8'
@@ -113,116 +135,182 @@ jobs:
           stack-version: 'latest'
 
       - name: Cache Stack
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.stack
             .stack-work
-          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock') }}
+          key: ${{ matrix.os }}-${{ runner.arch }}-macos-${{ matrix.macos-target }}-stack-${{ hashFiles('stack.yaml.lock') }}
 
       - name: Build CLI binary
+        id: prepare
         shell: bash
         run: |
           stack --no-terminal build :kai
-          mkdir -p dist
+          mkdir -p dist/bin dist/release
           BINARY_NAME=$(bash scripts/release-asset-name.sh "${{ runner.os }}" "${{ runner.arch }}")
-          # Locate the built binary (Windows adds .exe extension)
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            BIN_PATH=$(stack path --local-install-root)/bin/kai.exe || true
-            if [ ! -x "$BIN_PATH" ]; then
-              BIN_PATH=$(stack path --local-bin)/kai.exe || true
-            fi
-          else
-            BIN_PATH=$(stack path --local-install-root)/bin/kai || true
-            if [ ! -x "$BIN_PATH" ]; then
-              BIN_PATH=$(stack path --local-bin)/kai || true
-            fi
-          fi
-          if [ ! -x "$BIN_PATH" ]; then
-            echo "Binary not found" >&2; exit 1
-          fi
-          cp "$BIN_PATH" "dist/$BINARY_NAME"
-          echo "Prepared release binary: $BINARY_NAME"
-          
-          # Test the binary on all .kai test files
-          echo "Testing binary functionality on all test files..."
-          FAILED_TESTS=0
-          TOTAL_TESTS=0
-
-          for test_file in tests/*.kai; do
-            if [ -f "$test_file" ]; then
-              TOTAL_TESTS=$((TOTAL_TESTS + 1))
-
-              echo "Running test: $test_file"
-
-              if [[ "$test_file" == tests/input* ]]; then
-                case "$test_file" in
-                  "tests/input_boolean_logic.kai")
-                    # This test has two input calls: (input == "yes") and not (input == "no")
-                    TEST_INPUT="yes\nyes"
-                    ;;
-                  "tests/input_comparison_chain.kai")
-                    # This test has two input calls: (input == "a") or (input == "b")
-                    TEST_INPUT="a\na"
-                    ;;
-                  "tests/input_empty_handling.kai")
-                    # This test needs an empty line, not empty string
-                    TEST_INPUT=""
-                    ;;
-                  "tests/input_nested_conditionals.kai")
-                    # This test has two input calls in nested conditionals
-                    TEST_INPUT="admin\nadmin"
-                    ;;
-                  *)
-                    TEST_INPUT="test_input"
-                    ;;
-                esac
-
-                if [[ "$test_file" == "tests/input_empty_handling.kai" ]]; then
-                  # Special handling for empty input test
-                  if ! echo | ./dist/$BINARY_NAME "$test_file" >/dev/null 2>&1; then
-                    echo "❌ FAILED: $test_file (with empty input)"
-                    FAILED_TESTS=$((FAILED_TESTS + 1))
-                  else
-                    echo "✅ PASSED: $test_file (with empty input)"
-                  fi
-                else
-                  if ! printf "$TEST_INPUT" | ./dist/$BINARY_NAME "$test_file" >/dev/null 2>&1; then
-                    echo "❌ FAILED: $test_file (with input: '$TEST_INPUT')"
-                    FAILED_TESTS=$((FAILED_TESTS + 1))
-                  else
-                    echo "✅ PASSED: $test_file (with input: '$TEST_INPUT')"
-                  fi
-                fi
-              else
-                if ! ./dist/$BINARY_NAME "$test_file" >/dev/null 2>&1; then
-                  echo "❌ FAILED: $test_file"
-                  FAILED_TESTS=$((FAILED_TESTS + 1))
-                else
-                  echo "✅ PASSED: $test_file"
-                fi
-              fi
-            fi
-          done
-
-          PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS))
-
-          echo "Test Results: $PASSED_TESTS/$TOTAL_TESTS passed"
-          if [ $FAILED_TESTS -gt 0 ]; then
-            echo "❌ $FAILED_TESTS test(s) failed. Aborting release."
+          PACKAGE_NAME=$(bash scripts/release-package-name.sh "${{ runner.os }}" "${{ runner.arch }}")
+          if [ "$PACKAGE_NAME" != "${{ matrix.expected-package }}" ]; then
+            echo "Unexpected package name: $PACKAGE_NAME" >&2
             exit 1
           fi
-          echo "✅ All binary tests passed! (Input tests provided with 'test_input')"
+
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            BIN_PATH=$(stack path --local-install-root)/bin/kai.exe
+            TARGET_PATH=dist/bin/kai.exe
+          else
+            BIN_PATH=$(stack path --local-install-root)/bin/kai
+            TARGET_PATH=dist/bin/kai
+          fi
+          if [ ! -x "$BIN_PATH" ]; then
+            echo "Binary not found: $BIN_PATH" >&2
+            exit 1
+          fi
+
+          cp "$BIN_PATH" "$TARGET_PATH"
+          if [ "${{ runner.os }}" != "Windows" ]; then
+            chmod 755 "$TARGET_PATH"
+          fi
+          echo "binary_path=$TARGET_PATH" >> "$GITHUB_OUTPUT"
+          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "Prepared release binary: $BINARY_NAME"
+
+      - name: Test built binary
+        shell: bash
+        run: bash scripts/test-release-binary.sh "${{ steps.prepare.outputs.binary_path }}" "${{ needs.check-version.outputs.version }}"
+
+      - name: Verify macOS deployment target
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          BUILD_INFO=$(xcrun vtool -show-build "${{ steps.prepare.outputs.binary_path }}")
+          printf '%s\n' "$BUILD_INFO"
+          grep -Eq 'minos[[:space:]]+11\.3([[:space:]]|$)' <<< "$BUILD_INFO"
+
+      - name: Sign and notarize macOS binary
+        if: runner.os == 'macOS' && vars.APPLE_SIGNING_ENABLED == 'true'
+        shell: bash
+        env:
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          : "${APPLE_DEVELOPER_ID_P12_BASE64:?missing Apple signing certificate}"
+          : "${APPLE_DEVELOPER_ID_P12_PASSWORD:?missing Apple certificate password}"
+          : "${APPLE_SIGNING_IDENTITY:?missing Apple signing identity}"
+          : "${APPLE_NOTARY_KEY_P8_BASE64:?missing Apple notary key}"
+          : "${APPLE_NOTARY_KEY_ID:?missing Apple notary key ID}"
+          : "${APPLE_NOTARY_ISSUER_ID:?missing Apple notary issuer ID}"
+
+          CERTIFICATE_PATH="$RUNNER_TEMP/kai-developer-id.p12"
+          NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          KEYCHAIN_PATH="$RUNNER_TEMP/kai-signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          NOTARY_ARCHIVE="$RUNNER_TEMP/kai-notarization.zip"
+          trap 'security delete-keychain "$KEYCHAIN_PATH" >/dev/null 2>&1 || true' EXIT
+
+          printf '%s' "$APPLE_DEVELOPER_ID_P12_BASE64" | base64 -D > "$CERTIFICATE_PATH"
+          printf '%s' "$APPLE_NOTARY_KEY_P8_BASE64" | base64 -D > "$NOTARY_KEY_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_DEVELOPER_ID_P12_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          codesign \
+            --force \
+            --options runtime \
+            --timestamp \
+            --keychain "$KEYCHAIN_PATH" \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "${{ steps.prepare.outputs.binary_path }}"
+          codesign --verify --strict --verbose=2 "${{ steps.prepare.outputs.binary_path }}"
+
+          ditto -c -k --norsrc "${{ steps.prepare.outputs.binary_path }}" "$NOTARY_ARCHIVE"
+          xcrun notarytool submit "$NOTARY_ARCHIVE" \
+            --key "$NOTARY_KEY_PATH" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait
+          spctl --assess --type execute --verbose=2 "${{ steps.prepare.outputs.binary_path }}"
+
+      - name: Authenticode-sign Windows binary
+        if: runner.os == 'Windows' && vars.WINDOWS_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PFX_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_BASE64)) {
+            throw "Missing WINDOWS_CERTIFICATE_PFX_BASE64"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PFX_PASSWORD)) {
+            throw "Missing WINDOWS_CERTIFICATE_PFX_PASSWORD"
+          }
+
+          $certificatePath = Join-Path $env:RUNNER_TEMP "kai-code-signing.pfx"
+          try {
+            [IO.File]::WriteAllBytes(
+              $certificatePath,
+              [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64)
+            )
+            $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+              Where-Object { $_.FullName -match '\\x64\\' } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if ($null -eq $signTool) {
+              throw "signtool.exe was not found"
+            }
+
+            & $signTool.FullName sign /f $certificatePath /p $env:WINDOWS_CERTIFICATE_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "${{ steps.prepare.outputs.binary_path }}"
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool failed with exit code $LASTEXITCODE"
+            }
+            & $signTool.FullName verify /pa /v "${{ steps.prepare.outputs.binary_path }}"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Authenticode verification failed"
+            }
+          }
+          finally {
+            Remove-Item $certificatePath -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Package release binary
+        id: package
+        shell: bash
+        run: |
+          PACKAGE_PATH=$(bash scripts/package-release-binary.sh \
+            "${{ runner.os }}" \
+            "${{ runner.arch }}" \
+            "${{ steps.prepare.outputs.binary_path }}" \
+            dist/release)
+          if [ "$(basename "$PACKAGE_PATH")" != "${{ steps.prepare.outputs.package_name }}" ]; then
+            echo "Packager returned an unexpected asset: $PACKAGE_PATH" >&2
+            exit 1
+          fi
+          echo "package_path=$PACKAGE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: kai-${{ runner.os }}-${{ runner.arch }}
-          path: dist/*
+          path: ${{ steps.package.outputs.package_path }}
+          if-no-files-found: error
 
   release:
     needs: [check-version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: needs.check-version.outputs.should-release == 'true'
     permissions:
       contents: write
@@ -231,7 +319,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Create or reuse tag
         run: |
           git config --local user.email "action@github.com"
@@ -253,14 +341,133 @@ jobs:
         with:
           path: artifacts
 
-      - name: Create GitHub Release
+      - name: Prepare release assets and checksums
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -name 'kai-*' -exec cp '{}' release-files/ \;
+          for ASSET in \
+            kai-linux-amd64.tar.gz \
+            kai-macos-arm64.zip \
+            kai-windows-amd64.zip
+          do
+            if [ ! -f "release-files/$ASSET" ]; then
+              echo "Missing release asset: $ASSET" >&2
+              exit 1
+            fi
+          done
+          (
+            cd release-files
+            sha256sum kai-* > SHA256SUMS
+          )
+
+      - name: Create or update draft GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-version.outputs.tag }}
           name: "Kai v${{ needs.check-version.outputs.version }}"
           generate_release_notes: true
+          draft: true
+          make_latest: false
           overwrite_files: true
-          files: |
-            artifacts/**/kai-*
+          files: release-files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  verify-release:
+    name: Verify draft package on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: [check-version, release]
+    if: needs.check-version.outputs.should-release == 'true'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            package: kai-linux-amd64.tar.gz
+          - os: macos-15
+            package: kai-macos-arm64.zip
+          - os: windows-2022
+            package: kai-windows-amd64.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download and verify release package
+        id: extract
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p downloaded extracted
+          gh release download "${{ needs.check-version.outputs.tag }}" \
+            --pattern "${{ matrix.package }}" \
+            --pattern SHA256SUMS \
+            --dir downloaded \
+            --clobber
+
+          EXPECTED_SHA=$(awk -v file="${{ matrix.package }}" '$2 == file { print $1 }' downloaded/SHA256SUMS)
+          if [ -z "$EXPECTED_SHA" ]; then
+            echo "SHA256SUMS has no entry for ${{ matrix.package }}" >&2
+            exit 1
+          fi
+          if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL_SHA=$(sha256sum "downloaded/${{ matrix.package }}" | awk '{ print $1 }')
+          else
+            ACTUAL_SHA=$(shasum -a 256 "downloaded/${{ matrix.package }}" | awk '{ print $1 }')
+          fi
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "Checksum mismatch for ${{ matrix.package }}" >&2
+            exit 1
+          fi
+
+          BINARY_PATH=$(bash scripts/extract-release-package.sh \
+            "${{ runner.os }}" \
+            "downloaded/${{ matrix.package }}" \
+            extracted)
+          if [ "${{ runner.os }}" != "Windows" ] && [ ! -x "$BINARY_PATH" ]; then
+            echo "Executable permission was not preserved: $BINARY_PATH" >&2
+            exit 1
+          fi
+          echo "binary_path=$BINARY_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Test exact downloaded binary
+        shell: bash
+        run: bash scripts/test-release-binary.sh "${{ steps.extract.outputs.binary_path }}" "${{ needs.check-version.outputs.version }}"
+
+      - name: Verify downloaded macOS binary
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          BUILD_INFO=$(xcrun vtool -show-build "${{ steps.extract.outputs.binary_path }}")
+          printf '%s\n' "$BUILD_INFO"
+          grep -Eq 'minos[[:space:]]+11\.3([[:space:]]|$)' <<< "$BUILD_INFO"
+          codesign --verify --strict --verbose=2 "${{ steps.extract.outputs.binary_path }}"
+
+      - name: Verify macOS Gatekeeper assessment
+        if: runner.os == 'macOS' && vars.APPLE_SIGNING_ENABLED == 'true'
+        shell: bash
+        run: |
+          xattr -w com.apple.quarantine "0081;$(date +%s);KaiReleaseVerification;" "${{ steps.extract.outputs.binary_path }}"
+          spctl --assess --type execute --verbose=2 "${{ steps.extract.outputs.binary_path }}"
+
+      - name: Verify downloaded Windows signature
+        if: runner.os == 'Windows' && vars.WINDOWS_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature "${{ steps.extract.outputs.binary_path }}"
+          if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+            throw "Downloaded binary has invalid Authenticode status: $($signature.Status)"
+          }
+
+  publish-release:
+    needs: [check-version, verify-release]
+    runs-on: ubuntu-22.04
+    if: needs.check-version.outputs.should-release == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Publish verified release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.check-version.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -1,13 +1,13 @@
 # Kai Language Features
 
-**Version**: 0.0.4.4 (released 2026-07-11)
+**Version**: 0.0.4.5 (development)
 **Last Updated**: 2026-07-11
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
 ---
 
-## Implemented Features (v0.0.4.4)
+## Implemented Features (v0.0.4.5 development snapshot)
 
 ### Core Language
 
@@ -177,7 +177,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Debug mode**: `kai --debug` for detailed output
 - ✅ **Help system**: `kai --help`
 - ✅ **REPL commands**: `:type`, `:load`, `:reload`, `:quit`
-- ✅ **Version display**: `Kai v0.0.4.4`
+- ✅ **Version display**: `kai --version` and `kai -V` print the package-derived version
 - ✅ **Script arguments**: Pass arguments to scripts
 - ✅ **Failure exit codes**: Parse, type, and runtime failures return non-zero exit codes
 - ✅ **Clean output**: No debug noise by default
@@ -186,7 +186,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### Testing Infrastructure
 
-- ✅ **709 test examples**: Hspec, meaningful typed QuickCheck properties, asserted scripts, CLI, REPL, stress, and example smoke coverage
+- ✅ **722 test examples**: Hspec, meaningful typed QuickCheck properties, asserted scripts, CLI, REPL, stress, and example smoke coverage
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
 - ✅ **Script tests**: `.kai` files with `// expect:` directives
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
@@ -230,9 +230,9 @@ decisions rather than historical numbers in documentation.
 
 ## Roadmap
 
-Kai is now past the point where a giant feature wishlist is useful. The next release after v0.0.4.4 should sharpen the language as a practical typed scripting tool, not broaden it in every possible direction.
+Kai is now past the point where a giant feature wishlist is useful. The v0.0.4.5 release candidate sharpens the CLI and distribution path instead of broadening the language surface.
 
-### Post-v0.0.4.4 Priorities
+### Post-v0.0.4.5 Priorities
 
 #### 1. REPL Polish
 - ⏳ **History and completion**: The core REPL works; now it needs comfort features
@@ -297,7 +297,7 @@ Kai is now past the point where a giant feature wishlist is useful. The next rel
 ## Implementation Statistics
 
 - **Lines of Haskell**: ~5,800 across `src/` and `benchmarks/`
-- **Test Coverage**: 709 passing examples; no line-coverage percentage is claimed
+- **Test Coverage**: 722 passing examples; no line-coverage percentage is claimed
 - **HLint Warnings**: 0
 - **Core Types**: 8 (Int, Bool, String, Unit, List, Tuple, Record, Function)
 - **Built-in Functions**: 39
@@ -312,6 +312,14 @@ Kai is now past the point where a giant feature wishlist is useful. The next rel
 ---
 
 ## Version History
+
+### v0.0.4.5 (development)
+- Added `kai --version` and `kai -V`, including clean debug-prefixed behavior
+- Switched release downloads to permission-preserving Linux/macOS archives and a Windows ZIP with `SHA256SUMS`
+- Pinned native release runners and set the Apple Silicon deployment target to macOS 11.3
+- Added native verification of the exact downloaded Linux, macOS, and Windows packages before a draft release becomes public
+- Made pushed `package.yaml` version bumps on `master` start the gated release workflow automatically, with manual retry support
+- Added fail-closed Apple Developer ID/notarization and Windows Authenticode workflow paths that activate only when explicitly enabled and credentialed
 
 ### v0.0.4.4 (2026-07-11)
 - Added an interactive REPL with multiline input plus `:type`, `:load`, `:reload`, and `:quit`

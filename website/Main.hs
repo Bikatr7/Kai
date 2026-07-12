@@ -51,7 +51,7 @@ getHomeR = do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>709
+            <div .stat-number>722
             <div .stat-label>Tests Passing
           <div .stat-item>
             <div .stat-number>8
@@ -60,8 +60,8 @@ getHomeR = do
             <div .stat-number>39
             <div .stat-label>Built-in Functions
           <div .stat-item>
-            <div .stat-number>v0.0.4.4
-            <div .stat-label>Current Version
+            <div .stat-number>v0.0.4.5
+            <div .stat-label>Development Version
 
       <nav>
         <ul>
@@ -86,10 +86,10 @@ getHomeR = do
             <p>User input with `input`, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, expression trees, and workspace-style file flows.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>709 passing examples with typed properties, asserted script results, CLI and REPL coverage, 1000-level full-pipeline stress checks, and example smoke coverage.
+            <p>722 passing examples with typed properties, asserted script results, CLI and REPL coverage, 1000-level full-pipeline stress checks, and example smoke coverage.
           <div .feature>
             <h3>Developer Experience
-            <p>CLI plus a multiline REPL with `:type`, `:load`, and `:reload`, alongside file execution, --debug, and comprehensive documentation.
+            <p>CLI plus a multiline REPL with `:type`, `:load`, and `:reload`, alongside file execution, --debug, --version/-V, and comprehensive documentation.
           <div .feature>
             <h3>Module System
             <p>Import modules with `import ModuleName`, top-level definitions with `let` and `letrec`, mutual recursion support, circular import detection, explicit exports, and module resolution.
@@ -104,6 +104,8 @@ getHomeR = do
             <code>stack exec kai --
             <br>
             <code>stack exec kai -- --help
+            <br>
+            <code>stack exec kai -- --version
             <br>
             <code>stack exec kai -- -e "print (42 + 1)"
             <br>
@@ -293,7 +295,7 @@ getHomeR = do
             <span>No JSON/HTTP/package-manager story yet
 
       <section #roadmap>
-        <h2>Current Release (v0.0.4.4) & Next Focus
+        <h2>v0.0.4.5 Release Candidate & Next Focus
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -345,13 +347,18 @@ getHomeR = do
             <div .timeline-content>
               <h3>File I/O & Scripting (Done)
               <p>readFile, writeFile, command-line arguments, practical scripting capabilities
-          <div .timeline-item .current>
-            <div .timeline-marker .current data-step="11">
+          <div .timeline-item>
+            <div .timeline-marker data-step="11">
             <div .timeline-content>
               <h3>v0.0.4.4 (Released 2026-07-11)
               <p>REPL, custom data types, constructor patterns, checked integers, sound composite inference, and essential scripting stdlib work
+          <div .timeline-item .current>
+            <div .timeline-marker .current data-step="12">
+            <div .timeline-content>
+              <h3>v0.0.4.5 (Development)
+              <p>Version flags, permission-preserving archives, checksums, automatic version-driven releases, pinned deployment baselines, and native verification of exact release downloads
           <div .timeline-item>
-            <div .timeline-marker data-step="12">
+            <div .timeline-marker data-step="13">
             <div .timeline-content>
               <h3>Later Releases
               <p>REPL polish, friendlier diagnostics, richer stdlib helpers, formatter/linter, package manager, HTTP/JSON work, and fuller polymorphic-recursion ergonomics
