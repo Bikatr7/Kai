@@ -19,14 +19,19 @@ jobs:
   check-version:
     runs-on: ubuntu-22.04
     if: github.ref == 'refs/heads/master'
+    permissions:
+      # Draft releases are visible only to callers with push access.
+      contents: write
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       tag: ${{ steps.get-version.outputs.tag }}
       should-release: ${{ steps.check-release.outputs.should-release }}
+      reuse-draft: ${{ steps.check-release.outputs.reuse-draft }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get version from package.yaml
@@ -44,12 +49,9 @@ jobs:
         run: |
           TAG="v${{ steps.get-version.outputs.version }}"
 
+          TAG_COMMIT=""
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
             TAG_COMMIT=$(git rev-list -n 1 "$TAG")
-            if [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
-              echo "Tag $TAG points to $TAG_COMMIT instead of $GITHUB_SHA" >&2
-              exit 1
-            fi
           fi
 
           IS_DRAFT=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null || echo "missing")
@@ -70,9 +72,22 @@ jobs:
           if [ "$IS_DRAFT" = "false" ] && [ "$MISSING_ASSETS" -eq 0 ]; then
             echo "Release $TAG is published with every expected asset, skipping"
             echo "should-release=false" >> "$GITHUB_OUTPUT"
+            echo "reuse-draft=false" >> "$GITHUB_OUTPUT"
+          elif [ "$IS_DRAFT" = "true" ] && [ "$MISSING_ASSETS" -eq 0 ]; then
+            if [ -z "$TAG_COMMIT" ]; then
+              echo "Draft release $TAG has no matching Git tag" >&2
+              exit 1
+            fi
+            echo "Release $TAG is a complete draft at $TAG_COMMIT; reusing it"
+            echo "should-release=true" >> "$GITHUB_OUTPUT"
+            echo "reuse-draft=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$TAG_COMMIT" ] && [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "Tag $TAG points to $TAG_COMMIT instead of $GITHUB_SHA" >&2
+            exit 1
           else
             echo "Release $TAG is absent, draft, or incomplete; proceeding"
             echo "should-release=true" >> "$GITHUB_OUTPUT"
+            echo "reuse-draft=false" >> "$GITHUB_OUTPUT"
           fi
 
   validate:
@@ -321,6 +336,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create or reuse tag
+        if: needs.check-version.outputs.reuse-draft != 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
@@ -338,10 +354,12 @@ jobs:
           fi
 
       - uses: actions/download-artifact@v4
+        if: needs.check-version.outputs.reuse-draft != 'true'
         with:
           path: artifacts
 
       - name: Prepare release assets and checksums
+        if: needs.check-version.outputs.reuse-draft != 'true'
         run: |
           mkdir -p release-files
           find artifacts -type f -name 'kai-*' -exec cp '{}' release-files/ \;
@@ -361,6 +379,7 @@ jobs:
           )
 
       - name: Create or update draft GitHub release
+        if: needs.check-version.outputs.reuse-draft != 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.check-version.outputs.tag }}
@@ -373,13 +392,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Reuse existing complete draft
+        if: needs.check-version.outputs.reuse-draft == 'true'
+        run: echo "Reusing ${{ needs.check-version.outputs.tag }} without replacing its verified build inputs"
+
   verify-release:
     name: Verify draft package on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     needs: [check-version, release]
     if: needs.check-version.outputs.should-release == 'true'
     permissions:
-      contents: read
+      # Draft releases are visible only to callers with push access.
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -392,20 +416,26 @@ jobs:
             package: kai-windows-amd64.zip
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
-      - name: Download and verify release package
-        id: extract
+      - name: Download draft release package
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p downloaded extracted
+          mkdir -p downloaded
           gh release download "${{ needs.check-version.outputs.tag }}" \
             --pattern "${{ matrix.package }}" \
             --pattern SHA256SUMS \
             --dir downloaded \
             --clobber
 
+      - name: Verify checksum and extract package
+        id: extract
+        shell: bash
+        run: |
+          mkdir -p extracted
           EXPECTED_SHA=$(awk -v file="${{ matrix.package }}" '$2 == file { print $1 }' downloaded/SHA256SUMS)
           if [ -z "$EXPECTED_SHA" ]; then
             echo "SHA256SUMS has no entry for ${{ matrix.package }}" >&2

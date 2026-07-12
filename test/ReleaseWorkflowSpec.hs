@@ -145,9 +145,18 @@ spec = describe "Release workflow asset naming" $ do
     workflow `shouldSatisfy` isInfixOf "draft: true"
     workflow `shouldSatisfy` isInfixOf "group: kai-release"
     workflow `shouldSatisfy` isInfixOf "cancel-in-progress: false"
+    workflow `shouldSatisfy` isInfixOf "reuse-draft:"
+    workflow `shouldSatisfy` isInfixOf "if: needs.check-version.outputs.reuse-draft != 'true'"
+    let checkVersionSection = unlines $ takeWhile (/= "  validate:") $ dropWhile (/= "  check-version:") $ lines workflow
+    checkVersionSection `shouldSatisfy` isInfixOf "contents: write"
+    checkVersionSection `shouldSatisfy` isInfixOf "persist-credentials: false"
     workflow `shouldSatisfy` isInfixOf "verify-release:"
     workflow `shouldSatisfy` isInfixOf "scripts/test-release-binary.sh"
     workflow `shouldSatisfy` isInfixOf "--repo \"$GITHUB_REPOSITORY\" --draft=false --latest"
+    let verifySection = unlines $ takeWhile (/= "  publish-release:") $ dropWhile (/= "  verify-release:") $ lines workflow
+    verifySection `shouldSatisfy` isInfixOf "contents: write"
+    verifySection `shouldSatisfy` isInfixOf "persist-credentials: false"
+    verifySection `shouldSatisfy` isInfixOf "Download draft release package"
 
   it "supports fail-closed macOS and Windows signing when explicitly enabled" $ do
     workflow <- readFile ".github/workflows/release.yml"
