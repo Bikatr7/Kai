@@ -1,9 +1,9 @@
-# Kai Language Specification (v0.0.4.5 development snapshot)
+# Kai Language Specification (v0.0.4.5)
 
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
-**Version**: 0.0.4.5 (development)
-**Current Release**: 0.0.4.4 (2026-07-11)
+**Version**: 0.0.4.5
+**Released**: 2026-07-11
 **Last Updated**: 2026-07-11
 
 **Note**: Kai uses a modular architecture with focused Parser, TypeChecker, Evaluator, REPL, and module-loading components. Performance benchmarks are available via `stack bench`.
@@ -617,4 +617,4 @@ String ::= '"' StringChar* '"'
 - **Performance**: Optimized for deeply nested expressions (1000+ levels), comprehensive benchmarking suite available
 - **Benchmarks**: Criterion (speed) and Weigh (memory) profiling with regression detection
 
-This specification documents the Kai v0.0.4.5 development snapshot. Updates to language features should be reflected in this document immediately.
+This specification documents the released Kai v0.0.4.5 language. Updates to language features should be reflected in this document immediately.

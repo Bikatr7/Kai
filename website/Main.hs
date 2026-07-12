@@ -61,7 +61,7 @@ getHomeR = do
             <div .stat-label>Built-in Functions
           <div .stat-item>
             <div .stat-number>v0.0.4.5
-            <div .stat-label>Development Version
+            <div .stat-label>Current Version
 
       <nav>
         <ul>
@@ -295,7 +295,7 @@ getHomeR = do
             <span>No JSON/HTTP/package-manager story yet
 
       <section #roadmap>
-        <h2>v0.0.4.5 Release Candidate & Next Focus
+        <h2>Current Release (v0.0.4.5) & Next Focus
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -355,7 +355,7 @@ getHomeR = do
           <div .timeline-item .current>
             <div .timeline-marker .current data-step="12">
             <div .timeline-content>
-              <h3>v0.0.4.5 (Development)
+              <h3>v0.0.4.5 (Released 2026-07-11)
               <p>Version flags, permission-preserving archives, checksums, automatic version-driven releases, pinned deployment baselines, and native verification of exact release downloads
           <div .timeline-item>
             <div .timeline-marker data-step="13">

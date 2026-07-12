@@ -1,13 +1,13 @@
 # Kai Language Features
 
-**Version**: 0.0.4.5 (development)
+**Version**: 0.0.4.5 (released 2026-07-11)
 **Last Updated**: 2026-07-11
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
 ---
 
-## Implemented Features (v0.0.4.5 development snapshot)
+## Implemented Features (v0.0.4.5)
 
 ### Core Language
 
@@ -230,7 +230,7 @@ decisions rather than historical numbers in documentation.
 
 ## Roadmap
 
-Kai is now past the point where a giant feature wishlist is useful. The v0.0.4.5 release candidate sharpens the CLI and distribution path instead of broadening the language surface.
+Kai is now past the point where a giant feature wishlist is useful. The v0.0.4.5 release sharpened the CLI and distribution path instead of broadening the language surface.
 
 ### Post-v0.0.4.5 Priorities
 
@@ -313,7 +313,7 @@ Kai is now past the point where a giant feature wishlist is useful. The v0.0.4.5
 
 ## Version History
 
-### v0.0.4.5 (development)
+### v0.0.4.5 (2026-07-11)
 - Added `kai --version` and `kai -V`, including clean debug-prefixed behavior
 - Switched release downloads to permission-preserving Linux/macOS archives and a Windows ZIP with `SHA256SUMS`
 - Pinned native release runners and set the Apple Silicon deployment target to macOS 11.3

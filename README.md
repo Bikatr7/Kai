@@ -4,9 +4,9 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Development Snapshot (v0.0.4.5)
+## Current Release (v0.0.4.5)
 
-Kai `v0.0.4.5` is the next patch release candidate. It adds explicit `--version`/`-V` CLI flags and hardens distribution with permission-preserving archives, SHA-256 manifests, pinned platform runners, a macOS 11.3 deployment target, and native verification of the exact downloaded release packages before publication. The current published release remains `v0.0.4.4` (2026-07-11).
+Kai `v0.0.4.5`, released on 2026-07-11, adds explicit `--version`/`-V` CLI flags and hardens distribution with permission-preserving archives, SHA-256 manifests, pinned platform runners, a macOS 11.3 deployment target, and native verification of the exact downloaded release packages before publication.
 
 Features available today:
 
@@ -413,7 +413,7 @@ Design philosophy:
 
 Roadmap:
 
-`v0.0.4.4` is the current published release. `v0.0.4.5` is the active release candidate for CLI and distribution hardening; feature work should continue to sharpen the existing experience instead of widening the surface area immediately.
+`v0.0.4.5` is the current published release. It completes the CLI and distribution hardening pass; feature work should continue to sharpen the existing experience instead of widening the surface area immediately.
 
 **Next focus after v0.0.4.5**
 - Better REPL ergonomics: history, completion, and friendlier diagnostics
