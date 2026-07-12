@@ -1,0 +1,4 @@
+// expect: 1
+data Pair a b = Pair a b
+let withOne = Pair 1
+case withOne true of Pair x y -> if y then x else 0

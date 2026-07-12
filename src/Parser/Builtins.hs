@@ -127,22 +127,61 @@ writeFileExpr atom = do
   path <- atom
   WriteFile path <$> atom
 
+appendFileExpr :: ExprParser -> Parser Expr
+appendFileExpr atom = do
+  keyword "appendFile"
+  path <- atom
+  AppendFile path <$> atom
+
+fileExistsExpr :: ExprParser -> Parser Expr
+fileExistsExpr atom = keyword "fileExists" >> FileExists <$> atom
+
+listDirectoryExpr :: ExprParser -> Parser Expr
+listDirectoryExpr atom = keyword "listDirectory" >> ListDirectory <$> atom
+
+createDirectoryExpr :: ExprParser -> Parser Expr
+createDirectoryExpr atom = keyword "createDirectory" >> CreateDirectory <$> atom
+
+removeDirectoryExpr :: ExprParser -> Parser Expr
+removeDirectoryExpr atom = keyword "removeDirectory" >> RemoveDirectory <$> atom
+
+getCurrentDirectoryExpr :: Parser Expr
+getCurrentDirectoryExpr = keyword "getCurrentDirectory" >> return GetCurrentDirectory
+
+setCurrentDirectoryExpr :: ExprParser -> Parser Expr
+setCurrentDirectoryExpr atom = keyword "setCurrentDirectory" >> SetCurrentDirectory <$> atom
+
+systemExpr :: ExprParser -> Parser Expr
+systemExpr atom = keyword "system" >> System <$> atom
+
+getEnvExpr :: ExprParser -> Parser Expr
+getEnvExpr atom = keyword "getEnv" >> GetEnv <$> atom
+
+setEnvExpr :: ExprParser -> Parser Expr
+setEnvExpr atom = do
+  keyword "setEnv"
+  name <- atom
+  SetEnv name <$> atom
+
+exitExpr :: ExprParser -> Parser Expr
+exitExpr atom = keyword "exit" >> Exit <$> atom
+
 justExpr :: ExprParser -> Parser Expr
 justExpr expr = do
-  symbol "Just"
+  keyword "Just"
   MJust <$> expr
 
 nothingExpr :: Parser Expr
-nothingExpr = symbol "Nothing" >> return MNothing
+nothingExpr = keyword "Nothing" >> return MNothing
 
 leftExpr :: ExprParser -> Parser Expr
 leftExpr expr = do
-  symbol "Left"
+  keyword "Left"
   ELeft <$> expr
 
 rightExpr :: ExprParser -> Parser Expr
 rightExpr expr = do
-  symbol "Right"
+  keyword "Right"
   ERight <$> expr
 
 discardExpr :: ExprParser -> Parser Expr

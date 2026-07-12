@@ -21,6 +21,7 @@ patternTerm = choice
   , nothingPattern
   , leftPattern
   , rightPattern
+  , try constructorPattern
   , PVar <$> identifier
   , try parensOrTuplePattern
   ]
@@ -39,21 +40,44 @@ patternOperatorTable = [ [ InfixR (PCons <$ symbol "::") ] ]
 
 justPattern :: Parser Pattern
 justPattern = do
-  symbol "Just"
-  PJust <$> patternTerm
+  keyword "Just"
+  PJust <$> patternArgument
 
 nothingPattern :: Parser Pattern
-nothingPattern = symbol "Nothing" >> return PNothing
+nothingPattern = keyword "Nothing" >> return PNothing
 
 leftPattern :: Parser Pattern
 leftPattern = do
-  symbol "Left"
-  PLeft <$> patternTerm
+  keyword "Left"
+  PLeft <$> patternArgument
 
 rightPattern :: Parser Pattern
 rightPattern = do
-  symbol "Right"
-  PRight <$> patternTerm
+  keyword "Right"
+  PRight <$> patternArgument
+
+constructorPattern :: Parser Pattern
+constructorPattern = do
+  name <- constructorIdentifier
+  args <- many patternArgument
+  return $ PConstructor name args
+
+patternArgument :: Parser Pattern
+patternArgument = choice
+  [ PInt <$> integer
+  , PBool <$> boolean
+  , PStr <$> stringLit
+  , PUnit <$ unit
+  , try listPattern
+  , try recordPattern
+  , justPattern
+  , nothingPattern
+  , leftPattern
+  , rightPattern
+  , PConstructor <$> constructorIdentifier <*> pure []
+  , PVar <$> identifier
+  , try parensOrTuplePattern
+  ]
 
 listPattern :: Parser Pattern
 listPattern = PList <$> brackets (sepBy patternParser (symbol ","))

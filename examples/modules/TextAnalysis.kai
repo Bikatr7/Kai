@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // TextAnalysis.kai - A small reusable analysis module built from StringUtils and MathUtils.
 import StringUtils
 import MathUtils

@@ -163,6 +163,16 @@ spec = do
                   Right ty -> expectationFailure $ "Expected type error, got: " ++ show ty
               Left err -> expectationFailure $ "Parse error: " ++ show err
 
+          it "imports annotated polymorphically recursive functions" $ do
+            let program = "import PolyRec\nnestedLayers 2 [1, 2, 3]"
+            case parseProgram program of
+              Right ast -> do
+                typeResult <- typeCheckProgramWithDirIO ModuleSystem.loadModuleTypeEnvIO "test_modules" ast
+                typeResult `shouldBe` Right TInt
+                result <- evalProgramWithEnv Map.empty "test_modules" ast
+                result `shouldBe` Right (VInt 3)
+              Left err -> expectationFailure $ "Parse error: " ++ show err
+
         describe "Complex Module Usage" $ do
           it "uses imported functions in complex expressions" $ do
             let program = "import Math\nlet x = add 1 2\nlet y = multiply x 3\ny"
@@ -220,6 +230,11 @@ setupTestModules = do
   -- Recursive.kai
   writeFile "test_modules/Recursive.kai" $ unlines
     [ "letrec factorial = \\n -> if n == 0 then 1 else n * factorial (n - 1)"
+    ]
+
+  -- PolyRec.kai
+  writeFile "test_modules/PolyRec.kai" $ unlines
+    [ "letrec nestedLayers : Int -> [a] -> Int = \\depth -> \\xs -> if depth == 0 then length xs else 1 + nestedLayers (depth - 1) [xs]"
     ]
   
   -- Mutual.kai

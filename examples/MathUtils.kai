@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // MathUtils.kai - Numeric helpers built from Kai's core list functions.
 let sum : [Int] -> Int = \xs -> foldl (\acc -> \x -> acc + x) 0 xs
 let average : [Int] -> Int = \xs -> if null xs then 0 else sum xs / length xs

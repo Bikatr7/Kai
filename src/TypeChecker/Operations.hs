@@ -178,6 +178,69 @@ inferOperations infer env (WriteFile path content) = do
     let finalSubst = composeSubst s4 (composeSubst s3 s12)
     return (finalSubst, TUnit)
 
+inferOperations infer env (AppendFile path content) = do
+    (s12, pathType, contentType) <- inferTwo infer env path content
+    s3 <- lift $ unify pathType TString
+    s4 <- lift $ unify (applySubst s3 contentType) TString
+    let finalSubst = composeSubst s4 (composeSubst s3 s12)
+    return (finalSubst, TUnit)
+
+inferOperations infer env (FileExists path) = do
+    (s, pathType) <- infer env path
+    s' <- lift $ unify (applySubst s pathType) TString
+    let finalSubst = composeSubst s' s
+    return (finalSubst, TBool)
+
+inferOperations infer env (ListDirectory path) = do
+    (s, pathType) <- infer env path
+    s' <- lift $ unify (applySubst s pathType) TString
+    let finalSubst = composeSubst s' s
+    return (finalSubst, TList TString)
+
+inferOperations infer env (CreateDirectory path) = do
+    (s, pathType) <- infer env path
+    s' <- lift $ unify (applySubst s pathType) TString
+    let finalSubst = composeSubst s' s
+    return (finalSubst, TUnit)
+
+inferOperations infer env (RemoveDirectory path) = do
+    (s, pathType) <- infer env path
+    s' <- lift $ unify (applySubst s pathType) TString
+    let finalSubst = composeSubst s' s
+    return (finalSubst, TUnit)
+
+inferOperations infer env (SetCurrentDirectory path) = do
+    (s, pathType) <- infer env path
+    s' <- lift $ unify (applySubst s pathType) TString
+    let finalSubst = composeSubst s' s
+    return (finalSubst, TUnit)
+
+inferOperations infer env (System command) = do
+    (s, commandType) <- infer env command
+    s' <- lift $ unify (applySubst s commandType) TString
+    let finalSubst = composeSubst s' s
+    return (finalSubst, TInt)
+
+inferOperations infer env (GetEnv name) = do
+    (s, nameType) <- infer env name
+    s' <- lift $ unify (applySubst s nameType) TString
+    let finalSubst = composeSubst s' s
+    return (finalSubst, TMaybe TString)
+
+inferOperations infer env (SetEnv name value) = do
+    (s12, nameType, valueType) <- inferTwo infer env name value
+    s3 <- lift $ unify nameType TString
+    s4 <- lift $ unify (applySubst s3 valueType) TString
+    let finalSubst = composeSubst s4 (composeSubst s3 s12)
+    return (finalSubst, TUnit)
+
+inferOperations infer env (Exit codeExpr) = do
+    (s, codeType) <- infer env codeExpr
+    s' <- lift $ unify (applySubst s codeType) TInt
+    resultType <- freshTVar
+    let finalSubst = composeSubst s' s
+    return (finalSubst, applySubst finalSubst resultType)
+
 inferOperations infer env (Case scrutinee patterns) = do
   (s1, scrutType) <- infer env scrutinee
   resultType <- freshTVar
@@ -188,7 +251,7 @@ inferOperations infer env (Case scrutinee patterns) = do
   where
     inferPatterns _ _ _ [] = return (Map.empty, TUnit)
     inferPatterns env scrutType resultType ((pat, expr) : rest) = do
-      (patSubst, patEnv) <- inferPattern pat scrutType
+      (patSubst, patEnv) <- inferPattern env pat scrutType
       let appliedEnv = applySubstEnv patSubst env
       let newEnv = Map.union (applySubstEnv patSubst patEnv) appliedEnv
       (exprSubst, exprType) <- infer newEnv expr

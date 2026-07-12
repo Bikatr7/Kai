@@ -1,0 +1,36 @@
+// expect-type: TUnit
+// Expression-tree example with constructor functions, recursive transforms, and constructor patterns.
+data Expr = Lit Int | Add (Expr) (Expr) | Mul (Expr) (Expr) | Neg (Expr)
+let liftByFive = Add (Lit 5)
+let program = Mul (liftByFive (Lit 3)) (Neg (Lit 2))
+
+letrec render = \expr -> case expr of
+  Lit n -> toString n
+  | Add left right -> "(" ++ render left ++ " + " ++ render right ++ ")"
+  | Mul left right -> "(" ++ render left ++ " * " ++ render right ++ ")"
+  | Neg inner -> "(-" ++ render inner ++ ")"
+
+letrec simplify = \expr -> case expr of
+  Add (Lit 0) right -> simplify right
+  | Add left (Lit 0) -> simplify left
+  | Add left right -> Add (simplify left) (simplify right)
+  | Mul (Lit 1) right -> simplify right
+  | Mul left (Lit 1) -> simplify left
+  | Mul left right -> Mul (simplify left) (simplify right)
+  | Neg (Lit n) -> Lit (0 - n)
+  | Neg inner -> Neg (simplify inner)
+  | Lit n -> Lit n
+
+letrec eval = \expr -> case expr of
+  Lit n -> n
+  | Add left right -> eval left + eval right
+  | Mul left right -> eval left * eval right
+  | Neg inner -> 0 - eval inner
+
+let simplified = simplify program
+do {
+  print ("AST: " ++ show program);
+  print ("Pretty: " ++ render program);
+  print ("Simplified: " ++ render simplified);
+  print ("Value: " ++ toString (eval simplified))
+}

@@ -1,13 +1,13 @@
 # Kai Language Features
 
-**Version**: 0.0.4.3
-**Last Updated**: 2026-04-01
+**Version**: 0.0.4.4 (released 2026-07-11)
+**Last Updated**: 2026-07-11
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
 ---
 
-## Implemented Features (v0.0.4.3)
+## Implemented Features (v0.0.4.4)
 
 ### Core Language
 
@@ -18,10 +18,10 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Unit literal**: `()` for side-effect operations
 
 #### Operators
-- ✅ **Arithmetic**: `+`, `-`, `*`, `/` (integer division)
+- ✅ **Arithmetic**: `+`, `-`, `*`, `/` (integer division with checked 32-bit overflow)
 - ✅ **Unary minus**: `-expr` (proper prefix operator)
 - ✅ **Boolean logic**: `and`, `or` (right-associative), `not` (prefix)
-- ✅ **Comparison**: `==`, `<`, `>` (non-associative)
+- ✅ **Comparison**: `==`, `<`, `>` (non-associative); equality is structural for data and rejects callable/reference values
 - ✅ **String concatenation**: `++` (right-associative)
 - ✅ **List concatenation**: `++` (right-associative)
 - ✅ **Cons operator**: `::` (right-associative)
@@ -38,6 +38,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **First-class functions**: Pass as arguments, return from functions, store in variables
 - ✅ **Closures**: Lambda expressions capture lexical environment
 - ✅ **Recursion**: Via `letrec` bindings
+- ✅ **Fixed points**: `fix : (a -> a) -> a`, with safe rejection of unproductive self-forcing values
 
 #### Variable Bindings
 - ✅ **Let bindings**: `let x = value in body`
@@ -53,6 +54,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Records**: `{a = 1, b = true}` with field access (`record.field`)
 - ✅ **Maybe type**: `Just value | Nothing` for optional values
 - ✅ **Either type**: `Left error | Right value` for error propagation
+- ✅ **Custom data types**: `data TypeName a = Constructor ...` with partially applicable, first-class constructor functions
 
 #### Pattern Matching
 - ✅ **Variable patterns**: `x`
@@ -63,6 +65,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **List patterns**: `[]`, `x :: xs`
 - ✅ **Tuple patterns**: `(x, y, z)`
 - ✅ **Record patterns**: `{a = x, b = y}`
+- ✅ **Constructor patterns**: `Leaf x`, `Node left right`, and other user-defined variants
 
 ### Type System
 
@@ -70,9 +73,11 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Static type checking**: All types checked before evaluation
 - ✅ **Unification**: With occurs check to prevent infinite types
 - ✅ **Generalized let-polymorphism**: `let`, `letrec`, top-level, and imported definitions can be reused at multiple types
+- ✅ **Annotated polymorphic recursion**: Recursive bindings can recurse across different instantiations when given explicit type annotations
 - ✅ **Parametric function types**: Functions such as `\x -> x` infer type variables in their signatures
 - ✅ **Base types**: `Int`, `Bool`, `String`, `Unit`
 - ✅ **Composite types**: `[T]`, `(T1, T2, ...)`, `{field: T}`
+- ✅ **Custom algebraic types**: `Tree Int`, `Result String`, `Pair a b`
 - ✅ **Function types**: `T1 -> T2` (right-associative)
 - ✅ **Maybe types**: `Maybe T`
 - ✅ **Either types**: `Either T U`
@@ -109,14 +114,25 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ `fst : (a, b) -> a` - First element of pair
 - ✅ `snd : (a, b) -> b` - Second element of pair
 
-#### I/O Operations (5)
+#### I/O Operations (16)
 - ✅ `print : a -> Unit` - Print value and return unit
 - ✅ `input : String` - Read line from stdin
 - ✅ `readFile : String -> String` - Read entire file as string
 - ✅ `writeFile : String -> String -> Unit` - Write string to file (overwrite)
+- ✅ `appendFile : String -> String -> Unit` - Append string to a file
+- ✅ `fileExists : String -> Bool` - Check whether a file exists
+- ✅ `listDirectory : String -> [String]` - List directory entries
+- ✅ `createDirectory : String -> Unit` - Create a directory
+- ✅ `removeDirectory : String -> Unit` - Remove an empty directory
+- ✅ `getCurrentDirectory : String` - Return the current working directory
+- ✅ `setCurrentDirectory : String -> Unit` - Change the current working directory
+- ✅ `system : String -> Int` - Run a shell command and return its exit code
+- ✅ `getEnv : String -> Maybe String` - Read an environment variable
+- ✅ `setEnv : String -> String -> Unit` - Set an environment variable
+- ✅ `exit : Int -> a` - Exit the current program with an explicit code
 - ✅ `args : [String]` - Command-line arguments passed to script
 
-**Total Built-in Functions**: 27
+**Total Built-in Functions**: 39
 
 ### Module System
 
@@ -154,12 +170,14 @@ This document provides a comprehensive overview of all implemented and planned f
 ### CLI & Tooling
 
 - ✅ **Command-line interface**: `kai` executable
+- ✅ **Interactive REPL**: `kai`, `kai repl`, or `kai --repl`
 - ✅ **Expression evaluation**: `kai -e "expr"`
 - ✅ **File execution**: `kai script.kai [args...]`
 - ✅ **Shebang support**: `#!/usr/bin/env kai` for executable scripts
 - ✅ **Debug mode**: `kai --debug` for detailed output
 - ✅ **Help system**: `kai --help`
-- ✅ **Version display**: `Kai v0.0.4.3`
+- ✅ **REPL commands**: `:type`, `:load`, `:reload`, `:quit`
+- ✅ **Version display**: `Kai v0.0.4.4`
 - ✅ **Script arguments**: Pass arguments to scripts
 - ✅ **Failure exit codes**: Parse, type, and runtime failures return non-zero exit codes
 - ✅ **Clean output**: No debug noise by default
@@ -168,7 +186,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 ### Testing Infrastructure
 
-- ✅ **588 test examples**: Hspec, QuickCheck, script, CLI, stress, and example smoke coverage
+- ✅ **709 test examples**: Hspec, meaningful typed QuickCheck properties, asserted scripts, CLI, REPL, stress, and example smoke coverage
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
 - ✅ **Script tests**: `.kai` files with `// expect:` directives
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
@@ -183,7 +201,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **DEVELOPING.md**: Architecture, semantics, development workflow
 - ✅ **AGENTS.md**: Testing guidelines for AI assistants
 - ✅ **Website**: Yesod-based static site with examples
-- ✅ **Working examples**: 11 runnable scripts plus reusable module samples
+- ✅ **Working examples**: 12 runnable scripts plus reusable module samples
 
 ### Performance & Optimization
 
@@ -192,71 +210,48 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Parser benchmarks**: Expression size, nesting depth, lambda chains, list operations
 - ✅ **Evaluator benchmarks**: Arithmetic, boolean logic, conditionals, functions, recursion, data structures
 - ✅ **Type checker benchmarks**: Basic types, arithmetic, functions, polymorphism, recursion
-- ✅ **Regression detection**: Automated performance monitoring and alerting
-- ✅ **CI integration**: Benchmark suite integrated into automated testing
+- ✅ **Input validity gate**: Invalid benchmark programs abort instead of measuring parse/type/runtime failures
+- ✅ **CI integration**: Every benchmark runs for one iteration in automated testing
 
 #### Performance Optimizations
 - ✅ **Modular architecture**: Split monolithic components into focused submodules
-- ✅ **Record access optimization**: Inlined evaluation logic (3-5% improvement)
-- ✅ **Boolean operation fixes**: Corrected syntax usage (300x improvement)
+- ✅ **Record access optimization**: Inlined evaluation logic
+- ✅ **Boolean operation fixes**: Corrected syntax usage
 - ✅ **Pure recursion optimization**: Improved LetRec evaluation efficiency
 - ✅ **NFData instances**: Added for accurate benchmarking across all data types
 - ✅ **Memory profiling**: Comprehensive heap usage analysis
 
-#### Current Performance Metrics
-- **Most operations**: ~20-50ns (arithmetic, conditionals, functions)
-- **Record access**: ~1.93μs (optimized map lookups)
-- **Recursion**: ~6μs (appropriate for function call overhead)
-- **Boolean operations**: ~23ns (after syntax corrections)
-- **Parser**: ~40-600ns (linear scaling with complexity)
-- **Type checker**: ~20ns
+#### Performance Baselines
+Benchmark timings are machine- and build-specific. The suite validates its Kai
+inputs before measuring them; use same-machine before/after runs for regression
+decisions rather than historical numbers in documentation.
 
 ---
 
 ## Roadmap
 
-Kai is now past the point where a giant feature wishlist is useful. The next release should sharpen the language as a practical typed scripting tool, not broaden it in every possible direction.
+Kai is now past the point where a giant feature wishlist is useful. The next release after v0.0.4.4 should sharpen the language as a practical typed scripting tool, not broaden it in every possible direction.
 
-### v0.0.4.4 Release Focus
+### Post-v0.0.4.4 Priorities
 
-#### 1. Interactive Workflow
-- ⏳ **Interactive REPL**: Core read-eval-print loop
-- ⏳ **Multiline input**: Usable for real expressions and definitions
-- ⏳ **`:type`, `:load`, `:reload`**: Enough commands to make exploration practical
-- ⏳ **History and completion**: Nice-to-have if the core REPL lands cleanly
+#### 1. REPL Polish
+- ⏳ **History and completion**: The core REPL works; now it needs comfort features
+- ⏳ **Better interactive diagnostics**: Friendlier parse/type/runtime feedback in the session loop
 
-#### 2. Data Modeling and Pattern Matching
-- ⏳ **Custom data types**: User-defined algebraic data types
-- ⏳ **Constructor patterns**: Matching on user-defined variants
-- ⏳ **Tuple destructuring in `case`**: Make existing tuples less awkward
-- ⏳ **Simple guards and as-patterns**: Only if they keep the implementation coherent
+#### 2. Stdlib Depth
+- ⏳ **Line-oriented file helpers**: A practical follow-up to `readFile`/`writeFile`/`appendFile`
+- ⏳ **JSON and HTTP**: Valuable once the local scripting story is rounded out
+- ⏳ **Small utility gaps**: A few missing math/list/string helpers that matter in scripts
 
-#### 3. Essential Scripting Stdlib
-- ⏳ **File additions**: `appendFile`, `fileExists`, line-oriented helpers
-- ⏳ **Directory operations**: `listDirectory`, `createDirectory`, `removeDirectory`, current-directory helpers
-- ⏳ **Process and environment access**: `system`, `getEnv`, `setEnv`, explicit exit helpers
-- ⏳ **Small stdlib gaps**: A few missing math/list/string helpers that matter in scripts
+#### 3. Tooling and Distribution
+- ⏳ **Formatter and linter**: Useful once the surface syntax is more settled
+- ⏳ **Language server / IDE support**: Valuable after the interactive workflow matures
+- ⏳ **Package manager**: Important later, but still premature before the stdlib and module story stabilize
 
-#### 4. Stretch Work If v0.0.4.4 Lands Early
-- ⏳ **Better parse and type errors**: Better wording and code context
-- ⏳ **Function composition and pipeline operators**: Worth adding once REPL and scripting flow are stronger
-- ⏳ **More ergonomic pattern forms**: Only after ADTs are solid
-
-### Deferred Until After v0.0.4.4
-
-#### Tooling and Distribution
-- ⏳ **Formatter and linter**: Useful, but not before the interactive workflow is solid
-- ⏳ **Language server / IDE support**: Valuable after the surface syntax settles
-- ⏳ **Package manager**: Important later, but premature before the module and stdlib story is more mature
-
-#### Networking and Richer I/O
-- ⏳ **HTTP and JSON support**: Desirable, but behind local file/process scripting basics
-- ⏳ **Mutable references**: Only if the scripting story proves it needs them
-
-#### Advanced Type System and Syntax
-- ⏳ **Polymorphic recursion**: Explicitly not a near-term priority
-- ⏳ **Type classes, row polymorphism, GADTs, rank-N types**: Out of scope for the next release
-- ⏳ **List comprehensions, ranges, `where`, multi-way `if`**: Backlog ideas, not core release goals
+#### 4. Longer-Term Type/System Work
+- ⏳ **Full polymorphic recursion inference/ergonomics**: Explicitly not the next priority
+- ⏳ **Type classes, row polymorphism, GADTs, rank-N types**: Out of scope for the near term
+- ⏳ **List comprehensions, ranges, `where`, multi-way `if`**: Backlog ideas, not current release goals
 
 #### Compiler and Runtime Work
 - ⏳ **Tail call optimization and strictness controls**: Worth revisiting later
@@ -267,20 +262,19 @@ Kai is now past the point where a giant feature wishlist is useful. The next rel
 ## Current Limitations
 
 ### Language Limitations
-- ❌ **No REPL**: Command-line execution only
-- ❌ **No custom data types**: Only built-in types available
+- ❌ **Minimal REPL ergonomics**: No history, completion, or editor integration yet
 - ❌ **Limited pattern matching**: No guards, no as-patterns
 - ❌ **Wildcard restrictions**: `_` not allowed in `letrec` bindings (cannot be meaningfully recursive)
-- ❌ **No polymorphic recursion**: Type inference limitations
+- ❌ **Polymorphic recursion still needs explicit annotations**: Unannotated recursive bindings remain monomorphic
 - ❌ **No error recovery**: One parse/type error stops execution
 - ❌ **Integer-only arithmetic**: No floating-point numbers
 - ❌ **Limited escape sequences**: Only `\"`, `\\`, `\n` supported
 - ❌ **No regex support**: String operations are basic
 
 ### I/O Limitations
-- ❌ **Basic file I/O**: No append, directory operations
+- ❌ **No line-oriented file helpers**: Core file and directory primitives exist, but higher-level helpers are still missing
 - ❌ **No network operations**: No HTTP, sockets, etc.
-- ❌ **No process control**: Can't spawn processes or run commands
+- ❌ **Basic process control only**: `system` exists, but there is no richer subprocess API
 - ❌ **No concurrent I/O**: Single-threaded only
 
 ### Standard Library Limitations
@@ -302,24 +296,38 @@ Kai is now past the point where a giant feature wishlist is useful. The next rel
 
 ## Implementation Statistics
 
-- **Lines of Haskell**: ~4,200 (estimated, including benchmarks)
-- **Test Coverage**: 588 examples, 100% passing
+- **Lines of Haskell**: ~5,800 across `src/` and `benchmarks/`
+- **Test Coverage**: 709 passing examples; no line-coverage percentage is claimed
 - **HLint Warnings**: 0
 - **Core Types**: 8 (Int, Bool, String, Unit, List, Tuple, Record, Function)
-- **Built-in Functions**: 27
-- **Reserved Keywords**: 45+
+- **Built-in Functions**: 39
+- **Reserved Keywords**: 66
 - **Operator Precedence Levels**: 11
-- **Example Scripts**: 11 runnable scripts plus reusable module samples
+- **Example Scripts**: 12 runnable scripts plus reusable module samples
 - **Documentation**: 5 comprehensive markdown files
 - **Benchmark Suites**: 3 (Parser, Evaluator, TypeChecker)
 - **Performance Optimizations**: Record access inlining, boolean syntax fixes
-- **Architecture**: Modular design with 28 focused submodules
+- **Architecture**: Modular design with focused submodules across parser, type checker, evaluator, REPL, and module loading
 
 ---
 
 ## Version History
 
-### v0.0.4.3 (Current - 2026-04-01)
+### v0.0.4.4 (2026-07-11)
+- Added an interactive REPL with multiline input plus `:type`, `:load`, `:reload`, and `:quit`
+- Added custom algebraic data types with constructor functions and constructor patterns
+- Added scripting stdlib builtins for file append/existence, directory operations, current-directory management, process execution, environment access, and explicit exit codes
+- Added explicitly annotated polymorphic recursion for recursive bindings, plus CLI/REPL/module regressions around it
+- Added a typed `fix` combinator and removed cyclic substitutions from the occurs check
+- Fixed composite unification, constructor-pattern parsing, builtin precedence, ADT equality, and left-to-right IO error propagation
+- Made constructor functions work consistently in ordinary application, `map`, `foldl`, and `fix`
+- Enforced signed 32-bit literals, conversions, and checked arithmetic overflow
+- Made script assertions mandatory and made invalid benchmark inputs fail CI validation
+- Made releases explicit and gated, and made static-site export verify that it owns the server response
+- Added direct REPL coverage, custom data type coverage, and real IO-stdlib regression tests
+- Added new ADT example coverage and refreshed file I/O examples around the new stdlib helpers
+
+### v0.0.4.3 (2026-04-01)
 - Added generalized let-polymorphism for `let`, `letrec`, top-level, and imported definitions
 - Fixed CLI failure exit codes for parse, type, and runtime errors
 - Added shebang parsing support for script files
@@ -331,7 +339,7 @@ Kai is now past the point where a giant feature wishlist is useful. The next rel
 - Added smoke tests for every runnable example and sync checks for duplicate example modules
 
 ### v0.0.4.2 (2025-11-06)
-- **Performance optimizations**: Record access inlining (3-5% improvement), boolean syntax corrections (300x faster)
+- **Performance optimizations**: Record access inlining and boolean syntax corrections
 - **Modular architecture**: Split Evaluator, Parser, and TypeChecker into focused submodules
 - **Comprehensive benchmarking**: Added Criterion speed benchmarks and Weigh memory profiling
 - **Benchmark automation**: Performance regression detection and CI integration

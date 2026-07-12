@@ -23,25 +23,25 @@ typeCheckBenchmarks = bgroup "Type Checker Benchmarks"
   , bgroup "Functions"
       [ bench "Identity function" $ nf (\() -> typeCheckExpr "\\x -> x") ()
       , bench "Simple lambda" $ nf (\() -> typeCheckExpr "\\x -> x + 1") ()
-      , bench "Higher order" $ nf (\() -> typeCheckExpr "\\f x -> f (f x)") ()
-      , bench "Curried function" $ nf (\() -> typeCheckExpr "\\x y -> x + y") ()
+      , bench "Higher order" $ nf (\() -> typeCheckExpr "\\f -> \\x -> f (f x)") ()
+      , bench "Curried function" $ nf (\() -> typeCheckExpr "\\x -> \\y -> x + y") ()
       ]
 
   , bgroup "Polymorphism"
       [ bench "Generic identity" $ nf (\() -> typeCheckExpr "let id = \\x -> x in id 5") ()
-      , bench "Generic map" $ nf (\() -> typeCheckExpr "let map = \\f l -> case l of [] -> [] ; (h:t) -> f h : map f t in map (\\x -> x * 2) [1,2,3]") ()
+      , bench "Generic map" $ nf (\() -> typeCheckExpr "let applyMap = \\f -> \\xs -> map f xs in applyMap (\\x -> x * 2) [1,2,3]") ()
       ]
 
   , bgroup "Recursion"
-      [ bench "Simple recursion" $ nf (\() -> typeCheckExpr "letrec sum = \\n -> if n <= 0 then 0 else n + sum (n - 1) in sum") ()
+      [ bench "Simple recursion" $ nf (\() -> typeCheckExpr "letrec sum = \\n -> if n < 1 then 0 else n + sum (n - 1) in sum") ()
       , bench "Fibonacci" $ nf (\() -> typeCheckExpr "letrec fib = \\n -> if n < 2 then n else fib (n - 1) + fib (n - 2) in fib") ()
-      , bench "Factorial" $ nf (\() -> typeCheckExpr "letrec fact = \\n -> if n <= 1 then 1 else n * fact (n - 1) in fact") ()
+      , bench "Factorial" $ nf (\() -> typeCheckExpr "letrec fact = \\n -> if n < 2 then 1 else n * fact (n - 1) in fact") ()
       ]
 
   , bgroup "Data Structures"
       [ bench "List literal" $ nf (\() -> typeCheckExpr "[1,2,3,4,5]") ()
       , bench "Empty list" $ nf (\() -> typeCheckExpr "[]") ()
-      , bench "Record literal" $ nf (\() -> typeCheckExpr "{x: 1, y: \"hello\"}") ()
+      , bench "Record literal" $ nf (\() -> typeCheckExpr "{x = 1, y = \"hello\"}") ()
       , bench "Tuple literal" $ nf (\() -> typeCheckExpr "(1, \"hello\", true)") ()
       ]
 
@@ -59,18 +59,18 @@ typeCheckBenchmarks = bgroup "Type Checker Benchmarks"
       ]
 
   , bgroup "Type Annotations"
-      [ bench "Explicit annotation" $ nf (\() -> typeCheckExpr "(\\x -> x) : Int -> Int") ()
+      [ bench "Explicit annotation" $ nf (\() -> typeCheckExpr "((\\x -> x) : Int -> Int)") ()
       , bench "Annotated let" $ nf (\() -> typeCheckExpr "let f : Int -> Int = \\x -> x in f 5") ()
       ]
   ]
 
 -- Helper functions
-typeCheckExpr :: String -> Either String Type
+typeCheckExpr :: String -> Type
 typeCheckExpr input = case parseExpr input of
-  Left err -> Left (show err)
+  Left err -> error $ "Invalid type-check benchmark expression: " ++ show err
   Right expr -> case typeCheck expr of
-    Left err -> Left (show err)
-    Right typ -> Right typ
+    Left err -> error $ "Type-check benchmark failed: " ++ show err
+    Right typ -> typ
 
 manyLets :: Int -> String
 manyLets 0 = "42"
@@ -83,7 +83,7 @@ deepNesting n = "if true then " ++ deepNesting (n-1) ++ " else 0"
 complexRecursive :: String
 complexRecursive = unlines
   [ "letrec fib = \\n -> if n < 2 then n else fib (n - 1) + fib (n - 2) in"
-  , "letrec fact = \\n -> if n <= 1 then 1 else n * fact (n - 1) in"
-  , "letrec gcd = \\a b -> if b == 0 then a else gcd b (a % b) in"
-  , "fib 8 + fact 5 + gcd 48 18"
+  , "letrec fact = \\n -> if n < 2 then 1 else n * fact (n - 1) in"
+  , "letrec addDown = \\a -> \\b -> if b < 1 then a else addDown (a + 1) (b - 1) in"
+  , "fib 8 + fact 5 + addDown 48 18"
   ]

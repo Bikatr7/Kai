@@ -20,6 +20,7 @@ infer env expr = case expr of
   UnitLit -> inferLiteral env expr
   Input -> inferLiteral env expr
   Args -> inferLiteral env expr
+  GetCurrentDirectory -> inferLiteral env expr
   Var x -> inferVariable env expr
 
   Add _ _ -> inferArithmetic infer env expr
@@ -40,6 +41,7 @@ infer env expr = case expr of
 
   Lambda _ _ _ -> inferFunctions infer env expr
   App _ _ -> inferFunctions infer env expr
+  Fix _ -> inferFunctions infer env expr
 
   Let _ _ _ _ -> inferBindings infer env expr
   LetRec _ _ _ _ -> inferBindings infer env expr

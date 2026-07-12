@@ -90,7 +90,7 @@ spec = describe "CLI" $ do
           output `shouldContain` "wildcard works\n"
 
   it "runs nested record-access scripts through the real CLI path" $ do
-    withTempKaiFile "let r = {outer = {inner = 7}, ok = true}\nprint r.outer.inner\n" $ \path -> do
+    withTempKaiFile "let r = {outer = {inner = 7}, ok = true}\nprint (r.outer.inner)\n" $ \path -> do
       (exitCode, output) <- captureOutput $ runCLI [path]
       exitCode `shouldBe` ExitSuccess
       output `shouldContain` "7\n"
@@ -101,3 +101,12 @@ spec = describe "CLI" $ do
       exitCode `shouldBe` ExitSuccess
       output `shouldContain` "hello from block\n"
       output `shouldContain` "7\n"
+
+  it "runs annotated top-level letrec files through the real CLI path" $ do
+    withTempKaiFile
+      "letrec nestedLayers : Int -> [a] -> Int = \\depth -> \\xs -> if depth == 0 then length xs else 1 + nestedLayers (depth - 1) [xs]\n\
+      \print (nestedLayers 2 [1, 2, 3])\n"
+      $ \path -> do
+          (exitCode, output) <- captureOutput $ runCLI [path]
+          exitCode `shouldBe` ExitSuccess
+          output `shouldContain` "3\n"

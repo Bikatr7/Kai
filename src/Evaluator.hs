@@ -13,17 +13,12 @@ module Evaluator (
 import ModuleSystem (loadModule, ModuleInfo(..))
 
 import Syntax
+import DataDeclarations (dataConstructorsValueEnv)
+import TopLevelRecursion (collectConsecutiveLetrecs, dependencyOrderedLetrecGroups)
 import qualified Data.Map as Map
 import Data.IORef
-import System.IO (getLine, readFile, writeFile)
-import Control.Monad (foldM)
-import Control.Exception (try, SomeException)
-import Data.Char (isSpace)
-import Data.Either (rights)
-import Data.List.Split (splitOn)
-import Data.List (intercalate)
 import Evaluator.Types
-import Evaluator.Helpers (parseIntString, showValue)
+import Evaluator.Helpers (bindResult, traverseResults)
 import Evaluator.Literals
 import Evaluator.Arithmetic
 import Evaluator.BooleanOps
@@ -70,6 +65,7 @@ evalPureWithEnv env expr = case expr of
   UnitLit -> evalLiteral expr
   Input -> evalIOPure evalPureWithEnv env expr
   Args -> evalIOPure evalPureWithEnv env expr
+  GetCurrentDirectory -> evalIOPure evalPureWithEnv env expr
   Var x -> case Map.lookup x env of
     Just v -> Right v
     Nothing -> Left $ UnboundVariable x
@@ -88,6 +84,20 @@ evalPureWithEnv env expr = case expr of
   Seq _ _ -> evalControlFlow evalPureWithEnv env expr
   Lambda _ _ _ -> evalFunctions evalPureWithEnv env expr
   App _ _ -> evalFunctions evalPureWithEnv env expr
+  Fix e -> do
+    functionValue <- evalPureWithEnv env e
+    if isCallableValue functionValue
+      then case applyCallable evalPureWithEnv functionValue fixPlaceholder of
+          Left err -> Left err
+          Right probeValue
+            | containsFixPlaceholder probeValue -> Left uninitializedFixError
+            | otherwise ->
+                let fixedResult = applyCallable evalPureWithEnv functionValue fixedValue
+                    fixedValue = case fixedResult of
+                      Right value -> value
+                      Left _ -> fixPlaceholder
+                in fixedResult
+      else Left $ TypeError "Fix expects a function"
   Let _ _ _ _ -> evalBindings evalPureWithEnv env expr
   LetRec _ _ _ _ -> evalBindings evalPureWithEnv env expr
   TypeAnnotation _ _ -> evalBindings evalPureWithEnv env expr
@@ -131,12 +141,36 @@ evalPureWithEnv env expr = case expr of
   Print _ -> evalIOPure evalPureWithEnv env expr
   ReadFile _ -> evalIOPure evalPureWithEnv env expr
   WriteFile _ _ -> evalIOPure evalPureWithEnv env expr
+  AppendFile _ _ -> evalIOPure evalPureWithEnv env expr
+  FileExists _ -> evalIOPure evalPureWithEnv env expr
+  ListDirectory _ -> evalIOPure evalPureWithEnv env expr
+  CreateDirectory _ -> evalIOPure evalPureWithEnv env expr
+  RemoveDirectory _ -> evalIOPure evalPureWithEnv env expr
+  SetCurrentDirectory _ -> evalIOPure evalPureWithEnv env expr
+  System _ -> evalIOPure evalPureWithEnv env expr
+  GetEnv _ -> evalIOPure evalPureWithEnv env expr
+  SetEnv _ _ -> evalIOPure evalPureWithEnv env expr
+  Exit _ -> evalIOPure evalPureWithEnv env expr
   Case _ _ -> evalPatterns evalPureWithEnv env expr
 
 evalWithEnv :: Env -> Expr -> IO (Either RuntimeError Value)
 evalWithEnv env expr = case expr of
   Input -> evalIOWithEnv evalWithEnv env expr
   Args -> evalIOWithEnv evalWithEnv env expr
+  Print _ -> evalIOWithEnv evalWithEnv env expr
+  ReadFile _ -> evalIOWithEnv evalWithEnv env expr
+  WriteFile _ _ -> evalIOWithEnv evalWithEnv env expr
+  AppendFile _ _ -> evalIOWithEnv evalWithEnv env expr
+  FileExists _ -> evalIOWithEnv evalWithEnv env expr
+  ListDirectory _ -> evalIOWithEnv evalWithEnv env expr
+  CreateDirectory _ -> evalIOWithEnv evalWithEnv env expr
+  RemoveDirectory _ -> evalIOWithEnv evalWithEnv env expr
+  GetCurrentDirectory -> evalIOWithEnv evalWithEnv env expr
+  SetCurrentDirectory _ -> evalIOWithEnv evalWithEnv env expr
+  System _ -> evalIOWithEnv evalWithEnv env expr
+  GetEnv _ -> evalIOWithEnv evalWithEnv env expr
+  SetEnv _ _ -> evalIOWithEnv evalWithEnv env expr
+  Exit _ -> evalIOWithEnv evalWithEnv env expr
   Var x -> do
     let lookupResult = Map.lookup x env
     case lookupResult of
@@ -147,22 +181,21 @@ evalWithEnv env expr = case expr of
       Nothing -> return $ Left $ UnboundVariable x
   Lambda _ _ _ -> evalFunctionsIO evalWithEnv env expr
   App _ _ -> evalFunctionsIO evalWithEnv env expr
-  Fix e -> do
-    fResult <- evalWithEnv env e
-    case fResult of
-      Right fVal -> case fVal of
-        VFun param body closure -> do
-          recRef <- newIORef (error "fix not initialized")
-          let recVal = VRef recRef
-          let env' = Map.insert param recVal closure
-          result <- evalWithEnv env' body
+  Fix e ->
+    bindResult (evalWithEnv env e) $ \functionValue ->
+      bindResult (resolveCallableIO functionValue) $ \callable ->
+        if isCallableValue callable
+        then do
+          recRef <- newIORef fixPlaceholder
+          result <- applyCallableIO evalWithEnv callable (VRef recRef)
           case result of
-            Right finalVal -> do
-              writeIORef recRef finalVal
-              return $ Right finalVal
+            Right finalVal
+              | containsFixPlaceholder finalVal -> return $ Left uninitializedFixError
+              | otherwise -> do
+                  writeIORef recRef finalVal
+                  return $ Right finalVal
             Left err -> return $ Left err
-        _ -> return $ Left $ TypeError "Fix expects a function"
-      Left err -> return $ Left err
+        else return $ Left $ TypeError "Fix expects a function"
   LetRec var _maybeType val body -> do
     recValueRef <- newIORef (VFun "_placeholder" (IntLit 0) Map.empty)
     let env' = Map.insert var (VRef recValueRef) env
@@ -172,47 +205,6 @@ evalWithEnv env expr = case expr of
       Right recValue -> do
         writeIORef recValueRef recValue
         evalWithEnv env' body
-  Print e -> do
-    let result = evalPureWithEnv env e
-    case result of
-      Left err -> return $ Left err
-      Right v -> do
-        case v of
-          VInt n -> print n
-          VBool b -> print b
-          VStr s -> putStrLn s
-          VUnit -> putStrLn "()"
-          VFun {} -> putStrLn "<function>"
-          VJust val -> putStrLn $ "Just " ++ showValue val
-          VNothing -> putStrLn "Nothing"
-          VLeft val -> putStrLn $ "Left " ++ showValue val
-          VRight val -> putStrLn $ "Right " ++ showValue val
-          VList l -> putStrLn $ showValue (VList l)
-          VRecord r -> putStrLn $ showValue (VRecord r)
-        return $ Right VUnit
-  ReadFile path -> do
-    let pathResult = evalPureWithEnv env path
-    case pathResult of
-        Left err -> return $ Left err
-        Right (VStr p) -> do
-          result <- try (readFile p) :: IO (Either SomeException String)
-          case result of
-            Right contents -> return $ Right $ VStr contents
-            Left _ -> return $ Left $ TypeError $ "readFile: could not read file '" ++ p ++ "'"
-        Right _ -> return $ Left $ TypeError "readFile: path must be a string"
-  WriteFile path content -> do
-    let pathResult = evalPureWithEnv env path
-    let contentResult = evalPureWithEnv env content
-    case (pathResult, contentResult) of
-        (Left err, _) -> return $ Left err
-        (_, Left err) -> return $ Left err
-        (Right (VStr p), Right (VStr c)) -> do
-          result <- try (writeFile p c) :: IO (Either SomeException ())
-          case result of
-            Right _ -> return $ Right VUnit
-            Left _ -> return $ Left $ TypeError $ "writeFile: could not write to file '" ++ p ++ "'"
-        (Right (VStr _), Right _) -> return $ Left $ TypeError "writeFile: content must be a string"
-        (Right _, Right _) -> return $ Left $ TypeError "writeFile: path must be a string"
   Add _ _ -> evalArithmeticIO evalWithEnv env expr
   Sub _ _ -> evalArithmeticIO evalWithEnv env expr
   Mul _ _ -> evalArithmeticIO evalWithEnv env expr
@@ -234,14 +226,7 @@ evalWithEnv env expr = case expr of
   Tail _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
   Null _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
   RecordLit _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
-  RecordAccess r field -> do
-    result <- evalWithEnv env r
-    case result of
-      Right (VRecord fields) -> return $ case Map.lookup field fields of
-        Just val -> Right val
-        Nothing -> Left $ UnboundVariable field
-      Right _ -> return $ Left $ TypeError "Cannot access field on non-record value"
-      Left err -> return $ Left err
+  RecordAccess _ _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
   TupleLit _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
   Fst _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
   Snd _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
@@ -268,6 +253,25 @@ evalWithEnv env expr = case expr of
   ERight _ -> ConvIO.evalConversionsIO evalWithEnv env expr
   Case _ _ -> PatIO.evalPatternsIO evalWithEnv env expr
   _ -> return $ evalPureWithEnv env expr
+
+fixPlaceholder :: Value
+fixPlaceholder = VData "\0kai-fix-uninitialized" []
+
+uninitializedFixError :: RuntimeError
+uninitializedFixError = TypeError "Fixpoint forced before initialization"
+
+containsFixPlaceholder :: Value -> Bool
+containsFixPlaceholder value = case value of
+  VData name values -> name == "\0kai-fix-uninitialized" || any containsFixPlaceholder values
+  VConstructor _ _ values -> any containsFixPlaceholder values
+  VJust inner -> containsFixPlaceholder inner
+  VLeft inner -> containsFixPlaceholder inner
+  VRight inner -> containsFixPlaceholder inner
+  VList values -> any containsFixPlaceholder values
+  VRecord fields -> any containsFixPlaceholder (Map.elems fields)
+  VTuple values -> any containsFixPlaceholder values
+  VRef _ -> True
+  _ -> False
 
 evalProgram :: Program -> IO (Either RuntimeError Value)
 evalProgram = evalProgramWithEnv Map.empty "."
@@ -310,11 +314,14 @@ evalProgramWithEnv env currentDir (Program topLevels) = do
             _ -> return $ Left $ TypeError "Expressions must be at the end of the program"
     go env (TLImport _ : rest) = go env rest
     go env (TLExport _ : rest) = go env rest
+    go env (TLData _ _ constructors : rest) = do
+      let env' = Map.union (dataConstructorsValueEnv constructors) env
+      go env' rest
     go env (TLDef var maybeType expr : rest) = do
       case expr of
         LetRec _ _ _ _ -> do
           let (letrecs, remaining) = collectConsecutiveLetrecs (TLDef var maybeType expr : rest)
-          processMutualRecursion env letrecs remaining
+          processLetrecGroups env (dependencyOrderedLetrecGroups letrecs) remaining
         _ -> do
           result <- evalWithEnv env expr
           case result of
@@ -322,46 +329,34 @@ evalProgramWithEnv env currentDir (Program topLevels) = do
             Right val -> do
               let env' = Map.insert var val env
               go env' rest
-    
-    collectConsecutiveLetrecs :: [TopLevel] -> ([TopLevel], [TopLevel])
-    collectConsecutiveLetrecs [] = ([], [])
-    collectConsecutiveLetrecs (TLDef var maybeType expr : rest) =
-      case expr of
-        LetRec _ _ _ _ ->
-          let (moreLetrecs, remaining) = collectConsecutiveLetrecs rest
-          in (TLDef var maybeType expr : moreLetrecs, remaining)
-        _ -> ([], TLDef var maybeType expr : rest)
-    collectConsecutiveLetrecs (other : rest) = ([], other : rest)
-    
-    processMutualRecursion :: Env -> [TopLevel] -> [TopLevel] -> IO (Either RuntimeError Value)
-    processMutualRecursion env letrecs remaining = do
+
+    processLetrecGroups :: Env -> [[TopLevel]] -> [TopLevel] -> IO (Either RuntimeError Value)
+    processLetrecGroups env [] remaining = go env remaining
+    processLetrecGroups env (group : groups) remaining = do
+      groupResult <- processMutualRecursion env group
+      case groupResult of
+        Left err -> return $ Left err
+        Right newEnv -> processLetrecGroups newEnv groups remaining
+
+    processMutualRecursion :: Env -> [TopLevel] -> IO (Either RuntimeError Env)
+    processMutualRecursion env letrecs = do
       refs <- mapM (\_ -> newIORef (VFun "_placeholder" (IntLit 0) Map.empty)) letrecs
       let refMap = Map.fromList $ zipWith (\topLevel ref ->
             case topLevel of
               TLDef var _ _ -> (var, VRef ref)
               _ -> error "processMutualRecursion: expected TLDef") letrecs refs
       let mutualEnv = Map.union refMap env
-      results <- mapM (\topLevel ->
-        case topLevel of
-          TLDef var _ expr ->
-            case expr of
+      let evalLetrec topLevel = case topLevel of
+            TLDef _ _ expr -> case expr of
               LetRec _ _ recVal _ -> evalWithEnv mutualEnv recVal
               _ -> return $ Left $ TypeError $ "Expected LetRec expression, got: " ++ show expr
-          _ -> return $ Left $ TypeError "Expected TLDef with LetRec") letrecs
-      let findError = foldr (\result acc -> case result of Left err -> Left err; Right _ -> acc) (Right ()) results
-      case findError of
-        Left err -> return $ Left err
-        Right _ -> do
-          let recValues = rights results
+            _ -> return $ Left $ TypeError "Expected TLDef with LetRec"
+      bindResult (traverseResults evalLetrec letrecs) $ \recValues -> do
           let checkAndUpdate (recValue, ref) =
                 case recValue of
                   VFun _ _ _ -> do
                     writeIORef ref recValue
                     return $ Right ()
                   _ -> return $ Left $ TypeError ("LetRec value must be a function, got: " ++ show recValue)
-          updateResults <- mapM checkAndUpdate (zip recValues refs)
-          let checkUpdates = foldr (\result acc -> case result of Left err -> Left err; Right _ -> acc) (Right ()) updateResults
-          case checkUpdates of
-            Left err -> return $ Left err
-            Right _ -> do
-              go mutualEnv remaining
+          bindResult (traverseResults checkAndUpdate (zip recValues refs)) $ \_ ->
+            return $ Right mutualEnv

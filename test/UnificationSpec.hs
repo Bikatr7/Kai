@@ -29,6 +29,34 @@ spec = describe "Unification Algorithm Edge Cases" $ do
         Right _ -> True `shouldBe` True
         Left err -> expectationFailure $ "Should allow valid recursion pattern: " ++ show err
 
+    it "rejects a recursive binding whose result contains its own type" $ do
+      case parseAndInferType "letrec f = \\x -> f in f" of
+        Left (InfiniteType recursiveVar (TFun _ (TVar resultVar))) ->
+          resultVar `shouldBe` recursiveVar
+        Left err -> expectationFailure $ "Expected InfiniteType, got: " ++ show err
+        Right ty -> expectationFailure $ "Should fail with infinite type, got: " ++ show ty
+
+  describe "Composite Type Unification" $ do
+    it "threads substitutions across custom type arguments" $ do
+      let repeated = TCustom "Pair" [TVar "a", TVar "a"]
+      let incompatible = TCustom "Pair" [TInt, TBool]
+      unify repeated incompatible `shouldBe` Left (UnificationError TInt TBool)
+
+    it "threads substitutions across record fields" $ do
+      let repeated = TRecord (Map.fromList [("first", TVar "a"), ("second", TVar "a")])
+      let incompatible = TRecord (Map.fromList [("first", TInt), ("second", TBool)])
+      unify repeated incompatible `shouldBe` Left (UnificationError TInt TBool)
+
+    it "threads substitutions across tuple elements" $ do
+      let repeated = TTuple [TVar "a", TVar "a"]
+      let incompatible = TTuple [TInt, TBool]
+      unify repeated incompatible `shouldBe` Left (UnificationError TInt TBool)
+
+    it "preserves a compatible shared constraint across all components" $ do
+      let repeated = TTuple [TVar "a", TRecord (Map.singleton "value" (TVar "a"))]
+      let compatible = TTuple [TInt, TRecord (Map.singleton "value" TInt)]
+      unify repeated compatible `shouldBe` Right (Map.singleton "a" TInt)
+
   describe "Complex Unification Scenarios" $ do
     it "unifies nested function types" $ do
       case parseAndInferType "(\\f -> f (\\x -> x)) (\\g -> g 42)" of

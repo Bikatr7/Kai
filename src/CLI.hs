@@ -6,6 +6,7 @@ module CLI (
 import Syntax
 import TypeChecker (typeCheck, typeCheckProgramWithDirIO)
 import Evaluator
+import REPL (runREPL)
 import Parser
 import Evaluator.Types (Value(..))
 import System.Exit (ExitCode(..))
@@ -25,7 +26,9 @@ usageText :: String
 usageText = unlines
   [ versionString
   , "Usage:"
-  , "  kai                          # show help and examples"
+  , "  kai                          # start the REPL"
+  , "  kai repl [args...]           # start the REPL with args available via args"
+  , "  kai --repl [args...]         # same as above"
   , "  kai FILE.kai [args...]       # run a script file with optional arguments"
   , "  kai --debug FILE.kai [args...] # run a script file with debug output"
   , "  kai -e 'EXPR'                # evaluate a one-liner expression"
@@ -46,6 +49,11 @@ reportFailure message = do
   putStrLn message
   return (ExitFailure 1)
 
+runtimeToExitCode :: RuntimeError -> IO ExitCode
+runtimeToExitCode (ExitRequested 0) = return ExitSuccess
+runtimeToExitCode (ExitRequested code) = return $ ExitFailure code
+runtimeToExitCode err = reportFailure $ "Runtime error: " ++ show err
+
 runExpression :: Bool -> String -> IO ExitCode
 runExpression debug input = do
   when debug $ putStrLn $ "\nExpression: " ++ input
@@ -63,7 +71,7 @@ runExpression debug input = do
             when debug $ putStr "Evaluation: "
             result <- eval expr
             case result of
-              Left err -> reportFailure $ "Runtime error: " ++ show err
+              Left err -> runtimeToExitCode err
               Right val -> do
                 when debug $ print val
                 return ExitSuccess
@@ -80,7 +88,7 @@ runProgram debug currentDir scriptArgs program = do
       when debug $ putStr "Evaluation: "
       result <- evalProgramWithEnv (cliArgsEnv scriptArgs) currentDir program
       case result of
-        Left err -> reportFailure $ "Runtime error: " ++ show err
+        Left err -> runtimeToExitCode err
         Right val -> do
           when debug $ print val
           return ExitSuccess
@@ -116,7 +124,7 @@ runSingleExpression debug scriptArgs expr = do
       when debug $ putStr "Evaluation: "
       result <- evalWithEnv (cliArgsEnv scriptArgs) expr
       case result of
-        Left err -> reportFailure $ "Runtime error: " ++ show err
+        Left err -> runtimeToExitCode err
         Right val -> do
           when debug $ print val
           return ExitSuccess
@@ -131,7 +139,7 @@ runStatements debug scriptArgs stmts =
       let argsEnv = cliArgsEnv scriptArgs
       result <- evalStatements argsEnv stmts
       case result of
-        Left err -> reportFailure $ "Runtime error: " ++ show err
+        Left err -> runtimeToExitCode err
         Right val -> do
           let expr = last stmts
           when debug $ putStrLn $ "AST: " ++ show expr
@@ -158,10 +166,13 @@ runCLI args =
   case args of
     ["--help"] -> putStrLn usageText >> return ExitSuccess
     ["-h"] -> putStrLn usageText >> return ExitSuccess
+    ["--debug"] -> runREPL True []
+    ("--debug" : "repl" : scriptArgs) -> runREPL True scriptArgs
+    ("--debug" : "--repl" : scriptArgs) -> runREPL True scriptArgs
     ["-e", exprStr] -> runExpression False exprStr
     ["--debug", "-e", exprStr] -> runExpression True exprStr
-    [] -> do
-      putStrLn $ versionString ++ " — pass a file, -e 'expr', or --help for usage."
-      return ExitSuccess
+    [] -> runREPL False []
+    ("repl" : scriptArgs) -> runREPL False scriptArgs
+    ("--repl" : scriptArgs) -> runREPL False scriptArgs
     ("--debug" : filename : scriptArgs) -> runFile True filename scriptArgs
     (filename : scriptArgs) -> runFile False filename scriptArgs

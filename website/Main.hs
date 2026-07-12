@@ -5,50 +5,62 @@
 
 module Main where
 
+import Data.Maybe (fromMaybe)
+import qualified Data.Text as Text
+import System.Environment (lookupEnv)
+import Text.Read (readMaybe)
 import Yesod
 import Yesod.Static
 
-newtype HelloWorld = HelloWorld
-  { getStatic :: Static
+data Site = Site
+  { siteStatic :: Static
+  , siteExportToken :: Text.Text
   }
 
-mkYesod "HelloWorld" [parseRoutes|
+mkYesod "Site" [parseRoutes|
 /         HomeR    GET
-/static   StaticR  Static getStatic
+/static   StaticR  Static siteStatic
 /favicon.ico FaviconR GET
 |]
 
-instance Yesod HelloWorld
+instance Yesod Site
 
 -- Handlers (define each exactly once)
 getFaviconR :: Handler TypedContent
 getFaviconR = redirect (StaticR (StaticRoute ["favicon.ico"] []))
 
 getHomeR :: Handler Html
-getHomeR = defaultLayout $ do
-  setTitle "Kai Language"
-  addStylesheet (StaticR (StaticRoute ["style.css"] []))
-  toWidgetHead [hamlet|
-    <link rel="icon" href=@{StaticR (StaticRoute ["favicon.ico"] [])}>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  |]
-  [whamlet|
+getHomeR = do
+  site <- getYesod
+  addHeader "X-Kai-Site" "kai-language"
+  if Text.null (siteExportToken site)
+    then pure ()
+    else addHeader "X-Kai-Export-Token" (siteExportToken site)
+  defaultLayout $ do
+    setTitle "Kai Language"
+    addStylesheet (StaticR (StaticRoute ["style.css"] []))
+    toWidgetHead [hamlet|
+      <link rel="icon" href=@{StaticR (StaticRoute ["favicon.ico"] [])}>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta name="kai-site" content="kai-language">
+    |]
+    [whamlet|
     <div .container>
       <header>
         <h1>Kai
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>588
+            <div .stat-number>709
             <div .stat-label>Tests Passing
           <div .stat-item>
             <div .stat-number>8
             <div .stat-label>Core Types
           <div .stat-item>
-            <div .stat-number>27
+            <div .stat-number>39
             <div .stat-label>Built-in Functions
           <div .stat-item>
-            <div .stat-number>v0.0.4.3
+            <div .stat-number>v0.0.4.4
             <div .stat-label>Current Version
 
       <nav>
@@ -65,29 +77,31 @@ getHomeR = defaultLayout $ do
         <div .features-grid>
           <div .feature>
             <h3>Static Typing & Inference
-            <p>Static type inference with unification, occurs check, and generalized let-polymorphism for ints, bools, strings, functions, and data structures.
+            <p>Static type inference with unification, occurs check, generalized let-polymorphism, and explicitly annotated polymorphic recursion for ints, bools, strings, functions, and data structures.
           <div .feature>
             <h3>Clean Syntax
             <p>Haskell-like lambdas, `do { ... }` blocks, precedence, keywords, and multi-statement files with expression-only core.
           <div .feature>
             <h3>Interactive I/O & Conversions
-            <p>User input with `input`, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, and interactive workflows.
+            <p>User input with `input`, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, expression trees, and workspace-style file flows.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>588 passing examples with property-based testing, script evaluation, CLI coverage, stress checks, and example smoke coverage.
+            <p>709 passing examples with typed properties, asserted script results, CLI and REPL coverage, 1000-level full-pipeline stress checks, and example smoke coverage.
           <div .feature>
             <h3>Developer Experience
-            <p>CLI with help, inline evaluation, file execution, --debug flag for development, and comprehensive documentation.
+            <p>CLI plus a multiline REPL with `:type`, `:load`, and `:reload`, alongside file execution, --debug, and comprehensive documentation.
           <div .feature>
             <h3>Module System
             <p>Import modules with `import ModuleName`, top-level definitions with `let` and `letrec`, mutual recursion support, circular import detection, explicit exports, and module resolution.
 
       <section #quickstart>
         <h2>Quick Start
-        <div .element-block>
+          <div .element-block>
           <h3>Install & Run
           <div .code-example>
             <code>stack build && stack test
+            <br>
+            <code>stack exec kai --
             <br>
             <code>stack exec kai -- --help
             <br>
@@ -227,12 +241,20 @@ getHomeR = defaultLayout $ do
             <code>case parseInt guessText of Just guess -> ... | Nothing -> do { print "Please enter an integer."; loop secret attempt }
 
         <div .element-block>
-          <h3>File I/O & Arguments
+          <h3>Workspace-Style File I/O
           <div .code-example>
-            <code>let outputPath = case args of path :: _ -> path | [] -> "kai_output.txt"
-            <code>let content = join "\n" ["Kai writes files", "Kai reads them back", "Kai keeps scripts typed"]
-            <code>do { writeFile outputPath content; print ("Wrote " ++ outputPath) }
-            <code>print ("Read back: " ++ replace "\n" " | " (readFile outputPath))
+            <code>let workspace = case args of path :: _ -> path | [] -> "."
+            <code>let reportPath = if workspace == "." then "kai_output.txt" else workspace ++ "/report.txt"
+            <code>do { if workspace == "." then () else createDirectory workspace; setEnv "KAI_EXAMPLE_MODE" "workspace-demo"; ... }
+            <code>print ("Read back: " ++ replace "\n" " | " (readFile reportPath))
+
+        <div .element-block>
+          <h3>Custom Data Types
+          <div .code-example>
+            <code>data Expr = Lit Int | Add (Expr) (Expr) | Mul (Expr) (Expr) | Neg (Expr)
+            <code>let liftByFive = Add (Lit 5)
+            <code>let program = Mul (liftByFive (Lit 3)) (Neg (Lit 2))
+            <code>letrec eval = \\expr -> case expr of Lit n -> n | Add l r -> eval l + eval r | Mul l r -> eval l * eval r | Neg inner -> 0 - eval inner
 
         <div .element-block>
           <h3>Wildcard Patterns
@@ -256,7 +278,7 @@ getHomeR = defaultLayout $ do
           <h3>Current Limitations
           <div .code-example>
             <span .limitation>×
-            <span>No REPL for interactive experimentation
+            <span>REPL is still minimal: no history or completion yet
             <br>
             <span .limitation>×
             <span>No error recovery (one parse error stops execution)
@@ -265,13 +287,13 @@ getHomeR = defaultLayout $ do
             <span>Integer-only arithmetic (no floating-point)
             <br>
             <span .limitation>×
-            <span>No custom data types (only built-in types)
+            <span>Polymorphic recursion requires explicit annotations; unannotated recursive bindings remain monomorphic
             <br>
             <span .limitation>×
-            <span>No polymorphic recursion for recursively-defined functions
+            <span>No JSON/HTTP/package-manager story yet
 
       <section #roadmap>
-        <h2>Current Status (v0.0.4.3) & v0.0.4.4 Focus
+        <h2>Current Release (v0.0.4.4) & Next Focus
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -307,12 +329,12 @@ getHomeR = defaultLayout $ do
             <div .timeline-marker data-step="7">
             <div .timeline-content>
               <h3>Data Structures (Done)
-              <p>Lists, tuples, records, pattern matching, Maybe/Either error handling
+              <p>Lists, tuples, records, custom data types with first-class constructor functions, pattern matching, Maybe/Either error handling
           <div .timeline-item>
             <div .timeline-marker data-step="8">
             <div .timeline-content>
               <h3>Standard Library (Done)
-              <p>List functions (map, filter, fold, zip), string functions (split, join, trim), 27 built-ins
+              <p>List functions, string functions, file/directory/process helpers, a typed fixpoint combinator, and 39 built-ins
           <div .timeline-item>
             <div .timeline-marker data-step="9">
             <div .timeline-content>
@@ -326,20 +348,32 @@ getHomeR = defaultLayout $ do
           <div .timeline-item .current>
             <div .timeline-marker .current data-step="11">
             <div .timeline-content>
-              <h3>v0.0.4.4 Focus
-              <p>REPL, custom data types, stronger pattern matching, and essential scripting stdlib work
+              <h3>v0.0.4.4 (Released 2026-07-11)
+              <p>REPL, custom data types, constructor patterns, checked integers, sound composite inference, and essential scripting stdlib work
           <div .timeline-item>
             <div .timeline-marker data-step="12">
             <div .timeline-content>
               <h3>Later Releases
-              <p>Formatter, linter, IDE support, package manager, HTTP/JSON, and deeper optimization work
+              <p>REPL polish, friendlier diagnostics, richer stdlib helpers, formatter/linter, package manager, HTTP/JSON work, and fuller polymorphic-recursion ergonomics
 
       <footer>
         <p .copyright>Kai Language · Functional-first scripting · Implemented in Haskell
-  |]
+    |]
+
+websitePort :: IO Int
+websitePort = do
+  configuredPort <- lookupEnv "PORT"
+  case configuredPort of
+    Nothing -> pure 3000
+    Just rawPort ->
+      case readMaybe rawPort of
+        Just port | port >= 1 && port <= 65535 -> pure port
+        _ -> ioError (userError "PORT must be an integer between 1 and 65535")
 
 main :: IO ()
 main = do
-  putStrLn "Starting server on http://localhost:3000"
+  port <- websitePort
+  exportToken <- Text.pack . fromMaybe "" <$> lookupEnv "KAI_SITE_EXPORT_TOKEN"
+  putStrLn ("Starting server on http://localhost:" ++ show port)
   staticSite <- static "website/static"
-  warp 3000 (HelloWorld staticSite)
+  warp port (Site staticSite exportToken)

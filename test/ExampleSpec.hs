@@ -78,6 +78,13 @@ spec = describe "Examples" $ do
     output `shouldContain` "[log] starting example"
     output `shouldContain` "Final report:"
 
+  it "runs the custom data types example" $ do
+    (exitCode, output) <- captureOutput $ runCLI ["examples/custom_data_types.kai"]
+    exitCode `shouldBe` ExitSuccess
+    output `shouldContain` "AST: Mul(Add(Lit(5), Lit(3)), Neg(Lit(2)))"
+    output `shouldContain` "Simplified: ((5 + 3) * -2)"
+    output `shouldContain` "Value: -16"
+
   it "runs the file counter example with a real file" $ do
     withTempDir $ \dir ->
       withTempTextFile dir "Kai examples should stay practical and typed.\n" $ \path -> do
@@ -88,15 +95,20 @@ spec = describe "Examples" $ do
 
   it "runs the file IO example and writes the expected contents" $ do
     withTempDir $ \dir -> do
-      let outputPath = dir </> "kai-output.txt"
-      (exitCode, output) <- captureOutput $ runCLI ["examples/file_io.kai", outputPath]
+      let workspacePath = dir </> "workspace"
+      let outputPath = workspacePath </> "report.txt"
+      (exitCode, output) <- captureOutput $ runCLI ["examples/file_io.kai", workspacePath]
       exitCode `shouldBe` ExitSuccess
-      output `shouldContain` "Wrote "
+      output `shouldContain` ("Workspace: " ++ workspacePath)
+      output `shouldContain` "Mode: workspace-demo"
+      output `shouldContain` "Entries here:"
+      output `shouldContain` "report.txt"
+      output `shouldContain` "Exists after write: True"
       output `shouldContain` "Read back:"
       exists <- doesFileExist outputPath
       exists `shouldBe` True
       contents <- readFile outputPath
-      contents `shouldBe` "Kai writes files\nKai reads them back\nKai keeps scripts typed"
+      contents `shouldBe` "Kai writes files\nKai can hop between directories\nKai keeps scripts typed"
 
   it "runs the fizzbuzz example with a configured upper bound" $ do
     (exitCode, output) <- captureOutput $ runCLI ["examples/fizzbuzz.kai", "15"]
@@ -142,11 +154,12 @@ spec = describe "Examples" $ do
     output `shouldContain` "status: success"
     output `shouldContain` "list has values"
 
-  it "parses and type checks reusable example modules" $ do
+  it "parses and type checks example modules and custom data type examples" $ do
     let files =
           [ "examples/MathUtils.kai"
           , "examples/StringUtils.kai"
           , "examples/TextAnalysis.kai"
+          , "examples/custom_data_types.kai"
           , "examples/modules/MathUtils.kai"
           , "examples/modules/StringUtils.kai"
           , "examples/modules/TextAnalysis.kai"
@@ -166,11 +179,12 @@ spec = describe "Examples" $ do
             Left err -> expectationFailure $ path ++ " type error: " ++ show err
             Right _ -> return ()
 
-  it "runs reusable example modules directly" $ do
+  it "runs module-style examples and direct custom data type examples" $ do
     let files =
           [ "examples/MathUtils.kai"
           , "examples/StringUtils.kai"
           , "examples/TextAnalysis.kai"
+          , "examples/custom_data_types.kai"
           , "examples/modules/MathUtils.kai"
           , "examples/modules/StringUtils.kai"
           , "examples/modules/TextAnalysis.kai"

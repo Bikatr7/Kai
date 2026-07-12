@@ -1,5 +1,5 @@
+// expect: ()
 let double = \x -> x * 2
 let triple = \x -> x * 3
 let square = \x -> x * x
-
 

@@ -29,10 +29,10 @@ spec :: Spec
 spec = describe "Stress Tests" $ do
   
   describe "Deep Nesting Stress Tests" $ do
-    it "handles deeply nested arithmetic (100 levels)" $ do
-      let deepArith = buildDeepArithmetic 100
+    it "handles deeply nested arithmetic through parse, type check, and evaluation (1000 levels)" $ do
+      let deepArith = buildDeepArithmetic 1000
       case parseTypeCheckEval deepArith of
-        Right (VInt result) -> result `shouldBe` 100
+        Right (VInt result) -> result `shouldBe` 1000
         Left err -> expectationFailure $ "Deep arithmetic should work: " ++ err
         Right _ -> expectationFailure "Should return VInt"
     
@@ -43,15 +43,15 @@ spec = describe "Stress Tests" $ do
         Left err -> expectationFailure $ "Deep boolean should work: " ++ err  
         Right _ -> expectationFailure "Should return VBool"
     
-    it "handles deeply nested function applications (30 levels)" $ do
-      let deepFunc = buildDeepApplication 30
+    it "handles deeply nested function applications through the full pipeline (1000 levels)" $ do
+      let deepFunc = buildDeepApplication 1000
       case parseTypeCheckEval deepFunc of
         Right (VInt result) -> result `shouldBe` 42
         Left err -> expectationFailure $ "Deep application should work: " ++ err
         Right _ -> expectationFailure "Should return VInt"
     
-    it "handles deeply nested lambda abstractions (20 levels)" $ do
-      let deepLambda = buildDeepLambda 20
+    it "handles deeply nested lambda inference (1000 levels)" $ do
+      let deepLambda = buildDeepLambda 1000
       case parseTypeCheck deepLambda of
         Right _ -> True `shouldBe` True
         Left err -> expectationFailure $ "Deep lambda should type-check: " ++ err
@@ -150,7 +150,8 @@ buildDeepBoolean 0 = "true"
 buildDeepBoolean n = "true and " ++ buildDeepBoolean (n - 1)
 
 buildDeepApplication :: Int -> String
-buildDeepApplication n = replicate n '(' ++ "\\x -> x" ++ replicate n ')' ++ " 42"
+buildDeepApplication 0 = "42"
+buildDeepApplication n = "(\\x -> x) (" ++ buildDeepApplication (n - 1) ++ ")"
 
 buildDeepLambda :: Int -> String
 buildDeepLambda n = buildLambda n ++ " " ++ unwords (replicate n "0")

@@ -1,7 +1,6 @@
 module ParserSpec where
 
 import Test.Hspec
-import Test.QuickCheck
 import Syntax
 import Parser
 
@@ -34,6 +33,18 @@ spec = describe "Parser Tests" $ do
     
     it "parses variable with underscores" $ do
       parseExpr "my_var" `shouldBe` Right (Var "my_var")
+
+    it "reserves module and fixpoint keywords" $ do
+      mapM_
+        (\name -> case parseExpr ("let " ++ name ++ " = 1 in 1") of
+          Left _ -> return ()
+          Right parsed -> expectationFailure $ "Should reject reserved name " ++ name ++ ", got " ++ show parsed)
+        ["import", "export", "fix"]
+
+    it "does not split keyword-prefixed identifiers" $ do
+      mapM_
+        (\name -> parseExpr name `shouldBe` Right (Var name))
+        ["nothing", "trueValue", "ifonly", "letdown", "android", "origin"]
   
   describe "Operator Parsing" $ do
     it "parses addition" $ do
@@ -90,6 +101,60 @@ spec = describe "Parser Tests" $ do
     
     it "parses lambda application" $ do
       parseExpr "(\\x -> x) 5" `shouldBe` Right (App (Lambda "x" Nothing (Var "x")) (IntLit 5))
+
+    it "parses adjacent constructors as left-associative applications" $ do
+      parseExpr "Pair Z Z"
+        `shouldBe` Right (App (App (Var "Pair") (Var "Z")) (Var "Z"))
+
+    it "does not treat custom constructor names as Maybe/Either keyword prefixes" $ do
+      mapM_
+        (\name ->
+          parseExpr (name ++ " Z")
+            `shouldBe` Right (App (Var name) (Var "Z")))
+        ["Justly", "NothingElse", "Leftover", "RightAngle"]
+
+  describe "Built-in Application Precedence" $ do
+    mapM_
+      (\(source, expected) ->
+        it ("parses " ++ source ++ " before the surrounding operator") $ do
+          parseExpr source `shouldBe` Right expected)
+      [ ("head [1] + 2", Add (Head (ListLit [IntLit 1])) (IntLit 2))
+      , ("tail [1] ++ [2]", Concat (Tail (ListLit [IntLit 1])) (ListLit [IntLit 2]))
+      , ("null [] == true", Eq (Null (ListLit [])) (BoolLit True))
+      , ("fix f + 1", Add (Fix (Var "f")) (IntLit 1))
+      , ("parseInt \"1\" == Nothing", Eq (ParseInt (StrLit "1")) MNothing)
+      , ("toString 1 ++ \"!\"", Concat (ToString (IntLit 1)) (StrLit "!"))
+      , ("show 1 ++ \"!\"", Concat (Show (IntLit 1)) (StrLit "!"))
+      , ("fst (1, 2) + 3", Add (Fst (TupleLit [IntLit 1, IntLit 2])) (IntLit 3))
+      , ("snd (1, 2) + 3", Add (Snd (TupleLit [IntLit 1, IntLit 2])) (IntLit 3))
+      , ("Just 1 == Nothing", Eq (MJust (IntLit 1)) MNothing)
+      , ("Just 1 :: []", Cons (MJust (IntLit 1)) (ListLit []))
+      , ("Left \"bad\" == Right 1", Eq (ELeft (StrLit "bad")) (ERight (IntLit 1)))
+      , ("discard 1; 2", Seq (Discard (IntLit 1)) (IntLit 2))
+      , ("print 1; 2", Seq (Print (IntLit 1)) (IntLit 2))
+      , ( "take 1 [1, 2] ++ [3]"
+        , Concat (Take (IntLit 1) (ListLit [IntLit 1, IntLit 2])) (ListLit [IntLit 3])
+        )
+      , ( "foldl (\\acc -> \\x -> acc + x) 0 [1, 2] + 3"
+        , Add
+            (Foldl
+              (Lambda "acc" Nothing (Lambda "x" Nothing (Add (Var "acc") (Var "x"))))
+              (IntLit 0)
+              (ListLit [IntLit 1, IntLit 2]))
+            (IntLit 3)
+        )
+      ]
+
+    it "allows a parenthesized operator expression as a built-in argument" $ do
+      parseExpr "head ([1] ++ [2]) + 3"
+        `shouldBe` Right
+          (Add
+            (Head (Concat (ListLit [IntLit 1]) (ListLit [IntLit 2])))
+            (IntLit 3))
+
+    it "leaves later application arguments outside a unary built-in" $ do
+      parseExpr "head xs fallback"
+        `shouldBe` Right (App (Head (Var "xs")) (Var "fallback"))
   
   describe "Conditional Parsing" $ do
     it "parses if-then-else" $ do

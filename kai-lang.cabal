@@ -5,7 +5,7 @@ cabal-version: 2.2
 -- see: https://github.com/sol/hpack
 
 name:           kai-lang
-version:        0.0.4.3
+version:        0.0.4.4
 description:    A functional-first scripting language with static typing
 homepage:       https://github.com/bikatr7/kai
 author:         Kaden Bilyeu (Bikatr7)
@@ -23,6 +23,7 @@ library
       Evaluator
       TypeChecker
   other-modules:
+      DataDeclarations
       Evaluator.Arithmetic
       Evaluator.Bindings
       Evaluator.BooleanOps
@@ -44,6 +45,8 @@ library
       Parser.Literals
       Parser.Patterns
       Parser.Types
+      REPL
+      TopLevelRecursion
       TypeChecker.Arithmetic
       TypeChecker.Bindings
       TypeChecker.ControlFlow
@@ -74,6 +77,7 @@ library
     , megaparsec
     , mtl
     , parser-combinators
+    , process
     , split
     , text
     , weigh
@@ -94,6 +98,7 @@ executable kai
   main-is: Main.hs
   other-modules:
       CLI
+      DataDeclarations
       Evaluator
       Evaluator.Arithmetic
       Evaluator.Bindings
@@ -117,7 +122,9 @@ executable kai
       Parser.Literals
       Parser.Patterns
       Parser.Types
+      REPL
       Syntax
+      TopLevelRecursion
       TypeChecker
       TypeChecker.Arithmetic
       TypeChecker.Bindings
@@ -150,6 +157,7 @@ executable kai
     , megaparsec
     , mtl
     , parser-combinators
+    , process
     , split
     , text
     , weigh
@@ -188,6 +196,7 @@ executable kai-website
     , megaparsec
     , mtl
     , parser-combinators
+    , process
     , split
     , text
     , weigh
@@ -225,10 +234,12 @@ test-suite kai-test
       ComparisonSpec
       ConditionalSpec
       DataStructureSpec
+      DataTypeSpec
       EdgeCaseSpec
       ExampleSpec
       InputSpec
       IntegerOverflowSpec
+      IOSpec
       LambdaSpec
       LetBindingSpec
       ListFunctionsSpec
@@ -237,9 +248,11 @@ test-suite kai-test
       ProgramSpec
       PropertyBasedSpec
       ReleaseWorkflowSpec
+      ReplSpec
       RuntimeErrorSpec
       ScriptSpec
       SequencingSpec
+      SiteExportSpec
       StressTestSpec
       StringFunctionsSpec
       StringSpec
@@ -318,6 +331,7 @@ benchmark kai-bench
     , megaparsec
     , mtl
     , parser-combinators
+    , process
     , split
     , text
     , weigh

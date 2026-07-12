@@ -32,29 +32,30 @@ buildExpr allowSeq = exprParser
       , try (parensOrTuple exprParser)
       , BoolLit <$> boolean
       , StrLit <$> stringLit
-      , builtinExpr exprParser atomParser
+      , builtinExpr atomParser
       , complexExprWithBlock exprParser
       , try (listLitExpr exprParser)
       , try (recordLitExpr exprParser)
+      , try (Var <$> constructorIdentifier)
       , try (Var <$> identifier)
       , try (typeAnnotationExpr exprParser)
       ]
 
-builtinExpr :: Parser Expr -> Parser Expr -> Parser Expr
-builtinExpr exprParser atomParser = choice
-  [ printExpr exprParser
-  , discardExpr exprParser
+builtinExpr :: Parser Expr -> Parser Expr
+builtinExpr atomParser = choice
+  [ printExpr atomParser
+  , discardExpr atomParser
   , inputExpr
   , argsExpr
-  , parseIntExpr exprParser
-  , toStringExpr exprParser
-  , showExpr exprParser
-  , headExpr exprParser
-  , tailExpr exprParser
-  , nullExpr exprParser
-  , fixExpr exprParser
-  , fstExpr exprParser
-  , sndExpr exprParser
+  , parseIntExpr atomParser
+  , toStringExpr atomParser
+  , showExpr atomParser
+  , headExpr atomParser
+  , tailExpr atomParser
+  , nullExpr atomParser
+  , fixExpr atomParser
+  , fstExpr atomParser
+  , sndExpr atomParser
   , mapExpr atomParser
   , filterExpr atomParser
   , foldlExpr atomParser
@@ -70,10 +71,21 @@ builtinExpr exprParser atomParser = choice
   , strLengthExpr atomParser
   , readFileExpr atomParser
   , writeFileExpr atomParser
-  , justExpr exprParser
+  , appendFileExpr atomParser
+  , fileExistsExpr atomParser
+  , listDirectoryExpr atomParser
+  , createDirectoryExpr atomParser
+  , removeDirectoryExpr atomParser
+  , getCurrentDirectoryExpr
+  , setCurrentDirectoryExpr atomParser
+  , systemExpr atomParser
+  , getEnvExpr atomParser
+  , setEnvExpr atomParser
+  , exitExpr atomParser
+  , justExpr atomParser
   , nothingExpr
-  , leftExpr exprParser
-  , rightExpr exprParser
+  , leftExpr atomParser
+  , rightExpr atomParser
   ]
 
 complexExprWithBlock :: Parser Expr -> Parser Expr
@@ -130,7 +142,7 @@ typeAnnotationExpr exprParser = do
 
 operatorTable :: Bool -> [[Operator Parser Expr]]
 operatorTable allowSeq =
-  [ [ Prefix (Not <$ symbol "not")
+  [ [ Prefix (Not <$ keyword "not")
     , Prefix ( Sub (IntLit 0)
              <$ try (char '-' <* notFollowedBy digitChar <* sc)
              )
@@ -147,6 +159,6 @@ operatorTable allowSeq =
     , InfixN (Gt <$ symbol ">")
     , InfixN (Eq <$ symbol "==")
     ]
-  , [ InfixR (And <$ symbol "and") ]
-  , [ InfixR (Or <$ symbol "or") ]
+  , [ InfixR (And <$ keyword "and") ]
+  , [ InfixR (Or <$ keyword "or") ]
   ] ++ [[InfixR (Seq <$ symbol ";")] | allowSeq]

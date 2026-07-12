@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // Records, zips, and let-polymorphism over a small report pipeline.
 let numbers = [5, 8, 13, 21, 34, 55]
 let even = \n -> n - (n / 2 * 2) == 0

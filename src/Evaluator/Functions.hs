@@ -1,6 +1,7 @@
 module Evaluator.Functions where
 
 import Evaluator.Types
+import Evaluator.Helpers (bindResult)
 import Syntax
 import qualified Data.Map as Map
 import Data.IORef (readIORef)
@@ -14,41 +15,54 @@ evalFunctions _ env (Lambda param _maybeType body) =
 evalFunctions eval env (App fun arg) = do
   funVal <- eval env fun
   argVal <- eval env arg
-  case funVal of
-    VFun param body closureEnv ->
-      let env' = Map.insert param argVal closureEnv
-      in eval env' body
-    _ -> Left $ TypeError "Cannot apply non-function value"
+  applyCallable eval funVal argVal
 evalFunctions _ _ _ = error "evalFunctions called on non-function expression"
 
 evalFunctionsIO :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
 evalFunctionsIO _ env (Lambda param _maybeType body) =
   return $ Right $ VFun param body env
-evalFunctionsIO eval env (App fun arg) = do
-  funResult <- eval env fun
-  argResult <- eval env arg
-  case (funResult, argResult) of
-    (Left err, _) -> return $ Left err
-    (_, Left err) -> return $ Left err
-    (Right funVal, Right argVal) -> do
-      -- Dereference VRef if needed
-      actualFun <- case funVal of
-        VRef ref -> do
-          val <- readIORef ref
-          -- If it's another VRef, dereference recursively
-          case val of
-            VRef ref2 -> readIORef ref2
-            _ -> return val
-        _ -> return funVal
-      case actualFun of
-        VFun param body closureEnv -> do
-          let env' = Map.insert param argVal closureEnv
-          eval env' body
-        _ -> do
-          -- Check what's actually in the VRef
-          case funVal of
-            VRef ref -> do
-              val <- readIORef ref
-              return $ Left $ TypeError ("Cannot apply non-function value: VRef contains " ++ take 200 (show val))
-            _ -> return $ Left $ TypeError ("Cannot apply non-function value: got " ++ take 200 (show actualFun))
+evalFunctionsIO eval env (App fun arg) =
+  bindResult (eval env fun) $ \funVal ->
+    bindResult (eval env arg) $ \argVal -> applyCallableIO eval funVal argVal
 evalFunctionsIO _ _ _ = error "evalFunctionsIO called on non-function expression"
+
+isCallableValue :: Value -> Bool
+isCallableValue VFun {} = True
+isCallableValue VConstructor {} = True
+isCallableValue _ = False
+
+applyCallable :: EvalFunc -> Value -> Value -> Either RuntimeError Value
+applyCallable eval callable argument = case callable of
+  VFun param body closureEnv ->
+    eval (Map.insert param argument closureEnv) body
+  VConstructor name arity collectedArgs ->
+    finishConstructorApplication name arity (collectedArgs ++ [argument])
+  _ -> Left $ nonCallableError callable
+
+applyCallableIO :: EvalFuncIO -> Value -> Value -> IO (Either RuntimeError Value)
+applyCallableIO eval callable argument =
+  bindResult (resolveCallableIO callable) $ \resolved -> case resolved of
+    VFun param body closureEnv ->
+      eval (Map.insert param argument closureEnv) body
+    VConstructor name arity collectedArgs ->
+      return $ finishConstructorApplication name arity (collectedArgs ++ [argument])
+    _ -> return $ Left $ nonCallableError resolved
+
+resolveCallableIO :: Value -> IO (Either RuntimeError Value)
+resolveCallableIO = go []
+  where
+    go seen (VRef ref)
+      | ref `elem` seen =
+          return $ Left $ TypeError "Cannot apply cyclic recursive reference"
+      | otherwise = readIORef ref >>= go (ref:seen)
+    go _ value = return $ Right value
+
+finishConstructorApplication :: String -> Int -> [Value] -> Either RuntimeError Value
+finishConstructorApplication name arity arguments
+  | length arguments == arity = Right $ VData name arguments
+  | length arguments < arity = Right $ VConstructor name arity arguments
+  | otherwise = Left $ TypeError $ "Constructor '" ++ name ++ "' received too many arguments"
+
+nonCallableError :: Value -> RuntimeError
+nonCallableError value =
+  TypeError $ "Cannot apply non-callable value: " ++ take 200 (show value)

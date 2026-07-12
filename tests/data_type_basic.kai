@@ -1,0 +1,4 @@
+// expect: 7
+data Option a = None | Some a
+let unwrap = \value -> case value of None -> 0 | Some x -> x
+unwrap (Some 7)

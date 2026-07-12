@@ -10,16 +10,16 @@ module Parser
 
 import Text.Megaparsec
 import Text.Megaparsec.Char
-import Control.Monad.Combinators (sepBy)
+import Control.Monad.Combinators (sepBy, sepBy1)
 import Data.Void
 import Data.List (lines, isPrefixOf)
 import Data.Char (isAlphaNum, isSpace)
-import Syntax (Expr(..), TopLevel(..), Program(..))
+import Syntax (Expr(..), TopLevel(..), Program(..), DataConstructor(..))
 import qualified Parser.Lexer as Lexer
 import Parser.Expressions
-import Parser.Literals (identifier)
-import Parser.Lexer (symbol)
-import Parser.Types (syntaxType)
+import Parser.Literals (identifier, constructorIdentifier, lowerIdentifier)
+import Parser.Lexer (keyword, symbol)
+import Parser.Types (syntaxType, syntaxTypeAtom)
 
 type Parser = Parsec Void String
 
@@ -134,18 +134,33 @@ parseFileStatements sourceName = parse (Lexer.sc *> statements <* eof) sourceNam
 
 topLevelImport :: Parser TopLevel
 topLevelImport = do
-  symbol "import"
+  keyword "import"
   TLImport <$> identifier
 
 topLevelExport :: Parser TopLevel
 topLevelExport = do
-  symbol "export"
+  keyword "export"
   names <- sepBy identifier (symbol ",")
   return $ TLExport names
 
+topLevelDataDecl :: Parser TopLevel
+topLevelDataDecl = do
+  keyword "data"
+  typeName <- constructorIdentifier
+  typeVars <- many lowerIdentifier
+  symbol "="
+  constructors <- sepBy1 dataConstructorDecl (symbol "|")
+  return $ TLData typeName typeVars constructors
+
+dataConstructorDecl :: Parser DataConstructor
+dataConstructorDecl = do
+  constructorName <- constructorIdentifier
+  argTypes <- many syntaxTypeAtom
+  return $ DataConstructor constructorName argTypes
+
 topLevelLetDef :: Parser TopLevel
 topLevelLetDef = do
-  symbol "let"
+  keyword "let"
   var <- identifier
   maybeType <- optional $ do
     symbol ":"
@@ -155,7 +170,7 @@ topLevelLetDef = do
 
 topLevelLetRecDef :: Parser TopLevel
 topLevelLetRecDef = do
-  symbol "letrec"
+  keyword "letrec"
   var <- identifier
   maybeType <- optional $ do
     symbol ":"
@@ -179,6 +194,7 @@ parseTopLevelChunk :: String -> Either (ParseErrorBundle String Void) TopLevel
 parseTopLevelChunk chunk
   | startsWithKeyword "import" chunk = parse (Lexer.sc *> topLevelImport <* eof) "" chunk
   | startsWithKeyword "export" chunk = parse (Lexer.sc *> topLevelExport <* eof) "" chunk
+  | startsWithKeyword "data" chunk = parse (Lexer.sc *> topLevelDataDecl <* eof) "" chunk
   | startsWithKeyword "letrec" chunk =
       case parse (Lexer.sc *> topLevelLetRecDef <* eof) "" chunk of
         Right topLevel -> Right topLevel
@@ -196,12 +212,22 @@ coalesceProgramChunks = go []
     go acc (chunk:rest) = consume chunk rest
       where
         consume current remaining =
-          case parseTopLevelChunk current of
-            Right _ -> go (current : acc) remaining
-            Left err ->
-              case remaining of
-                [] -> Left err
-                next:more -> consume (current ++ "\n" ++ next) more
+          case remaining of
+            next:more
+              | startsWithContinuationPipe next ->
+                  consume (current ++ "\n" ++ next) more
+            _ ->
+              case parseTopLevelChunk current of
+                Right _ -> go (current : acc) remaining
+                Left err ->
+                  case remaining of
+                    [] -> Left err
+                    next:more -> consume (current ++ "\n" ++ next) more
+
+    startsWithContinuationPipe chunk =
+      case dropWhile isSpace chunk of
+        '|' : _ -> True
+        _ -> False
 
 parseProgram :: String -> Either (ParseErrorBundle String Void) Program
 parseProgram content =

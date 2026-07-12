@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // Wildcards across Either, records, tuples, and lists.
 let result = case Right {ok = true, message = "loaded"} of Right {ok = true, message = _} -> "status: success" | Left _ -> "status: failure" | Right _ -> "status: unexpected"
 let tupleSummary = case (42, "kai", true) of (_, name, true) -> "tuple for " ++ name | _ -> "tuple mismatch"

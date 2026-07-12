@@ -4,22 +4,29 @@ import Test.Hspec
 import System.Directory (doesDirectoryExist, listDirectory)
 import System.FilePath ((</>), takeExtension)
 import Data.List (sort)
-import Control.Monad (forM, forM_)
+import Control.Monad (filterM, forM, forM_)
 
 import Parser
 import Evaluator
 import TypeChecker
 import Syntax
-import Data.Maybe (listToMaybe)
+import Data.Maybe (isNothing, listToMaybe)
 import qualified Data.Map as Map
 
 spec :: Spec
 spec = do
+  describe "Script expectation coverage" $ do
+    files <- runIO $ allKaiFilesIn "."
+    it "requires an expectation directive in every repository .kai file" $ do
+      missing <- filterM (fmap (isNothing . parseExpect) . readFile) files
+      missing `shouldBe` []
+
   describe "Script files in tests/" $ do
     files <- runIO $ kaiFilesIn "tests"
     forM_ files $ \fp -> do
       it fp $ do
         content <- readFile fp
+        requireExpectation fp content
         -- Try parsing as program first (new top-level definitions)
         case parseProgram content of
           Right program -> testProgram program content
@@ -36,6 +43,7 @@ spec = do
     forM_ files $ \fp -> do
       it fp $ do
         content <- readFile fp
+        requireExpectation fp content
         -- For multi-statement files, use parseStatements directly
         -- Only use parseFileExpr for files that can't be parsed as multiple statements
         case parseStatements content of
@@ -50,9 +58,11 @@ testExpr :: Expr -> String -> IO ()
 testExpr expr content = do
   case parseExpect content of
     Just (ExpectValue expStr) -> do
+      requireExprTypeChecks expr
       case parseExpr expStr of
         Left perr -> expectationFailure ("Bad expect expr: " ++ show perr)
         Right eexp -> do
+          requireExprTypeChecks eexp
           if requiresIO expr
             then do
               result <- eval expr
@@ -87,6 +97,7 @@ testExpr expr content = do
               else expectationFailure $ "❌ FAIL: Expected type " ++ show ety ++ ", got " ++ show ty
           Left err -> expectationFailure ("❌ FAIL: Type error: " ++ show err)
     Just ExpectError -> do
+      requireExprTypeChecks expr
       if requiresIO expr
         then do
           result <- eval expr
@@ -97,24 +108,24 @@ testExpr expr content = do
           case evalPure expr of
             Left err -> putStrLn $ "✅ PASS: Expected error, got: " ++ show err
             Right v -> expectationFailure ("❌ FAIL: Expected error, got: " ++ show v)
-    Nothing -> do
-      if requiresIO expr
-        then do
-          -- For IO expressions, use eval with real input
-          result <- eval expr
-          case result of
-            Left rerr -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
-            Right v -> putStrLn $ "✅ PASS: Expression with input evaluated to: " ++ show v
-        else do
-          case evalPure expr of
-            Left rerr -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
-            Right v -> putStrLn $ "✅ PASS: Expression evaluated to: " ++ show v
+    Nothing -> expectationFailure "Missing required // expect directive"
 
 requiresIO :: Expr -> Bool
 requiresIO Input = True
 requiresIO Args = True
 requiresIO (ReadFile _) = True
 requiresIO (WriteFile _ _) = True
+requiresIO (AppendFile _ _) = True
+requiresIO (FileExists _) = True
+requiresIO (ListDirectory _) = True
+requiresIO (CreateDirectory _) = True
+requiresIO (RemoveDirectory _) = True
+requiresIO GetCurrentDirectory = True
+requiresIO (SetCurrentDirectory _) = True
+requiresIO (System _) = True
+requiresIO (GetEnv _) = True
+requiresIO (SetEnv _ _) = True
+requiresIO (Exit _) = True
 requiresIO (Add e1 e2) = requiresIO e1 || requiresIO e2
 requiresIO (Sub e1 e2) = requiresIO e1 || requiresIO e2
 requiresIO (Mul e1 e2) = requiresIO e1 || requiresIO e2
@@ -132,15 +143,23 @@ requiresIO (App f arg) = requiresIO f || requiresIO arg
 requiresIO (Let _ _ val body) = requiresIO val || requiresIO body
 requiresIO (LetRec _ _ val body) = requiresIO val || requiresIO body
 requiresIO (Print e) = requiresIO e
+requiresIO (Seq e1 e2) = requiresIO e1 || requiresIO e2
+requiresIO (Case scrutinee branches) = requiresIO scrutinee || any (requiresIO . snd) branches
+requiresIO (RecordLit fields) = any (requiresIO . snd) fields
+requiresIO (RecordAccess e _) = requiresIO e
+requiresIO (ListLit es) = any requiresIO es
+requiresIO (TupleLit es) = any requiresIO es
 requiresIO _ = False
 
 testProgram :: Program -> String -> IO ()
 testProgram program content = do
   case parseExpect content of
     Just (ExpectValue expStr) -> do
+      requireProgramTypeChecks program
       case parseExpr expStr of
         Left perr -> expectationFailure ("Bad expect expr: " ++ show perr)
         Right eexp -> do
+          requireExprTypeChecks eexp
           result <- evalProgram program
           case (result, evalPure eexp) of
             (Right v, Right vexp) -> v `shouldBe` vexp
@@ -159,16 +178,30 @@ testProgram program content = do
           Right ty -> ty `shouldBe` ety
           Left err -> expectationFailure ("Type error: " ++ show err)
     Just ExpectError -> do
+      requireProgramTypeChecks program
       result <- evalProgram program
       case result of
         Left _ -> return ()  -- Expected error, test passes
         Right v -> expectationFailure ("Expected error, got: " ++ show v)
-    Nothing -> do
-      -- No expect directive, just run the program
-      result <- evalProgram program
-      case result of
-        Left rerr -> expectationFailure ("Runtime error: " ++ show rerr)
-        Right _ -> return ()  -- Program ran successfully
+    Nothing -> expectationFailure "Missing required // expect directive"
+
+requireExpectation :: FilePath -> String -> IO ()
+requireExpectation fp content =
+  case parseExpect content of
+    Just _ -> return ()
+    Nothing -> expectationFailure $ fp ++ " must contain // expect:, // expect-type:, or // expect-error"
+
+requireExprTypeChecks :: Expr -> IO ()
+requireExprTypeChecks expr =
+  case typeCheck expr of
+    Left err -> expectationFailure $ "Type error before script evaluation: " ++ show err
+    Right _ -> return ()
+
+requireProgramTypeChecks :: Program -> IO ()
+requireProgramTypeChecks program =
+  case typeCheckProgram program of
+    Left err -> expectationFailure $ "Type error before program evaluation: " ++ show err
+    Right _ -> return ()
 
 -- Utilities
 kaiFilesIn :: FilePath -> IO [FilePath]
@@ -177,6 +210,21 @@ kaiFilesIn dir = do
   if not exists then pure [] else do
     entries <- listDirectory dir
     pure $ sort [ dir </> e | e <- entries, takeExtension e == ".kai" ]
+
+allKaiFilesIn :: FilePath -> IO [FilePath]
+allKaiFilesIn dir = do
+  exists <- doesDirectoryExist dir
+  if not exists then pure [] else do
+    entries <- listDirectory dir
+    nested <- forM entries $ \entry -> do
+      let path = dir </> entry
+      isDir <- doesDirectoryExist path
+      if isDir
+        then if entry `elem` ignoredDirectories then pure [] else allKaiFilesIn path
+        else pure [path | takeExtension path == ".kai"]
+    pure $ sort (concat nested)
+  where
+    ignoredDirectories = [".git", ".stack-work", "dist-site", "dist-newstyle"]
 
 data ExpectDirective
   = ExpectValue String

@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // Greet each provided name with explicit CLI validation.
 let validateNames : [String] -> Either String [String] = \cliArgs -> if null cliArgs then Left "Usage: kai examples/greet.kai <name> [name...]" else Right cliArgs
 letrec greetAll : [String] -> Unit = \names -> case names of [] -> print "All greetings sent." | name :: rest -> do {

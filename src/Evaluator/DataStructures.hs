@@ -1,6 +1,8 @@
 module Evaluator.DataStructures where
 
 import Evaluator.Types
+import Evaluator.Helpers (bindResult, traverseResults)
+import Evaluator.Functions (applyCallable, applyCallableIO, isCallableValue, resolveCallableIO)
 import Syntax
 import qualified Data.Map as Map
 import Control.Monad (foldM)
@@ -66,43 +68,46 @@ evalDataStructures eval env (Snd e) = do
 evalDataStructures eval env (Map f lst) = do
     fVal <- eval env f
     lstVal <- eval env lst
-    case (fVal, lstVal) of
-        (VFun param body closureEnv, VList vs) -> do
-            results <- mapM (\v -> eval (Map.insert param v closureEnv) body) vs
-            Right $ VList results
-        (_, VList _) -> Left $ TypeError "map: first argument must be a function"
-        (VFun {}, _) -> Left $ TypeError "map: second argument must be a list"
-        _ -> Left $ TypeError "map: invalid arguments"
+    case lstVal of
+        VList values
+          | isCallableValue fVal -> VList <$> mapM (applyCallable eval fVal) values
+          | otherwise -> Left $ TypeError "map: first argument must be callable"
+        _
+          | isCallableValue fVal -> Left $ TypeError "map: second argument must be a list"
+          | otherwise -> Left $ TypeError "map: invalid arguments"
 evalDataStructures eval env (Filter f lst) = do
     fVal <- eval env f
     lstVal <- eval env lst
-    case (fVal, lstVal) of
-        (VFun param body closureEnv, VList vs) -> do
-            results <- mapM (\v -> do
-                r <- eval (Map.insert param v closureEnv) body
-                case r of
-                    VBool b -> Right (v, b)
-                    _ -> Left $ TypeError "filter: predicate must return a boolean") vs
-            Right $ VList [v | (v, True) <- results]
-        (_, VList _) -> Left $ TypeError "filter: first argument must be a function"
-        (VFun {}, _) -> Left $ TypeError "filter: second argument must be a list"
-        _ -> Left $ TypeError "filter: invalid arguments"
+    case lstVal of
+        VList values
+          | isCallableValue fVal -> do
+              results <- mapM (evalPredicate fVal) values
+              Right $ VList [value | (value, True) <- results]
+          | otherwise -> Left $ TypeError "filter: first argument must be callable"
+        _
+          | isCallableValue fVal -> Left $ TypeError "filter: second argument must be a list"
+          | otherwise -> Left $ TypeError "filter: invalid arguments"
+  where
+    evalPredicate callable value = do
+      result <- applyCallable eval callable value
+      case result of
+        VBool keep -> Right (value, keep)
+        _ -> Left $ TypeError "filter: predicate must return a boolean"
 evalDataStructures eval env (Foldl f acc lst) = do
     fVal <- eval env f
     accVal <- eval env acc
     lstVal <- eval env lst
-    case (fVal, lstVal) of
-        (VFun param1 body1 closureEnv, VList vs) -> do
-            let foldStep currAcc v = do
-                    case eval (Map.insert param1 currAcc closureEnv) body1 of
-                        Right (VFun param2 body2 closureEnv2) ->
-                            eval (Map.insert param2 v closureEnv2) body2
-                        Right _ -> Left $ TypeError "foldl: function must take two arguments"
-                        Left err -> Left err
-            foldM foldStep accVal vs
-        (_, VList _) -> Left $ TypeError "foldl: first argument must be a function"
-        (VFun {}, _) -> Left $ TypeError "foldl: third argument must be a list"
-        _ -> Left $ TypeError "foldl: invalid arguments"
+    case lstVal of
+        VList values
+          | isCallableValue fVal -> foldM (foldStep fVal) accVal values
+          | otherwise -> Left $ TypeError "foldl: first argument must be callable"
+        _
+          | isCallableValue fVal -> Left $ TypeError "foldl: third argument must be a list"
+          | otherwise -> Left $ TypeError "foldl: invalid arguments"
+  where
+    foldStep callable current value = do
+      partiallyApplied <- applyCallable eval callable current
+      applyCallable eval partiallyApplied value
 evalDataStructures eval env (Length lst) = do
     lstVal <- eval env lst
     case lstVal of
@@ -140,20 +145,15 @@ evalDataStructures eval env (Zip l1 l2) = do
 evalDataStructures _ _ _ = error "evalDataStructures called on non-data-structure expression"
 
 evalDataStructuresIO :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
-evalDataStructuresIO eval env (ListLit es) = do
-    results <- mapM (eval env) es
-    case sequence results of
-        Right vs -> return $ Right $ VList vs
-        Left err -> return $ Left err
-evalDataStructuresIO eval env (Cons h t) = do
-    hResult <- eval env h
-    tResult <- eval env t
-    case (hResult, tResult) of
-        (Right vh, Right vt) -> case vt of
-            VList l -> return $ Right $ VList (vh:l)
-            _ -> return $ Left $ TypeError "Cons expects a list as its second argument"
-        (Left err, _) -> return $ Left err
-        (_, Left err) -> return $ Left err
+evalDataStructuresIO eval env (ListLit es) =
+    bindResult (traverseResults (eval env) es) $ \values ->
+      return $ Right $ VList values
+evalDataStructuresIO eval env (Cons h t) =
+    bindResult (eval env h) $ \headValue ->
+      bindResult (eval env t) $ \tailValue ->
+        return $ case tailValue of
+          VList values -> Right $ VList (headValue:values)
+          _ -> Left $ TypeError "Cons expects a list as its second argument"
 evalDataStructuresIO eval env (Head e) = do
     result <- eval env e
     case result of
@@ -174,16 +174,12 @@ evalDataStructuresIO eval env (Null e) = do
         Right (VList l) -> return $ Right $ VBool (null l)
         Right _ -> return $ Left $ TypeError "Null expects a list"
         Left err -> return $ Left err
-evalDataStructuresIO eval env (RecordLit fields) = do
-    let evalField (name, e) = do
-            result <- eval env e
-            case result of
-                Right v -> return $ Right (name, v)
-                Left err -> return $ Left err
-    results <- mapM evalField fields
-    case sequence results of
-        Right evaledFields -> return $ Right $ VRecord (Map.fromList evaledFields)
-        Left err -> return $ Left err
+evalDataStructuresIO eval env (RecordLit fields) =
+    bindResult (traverseResults evalField fields) $ \evaluatedFields ->
+      return $ Right $ VRecord (Map.fromList evaluatedFields)
+  where
+    evalField (name, expression) =
+      bindResult (eval env expression) $ \value -> return $ Right (name, value)
 evalDataStructuresIO eval env (RecordAccess r field) = do
     result <- eval env r
     case result of
@@ -192,11 +188,9 @@ evalDataStructuresIO eval env (RecordAccess r field) = do
             Nothing -> Left $ RecordFieldNotFound field
         Right _ -> return $ Left $ TypeError "Record access expects a record"
         Left err -> return $ Left err
-evalDataStructuresIO eval env (TupleLit exprs) = do
-    results <- mapM (eval env) exprs
-    case sequence results of
-        Right vals -> return $ Right $ VTuple vals
-        Left err -> return $ Left err
+evalDataStructuresIO eval env (TupleLit exprs) =
+    bindResult (traverseResults (eval env) exprs) $ \values ->
+      return $ Right $ VTuple values
 evalDataStructuresIO eval env (Fst e) = do
     result <- eval env e
     case result of
@@ -211,68 +205,58 @@ evalDataStructuresIO eval env (Snd e) = do
         Right (VTuple _) -> return $ Left $ TypeError "snd: tuple must have at least 2 elements"
         Right _ -> return $ Left $ TypeError "snd: expected a tuple"
         Left err -> return $ Left err
-evalDataStructuresIO eval env (Map f lst) = do
-    fResult <- eval env f
-    lstResult <- eval env lst
-    case (fResult, lstResult) of
-        (Right fVal, Right lstVal) -> case (fVal, lstVal) of
-            (VFun param body closureEnv, VList vs) -> do
-                results <- mapM (\v -> eval (Map.insert param v closureEnv) body) vs
-                case sequence results of
-                    Right vs' -> return $ Right $ VList vs'
-                    Left err -> return $ Left err
-            (_, VList _) -> return $ Left $ TypeError "map: first argument must be a function"
-            (VFun {}, _) -> return $ Left $ TypeError "map: second argument must be a list"
-            _ -> return $ Left $ TypeError "map: invalid arguments"
-        (Left err, _) -> return $ Left err
-        (_, Left err) -> return $ Left err
-evalDataStructuresIO eval env (Filter f lst) = do
-    fResult <- eval env f
-    lstResult <- eval env lst
-    case (fResult, lstResult) of
-        (Right fVal, Right lstVal) -> case (fVal, lstVal) of
-            (VFun param body closureEnv, VList vs) -> do
-                results <- mapM (\v -> do
-                    r <- eval (Map.insert param v closureEnv) body
-                    case r of
-                        Right (VBool b) -> return $ Right (v, b)
-                        Right _ -> return $ Left $ TypeError "filter: predicate must return a boolean"
-                        Left err -> return $ Left err) vs
-                case sequence results of
-                    Right results' -> return $ Right $ VList [v | (v, True) <- results']
-                    Left err -> return $ Left err
-            (_, VList _) -> return $ Left $ TypeError "filter: first argument must be a function"
-            (VFun {}, _) -> return $ Left $ TypeError "filter: second argument must be a list"
-            _ -> return $ Left $ TypeError "filter: invalid arguments"
-        (Left err, _) -> return $ Left err
-        (_, Left err) -> return $ Left err
-evalDataStructuresIO eval env (Foldl f acc lst) = do
-    fResult <- eval env f
-    accResult <- eval env acc
-    lstResult <- eval env lst
-    case (fResult, accResult, lstResult) of
-        (Right fVal, Right accVal, Right lstVal) -> case (fVal, lstVal) of
-            (VFun param1 body1 closureEnv, VList vs) -> do
-                let foldStep currAccEither v = do
-                        case currAccEither of
-                            Left err -> return $ Left err
-                            Right currAcc -> do
-                                result <- eval (Map.insert param1 currAcc closureEnv) body1
-                                case result of
-                                    Right (VFun param2 body2 closureEnv2) -> do
-                                        result2 <- eval (Map.insert param2 v closureEnv2) body2
-                                        case result2 of
-                                            Right val -> return $ Right val
-                                            Left err -> return $ Left err
-                                    Right _ -> return $ Left $ TypeError "foldl: function must take two arguments"
-                                    Left err -> return $ Left err
-                foldM foldStep (Right accVal) vs
-            (_, VList _) -> return $ Left $ TypeError "foldl: first argument must be a function"
-            (VFun {}, _) -> return $ Left $ TypeError "foldl: third argument must be a list"
-            _ -> return $ Left $ TypeError "foldl: invalid arguments"
-        (Left err, _, _) -> return $ Left err
-        (_, Left err, _) -> return $ Left err
-        (_, _, Left err) -> return $ Left err
+evalDataStructuresIO eval env (Map f lst) =
+    bindResult (eval env f) $ \functionValue ->
+      bindResult (eval env lst) $ \listValue ->
+        bindResult (resolveCallableIO functionValue) $ \callable ->
+          case listValue of
+            VList values
+              | isCallableValue callable ->
+                  bindResult
+                    (traverseResults (applyCallableIO eval callable) values)
+                    (return . Right . VList)
+              | otherwise -> return $ Left $ TypeError "map: first argument must be callable"
+            _
+              | isCallableValue callable -> return $ Left $ TypeError "map: second argument must be a list"
+              | otherwise -> return $ Left $ TypeError "map: invalid arguments"
+evalDataStructuresIO eval env (Filter f lst) =
+    bindResult (eval env f) $ \functionValue ->
+      bindResult (eval env lst) $ \listValue ->
+        bindResult (resolveCallableIO functionValue) $ \callable ->
+          case listValue of
+            VList values
+              | isCallableValue callable ->
+                  bindResult
+                    (traverseResults (evalPredicate callable) values)
+                    (return . Right . VList . map fst . filter snd)
+              | otherwise -> return $ Left $ TypeError "filter: first argument must be callable"
+            _
+              | isCallableValue callable -> return $ Left $ TypeError "filter: second argument must be a list"
+              | otherwise -> return $ Left $ TypeError "filter: invalid arguments"
+  where
+    evalPredicate callable value =
+      bindResult (applyCallableIO eval callable value) $ \predicateValue ->
+        case predicateValue of
+          VBool keep -> return $ Right (value, keep)
+          _ -> return $ Left $ TypeError "filter: predicate must return a boolean"
+evalDataStructuresIO eval env (Foldl f acc lst) =
+    bindResult (eval env f) $ \functionValue ->
+      bindResult (eval env acc) $ \initialValue ->
+        bindResult (eval env lst) $ \listValue ->
+          bindResult (resolveCallableIO functionValue) $ \callable ->
+            case listValue of
+              VList values
+                | isCallableValue callable ->
+                    foldM (foldStep callable) (Right initialValue) values
+                | otherwise -> return $ Left $ TypeError "foldl: first argument must be callable"
+              _
+                | isCallableValue callable -> return $ Left $ TypeError "foldl: third argument must be a list"
+                | otherwise -> return $ Left $ TypeError "foldl: invalid arguments"
+  where
+    foldStep callable currentResult value =
+      bindResult (return currentResult) $ \current ->
+        bindResult (applyCallableIO eval callable current) $ \partiallyApplied ->
+          applyCallableIO eval partiallyApplied value
 evalDataStructuresIO eval env (Length lst) = do
     result <- eval env lst
     case result of
@@ -285,34 +269,29 @@ evalDataStructuresIO eval env (Reverse lst) = do
         Right (VList vs) -> return $ Right $ VList (reverse vs)
         Right _ -> return $ Left $ TypeError "reverse: argument must be a list"
         Left err -> return $ Left err
-evalDataStructuresIO eval env (Take n lst) = do
-    nResult <- eval env n
-    lstResult <- eval env lst
-    case (nResult, lstResult) of
-        (Right (VInt count), Right (VList vs)) -> return $ Right $ VList (take count vs)
-        (Right (VInt _), Right _) -> return $ Left $ TypeError "take: second argument must be a list"
-        (Right _, Right (VList _)) -> return $ Left $ TypeError "take: first argument must be an integer"
-        (Left err, _) -> return $ Left err
-        (_, Left err) -> return $ Left err
-        _ -> return $ Left $ TypeError "take: invalid arguments"
-evalDataStructuresIO eval env (Drop n lst) = do
-    nResult <- eval env n
-    lstResult <- eval env lst
-    case (nResult, lstResult) of
-        (Right (VInt count), Right (VList vs)) -> return $ Right $ VList (drop count vs)
-        (Right (VInt _), Right _) -> return $ Left $ TypeError "drop: second argument must be a list"
-        (Right _, Right (VList _)) -> return $ Left $ TypeError "drop: first argument must be an integer"
-        (Left err, _) -> return $ Left err
-        (_, Left err) -> return $ Left err
-        _ -> return $ Left $ TypeError "drop: invalid arguments"
-evalDataStructuresIO eval env (Zip l1 l2) = do
-    l1Result <- eval env l1
-    l2Result <- eval env l2
-    case (l1Result, l2Result) of
-        (Right (VList vs1), Right (VList vs2)) -> return $ Right $ VList [VTuple [v1, v2] | (v1, v2) <- zip vs1 vs2]
-        (Right (VList _), Right _) -> return $ Left $ TypeError "zip: second argument must be a list"
-        (Right _, Right (VList _)) -> return $ Left $ TypeError "zip: first argument must be a list"
-        (Left err, _) -> return $ Left err
-        (_, Left err) -> return $ Left err
-        _ -> return $ Left $ TypeError "zip: invalid arguments"
+evalDataStructuresIO eval env (Take n lst) =
+    bindResult (eval env n) $ \countValue ->
+      bindResult (eval env lst) $ \listValue ->
+        return $ case (countValue, listValue) of
+          (VInt count, VList values) -> Right $ VList (take count values)
+          (VInt _, _) -> Left $ TypeError "take: second argument must be a list"
+          (_, VList _) -> Left $ TypeError "take: first argument must be an integer"
+          _ -> Left $ TypeError "take: invalid arguments"
+evalDataStructuresIO eval env (Drop n lst) =
+    bindResult (eval env n) $ \countValue ->
+      bindResult (eval env lst) $ \listValue ->
+        return $ case (countValue, listValue) of
+          (VInt count, VList values) -> Right $ VList (drop count values)
+          (VInt _, _) -> Left $ TypeError "drop: second argument must be a list"
+          (_, VList _) -> Left $ TypeError "drop: first argument must be an integer"
+          _ -> Left $ TypeError "drop: invalid arguments"
+evalDataStructuresIO eval env (Zip l1 l2) =
+    bindResult (eval env l1) $ \leftValue ->
+      bindResult (eval env l2) $ \rightValue ->
+        return $ case (leftValue, rightValue) of
+          (VList values1, VList values2) ->
+            Right $ VList [VTuple [value1, value2] | (value1, value2) <- zip values1 values2]
+          (VList _, _) -> Left $ TypeError "zip: second argument must be a list"
+          (_, VList _) -> Left $ TypeError "zip: first argument must be a list"
+          _ -> Left $ TypeError "zip: invalid arguments"
 evalDataStructuresIO _ _ _ = error "evalDataStructuresIO called on non-data-structure expression"

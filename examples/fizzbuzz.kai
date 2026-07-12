@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // FizzBuzz with optional CLI configuration and validated input.
 let parseLimit : [String] -> Either String Int = \cliArgs -> case cliArgs of [] -> Right 20 | value :: _ -> (case parseInt value of Just n -> Right n | Nothing -> Left "Usage: kai examples/fizzbuzz.kai [upper-bound-int]")
 let label = \n -> if n - (n / 15 * 15) == 0 then "FizzBuzz" else if n - (n / 3 * 3) == 0 then "Fizz" else if n - (n / 5 * 5) == 0 then "Buzz" else toString n

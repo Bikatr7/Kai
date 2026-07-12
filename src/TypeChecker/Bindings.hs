@@ -1,7 +1,7 @@
 module TypeChecker.Bindings where
 
 import qualified Data.Map as Map
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Control.Monad.Trans (lift)
 import Control.Monad.Except (throwError)
 import Syntax (Expr(..))
@@ -33,19 +33,34 @@ inferBindings infer env (Let var maybeType val body) = do
 
 inferBindings infer env (LetRec var maybeType val body) = do
   when (var == "_") $ throwError (InvalidWildcard "Wildcard variables (_) cannot be used in recursive definitions")
-  recType <- case maybeType of
-    Just sType -> return $ syntaxTypeToType sType
-    Nothing -> freshTVar
-  let env' = Map.insert var (monoScheme recType) env
-  (s1, valType) <- infer env' val
-  s2 <- lift $ unify (applySubst s1 recType) (applySubst s1 valType)
-  let combinedSubst = composeSubst s2 s1
-  let finalRecType = applySubst combinedSubst recType
-  let baseEnv = applySubstEnv combinedSubst env
-  let finalEnv = Map.insert var (generalize baseEnv finalRecType) baseEnv
-  (s3, bodyType) <- infer finalEnv body
-  let finalSubst = composeSubst s3 combinedSubst
-  return (finalSubst, bodyType)
+  case maybeType of
+    Just sType -> do
+      let annotatedType = syntaxTypeToType sType
+      let initialScheme = generalize env annotatedType
+      let env' = Map.insert var initialScheme env
+      (s1, valType) <- infer env' val
+      let baseEnv = applySubstEnv s1 env
+      let annotatedScheme = generalize baseEnv (applySubst s1 annotatedType)
+      let inferredScheme = generalize baseEnv (applySubst s1 valType)
+      matches <- schemeIsInstanceOf annotatedScheme inferredScheme
+      unless matches $
+        throwError (GeneralTypeError "Recursive definition does not satisfy its annotated polymorphic type")
+      let finalEnv = Map.insert var annotatedScheme baseEnv
+      (s2, bodyType) <- infer finalEnv body
+      let finalSubst = composeSubst s2 s1
+      return (finalSubst, bodyType)
+    Nothing -> do
+      recType <- freshTVar
+      let env' = Map.insert var (monoScheme recType) env
+      (s1, valType) <- infer env' val
+      s2 <- lift $ unify (applySubst s1 recType) (applySubst s1 valType)
+      let combinedSubst = composeSubst s2 s1
+      let finalRecType = applySubst combinedSubst recType
+      let baseEnv = applySubstEnv combinedSubst env
+      let finalEnv = Map.insert var (generalize baseEnv finalRecType) baseEnv
+      (s3, bodyType) <- infer finalEnv body
+      let finalSubst = composeSubst s3 combinedSubst
+      return (finalSubst, bodyType)
 
 inferBindings infer env (TypeAnnotation e sType) = do
   let annotatedType = syntaxTypeToType sType

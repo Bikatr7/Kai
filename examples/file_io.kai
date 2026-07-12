@@ -1,9 +1,29 @@
-// File I/O example with an optional output path argument.
-let outputPath = case args of path :: _ -> path | [] -> "kai_output.txt"
-let content = join "\n" ["Kai writes files", "Kai reads them back", "Kai keeps scripts typed"]
+// expect-type: TUnit
+// File, directory, and environment workflow example.
+// Optional arg: a workspace directory. Without one, it writes in the current directory.
+let workspace = case args of path :: _ -> path | [] -> "."
+let reportPath = if workspace == "." then "kai_output.txt" else workspace ++ "/report.txt"
+
 do {
-  writeFile outputPath content;
-  print ("Wrote " ++ outputPath);
-  let reloaded = readFile outputPath in
-    print ("Read back: " ++ replace "\n" " | " reloaded)
+  if workspace == "." then () else createDirectory workspace;
+  setEnv "KAI_EXAMPLE_MODE" "workspace-demo";
+  writeFile reportPath "Kai writes files";
+  appendFile reportPath "\nKai can hop between directories";
+  appendFile reportPath "\nKai keeps scripts typed";
+  let mode = case getEnv "KAI_EXAMPLE_MODE" of Just value -> value | Nothing -> "missing" in
+    let originalDir = getCurrentDirectory in
+      do {
+        if workspace == "." then () else setCurrentDirectory workspace;
+        let entries = listDirectory "." in
+          do {
+            if workspace == "." then () else setCurrentDirectory originalDir;
+            print ("Workspace: " ++ workspace);
+            print ("Current dir: " ++ originalDir);
+            print ("Mode: " ++ mode);
+            print ("Entries here: " ++ show entries);
+            print ("Exists after write: " ++ show (fileExists reportPath));
+            let reloaded = readFile reportPath in
+              print ("Read back: " ++ replace "\n" " | " reloaded)
+          }
+      }
 }

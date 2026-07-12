@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // StringUtils.kai - Text helpers for scripts.
 let words : String -> [String] = \text -> filter (\word -> not (word == "")) (split " " (trim text))
 let csvFields : String -> [String] = \line -> filter (\field -> not (field == "")) (map (\field -> trim field) (split "," line))

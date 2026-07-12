@@ -11,8 +11,12 @@ The codebase follows a modular architecture with clear separation of concerns. E
 
 #### Syntax (`src/Syntax.hs`)
 - AST definitions (`Expr`, `Pattern`) with NFData instances for benchmarking
-- Optional type annotations and comprehensive expression coverage
+- Optional type annotations, top-level `data` declarations, and comprehensive expression coverage
 - Literals, operators, functions, bindings, I/O operations
+
+#### Shared Declaration Logic (`src/DataDeclarations.hs`)
+- Constructor scheme generation for user-defined algebraic data types
+- Shared runtime/type-environment construction for `data` declarations
 
 #### Parser (`src/Parser/`)
 - **Lexer.hs**: Lexical analysis, reserved keywords, symbol parsing
@@ -56,27 +60,34 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - **Evaluator.hs**: Public interface with eval, evalWithEnv, evalPure, evalPureWithEnv
 
 #### CLI (`src/CLI.hs`, `src/Main.hs`)
-- Command-line interface with expression evaluation and file execution
+- Command-line interface with expression evaluation, file execution, and REPL entry
 - Debug mode, clean output by default, argument passing support
 - Non-zero exit codes for parse, type, and runtime failures
+- `src/REPL.hs`: multiline REPL with `:type`, `:load`, `:reload`, and persistent environments
 - `website/`: Yesod-based static site generator used for the project website/demo.
 
 ## Language Semantics (current)
 
 - Evaluation: strict (call-by-value).
+- Integers: signed 32-bit values; literals, `parseInt`, and arithmetic results enforce the range, and arithmetic overflow returns `IntegerOverflow`.
 - Unit: `()` value with type `TUnit`.
 - `print : a -> Unit` prints and returns `()`.
 - `input : String` reads a line from stdin.
 - `args : [String]` returns command-line arguments passed to script.
-- File I/O: `readFile : String -> String`, `writeFile : String -> String -> Unit`.
+- File and directory I/O: `readFile`, `writeFile`, `appendFile`, `fileExists`, `listDirectory`, `createDirectory`, `removeDirectory`, `getCurrentDirectory`, `setCurrentDirectory`.
+- Process/environment access: `system`, `getEnv`, `setEnv`, `exit`.
 - A leading shebang line (`#!/usr/bin/env kai`) is ignored when parsing files.
 - Error handling: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions for pattern matching.
 - Safe conversion functions: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`.
 - List functions: `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`.
 - String functions: `split`, `join`, `trim`, `replace`, `strLength`.
 - Tuple functions: `fst`, `snd` for pairs.
+- Custom data types: top-level `data` declarations produce constructor functions and constructor patterns.
+- Equality: primitive and composite data compare structurally; different constructors compare as false, while callable values and recursive runtime references raise a runtime `TypeError` at any nesting depth.
 - Type annotations: Optional Haskell-style type annotations for lambdas and let bindings.
 - Let, letrec, top-level, and imported definitions are generalized; lambda parameters and pattern bindings remain monomorphic within each use site.
+- Recursive bindings can recurse polymorphically when they have explicit type annotations; unannotated recursive bindings remain monomorphic.
+- `fix : (a -> a) -> a` provides an explicitly typed fixed-point combinator; forcing an unproductive fixed point returns a Kai runtime error.
 - `do { ... }` blocks are syntactic sugar for sequencing; entries are separated by `;`, and `do {}` evaluates to `()`.
 - Strings: escapes `\"`, `\\`, `\n`. Unknown escapes are errors with a helpful message.
 - Precedence (highest to lowest):
@@ -101,11 +112,13 @@ Notes:
 Prereqs: Stack + GHC.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 588 examples)
+- Tests: `stack test --fast` (all 709 examples)
 - Run CLI: `stack exec kai -- --help`
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
 - Try module-based example: `stack exec kai -- examples/text_analysis.kai`
+- Try ADT example: `stack exec kai -- examples/custom_data_types.kai`
 - Try interactive calculator: `stack exec kai -- examples/calculator.kai`
+- Try directory/env example: `stack exec kai -- examples/file_io.kai /tmp/kai-workspace`
 - Run website locally: `stack exec kai-website` (visit http://localhost:3000)
 
 ### Test Suite Structure
@@ -135,6 +148,9 @@ Kai includes comprehensive performance benchmarks using Criterion (speed) and We
 # Full benchmark suite
 stack bench
 
+# Fast CI-equivalent validation of every benchmark program
+stack bench --benchmark-arguments="--iters 1"
+
 # Specific components
 stack bench --benchmark-arguments="--match pattern 'Evaluator'"
 stack bench --benchmark-arguments="--match pattern 'Parser'"
@@ -151,14 +167,12 @@ stack bench --benchmark-arguments="--csv=results.csv"
 - **Monitor for >10% regressions** which indicate potential issues
 - **Use CSV output** for automated comparison in CI/CD pipelines
 
-### Current Performance Metrics
+### Performance Baselines
 
-- **Most operations**: ~20-50ns (arithmetic, conditionals, functions)
-- **Record access**: ~1.93μs (optimized map lookups)
-- **Recursion**: ~6μs (appropriate for function call overhead)
-- **Boolean operations**: ~23ns (after syntax corrections)
-- **Parser**: ~40-600ns (linear scaling with complexity)
-- **Type checker**: ~20ns
+All benchmark helpers fail immediately when their Kai input cannot be parsed,
+evaluated, or type-checked. CI runs every benchmark with one iteration as a
+validity gate. Performance comparisons still require before/after runs on the
+same machine and build profile.
 
 ## Linting & Style
 
@@ -213,14 +227,14 @@ stack bench --benchmark-arguments="--csv=results.csv"
 - **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
 - **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels) through parser and type checker optimizations
 - **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed for development
-- **Comprehensive testing**: 588 passing examples spanning unit, property, script, CLI, stress, and example smoke coverage
+- **Comprehensive testing**: 709 passing examples spanning unit, meaningful typed properties, asserted scripts, CLI, REPL, 1000-level stress, and example smoke coverage
 
 ## Notes / TODOs
 
-- **v0.0.4.4 scope**: REPL first (`:type`, `:load`, `:reload`, multiline input)
-- **v0.0.4.4 scope**: Custom data types plus the pattern matching needed to make them practical
-- **v0.0.4.4 scope**: Essential scripting stdlib additions (`appendFile`, file/directory helpers, process/environment access)
-- **Defer by default**: Package manager, formatter/linter/LSP, HTTP/JSON, and advanced type-system work unless the core v0.0.4.4 goals land comfortably
+- **For each release**: Keep package, docs, website, tests, and benchmark validation synchronized, then explicitly dispatch the **Build and Release Binaries** workflow. A push to `master` does not publish a release.
+- **Post-v0.0.4.4 focus**: REPL polish (`history`, `completion`, better diagnostics)
+- **Post-v0.0.4.4 focus**: Fill stdlib gaps that matter for scripts (line-oriented file helpers, JSON/HTTP, a few missing utilities)
+- **Defer by default**: Package manager, formatter/linter/LSP, and full polymorphic-recursion inference or other advanced type-system work unless scripting ergonomics are already in good shape
 - When changing semantics, align README.md, SPEC.md, website, and DEVELOPING.md immediately.
 - Always verify that stress tests pass after performance-critical changes.
 - Cross-platform support: Conditional dependencies for Windows compatibility

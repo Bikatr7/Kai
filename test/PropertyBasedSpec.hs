@@ -6,8 +6,9 @@ import Test.QuickCheck
 import Syntax
 import Parser
 import TypeChecker
-import Evaluator (Value(VInt, VBool, VFun, VRef), evalPure)
+import Evaluator (Value(..), evalPure)
 import Control.Monad (liftM, liftM2, liftM3)
+import qualified Data.Map as Map
 
 -- Generator for valid Kai expressions
 newtype ValidExpr = ValidExpr Expr deriving (Show, Eq)
@@ -17,11 +18,11 @@ instance Arbitrary ValidExpr where
 
 arbitraryExpr :: Int -> Gen Expr  
 arbitraryExpr 0 = oneof
-  [ IntLit <$> arbitrary
+  [ IntLit <$> genKaiInt
   , BoolLit <$> arbitrary
   ]
 arbitraryExpr n = oneof
-  [ IntLit <$> (arbitrary `suchThat` (\x -> x >= (minBound :: Int) && x <= (maxBound :: Int)))
+  [ IntLit <$> genKaiInt
   , BoolLit <$> arbitrary
   , liftM2 Add (arbitraryExpr n') (arbitraryExpr n')
   , liftM2 Sub (arbitraryExpr n') (arbitraryExpr n')  
@@ -40,13 +41,90 @@ arbitraryExpr n = oneof
     n' = n `div` 2
     arbitraryVar = elements ["x", "y", "z", "f", "g", "h", "a", "b", "c"]
 
+genKaiInt :: Gen Int
+genKaiInt = choose (fromInteger kaiIntMin, fromInteger kaiIntMax)
+
+genSmallKaiInt :: Gen Int
+genSmallKaiInt = choose (-100000, 100000)
+
+typedPureExpr :: Int -> Gen Expr
+typedPureExpr size = oneof
+  [ typedIntExpr size
+  , typedBoolExpr size
+  , typedStringExpr size
+  , typedListExpr size
+  , typedCompositeExpr size
+  ]
+
+typedIntExpr :: Int -> Gen Expr
+typedIntExpr 0 = IntLit <$> genSmallKaiInt
+typedIntExpr size = oneof
+  [ IntLit <$> genSmallKaiInt
+  , liftM2 Add smaller smaller
+  , liftM2 Sub smaller smaller
+  , If <$> typedBoolExpr next <*> smaller <*> smaller
+  , pure $ Let "x" Nothing (IntLit 10) (Add (Var "x") (IntLit 5))
+  , pure $ Case (MJust (IntLit 7)) [(PJust (PVar "x"), Var "x"), (PNothing, IntLit 0)]
+  ]
+  where
+    next = size `div` 2
+    smaller = typedIntExpr next
+
+typedBoolExpr :: Int -> Gen Expr
+typedBoolExpr 0 = BoolLit <$> arbitrary
+typedBoolExpr size = oneof
+  [ BoolLit <$> arbitrary
+  , liftM2 And smaller smaller
+  , liftM2 Or smaller smaller
+  , Not <$> smaller
+  , liftM2 Eq (typedIntExpr next) (typedIntExpr next)
+  , If <$> smaller <*> smaller <*> smaller
+  ]
+  where
+    next = size `div` 2
+    smaller = typedBoolExpr next
+
+typedStringExpr :: Int -> Gen Expr
+typedStringExpr 0 = StrLit <$> elements ["", "kai", "typed"]
+typedStringExpr size = oneof
+  [ StrLit <$> elements ["", "kai", "typed"]
+  , liftM2 Concat smaller smaller
+  , If <$> typedBoolExpr next <*> smaller <*> smaller
+  , Show <$> typedIntExpr next
+  ]
+  where
+    next = size `div` 2
+    smaller = typedStringExpr next
+
+typedListExpr :: Int -> Gen Expr
+typedListExpr size = oneof
+  [ ListLit . map IntLit <$> listOf genSmallKaiInt
+  , Cons <$> typedIntExpr next <*> (ListLit . map IntLit <$> listOf genSmallKaiInt)
+  , Map (Lambda "x" Nothing (Add (Var "x") (IntLit 1))) <$> baseList
+  , Reverse <$> baseList
+  ]
+  where
+    next = size `div` 2
+    baseList = ListLit . map IntLit <$> listOf genSmallKaiInt
+
+typedCompositeExpr :: Int -> Gen Expr
+typedCompositeExpr size = elements
+  [ TupleLit [IntLit 1, BoolLit True]
+  , RecordLit [("count", IntLit 2), ("ready", BoolLit False)]
+  , Let "id" Nothing (Lambda "x" Nothing (Var "x"))
+      (TupleLit [App (Var "id") (IntLit 1), App (Var "id") (BoolLit True)])
+  , Case (ListLit [IntLit 1, IntLit 2])
+      [(PList [], IntLit 0), (PCons (PVar "x") (PVar "xs"), Var "x")]
+  , If (BoolLit True) (TupleLit [IntLit size, BoolLit True]) (TupleLit [IntLit 0, BoolLit False])
+  ]
+
 -- Generator for integers that should cause overflow
 newtype OverflowInt = OverflowInt Integer deriving (Show, Eq)
 
 instance Arbitrary OverflowInt where
   arbitrary = OverflowInt <$> oneof
-    [ choose (fromIntegral (maxBound :: Int) + 1, fromIntegral (maxBound :: Int) + 1000000)
-    , choose (fromIntegral (minBound :: Int) - 1000000, fromIntegral (minBound :: Int) - 1)
+    [ choose (kaiIntMax + 1, kaiIntMax + 1000000)
+    , choose (kaiIntMin - 1000000, kaiIntMin - 1)
     ]
 
 spec :: Spec
@@ -54,7 +132,7 @@ spec = describe "Property-Based Testing" $ do
   
   describe "Parser Properties" $ do
     it "parsing never crashes on valid integers" $ do
-      property $ \(x :: Int) -> 
+      property $ forAll genKaiInt $ \x ->
         case parseExpr (show x) of
           Right (IntLit n) -> n == x
           Right _ -> False
@@ -87,27 +165,25 @@ spec = describe "Property-Based Testing" $ do
             result2 = typeCheck expr
         in result1 == result2
     
-    it "well-typed expressions don't crash evaluator" $ do
-      property $ \(ValidExpr expr) ->
+    it "generated well-typed expressions type-check and evaluate" $ do
+      property $ forAll (sized typedPureExpr) $ \expr ->
         case typeCheck expr of
-          Right _ -> case evalPure expr of
-            Right _ -> True
-            Left _ -> True  -- Runtime errors are OK (like div by zero)
-          Left _ -> True  -- Type errors are expected for some random expressions
+          Left err -> counterexample ("Unexpected type error for " ++ show expr ++ ": " ++ show err) False
+          Right ty -> case evalPure expr of
+            Left err -> counterexample ("Unexpected runtime error for " ++ show expr ++ ": " ++ show err) False
+            Right value -> counterexample
+              ("Value " ++ show value ++ " does not have inferred type " ++ show ty)
+              (valueHasType ty value)
     
-    it "type preservation: evaluation preserves types" $ do
-      property $ forAll (resize 3 arbitrary) $ \(ValidExpr expr) ->
+    it "type preservation covers composite values" $ do
+      property $ forAll (resize 8 (sized typedPureExpr)) $ \expr ->
         case (typeCheck expr, evalPure expr) of
-          (Right TInt, Right (VInt _)) -> True
-          (Right TBool, Right (VBool _)) -> True
-          (Right (TFun _ _), Right VFun {}) -> True
-          (Left _, _) -> True  -- Type errors are fine
-          (_, Left _) -> True  -- Runtime errors are fine
+          (Right ty, Right value) -> valueHasType ty value
           _ -> False
 
   describe "Arithmetic Properties" $ do
     it "addition is commutative" $ do
-      property $ \x y ->
+      property $ forAll genSmallKaiInt $ \x -> forAll genSmallKaiInt $ \y ->
         let expr1 = Add (IntLit x) (IntLit y)
             expr2 = Add (IntLit y) (IntLit x)
         in case (evalPure expr1, evalPure expr2) of
@@ -115,7 +191,7 @@ spec = describe "Property-Based Testing" $ do
              _ -> True  -- Errors are fine (overflow etc)
     
     it "addition is associative" $ do
-      property $ \x y z ->
+      property $ forAll genSmallKaiInt $ \x -> forAll genSmallKaiInt $ \y -> forAll genSmallKaiInt $ \z ->
         let expr1 = Add (Add (IntLit x) (IntLit y)) (IntLit z)
             expr2 = Add (IntLit x) (Add (IntLit y) (IntLit z))
         in case (evalPure expr1, evalPure expr2) of
@@ -123,14 +199,14 @@ spec = describe "Property-Based Testing" $ do
              _ -> True
     
     it "multiplication by zero gives zero" $ do
-      property $ \x ->
+      property $ forAll genKaiInt $ \x ->
         let expr = Mul (IntLit x) (IntLit 0)
         in case evalPure expr of
              Right (VInt 0) -> True
              _ -> False
 
     it "negation distributes over addition" $ do
-      property $ \x y ->
+      property $ forAll genSmallKaiInt $ \x -> forAll genSmallKaiInt $ \y ->
         let lhs = Sub (IntLit 0) (Add (IntLit x) (IntLit y))
             rhs = Add (Sub (IntLit 0) (IntLit x)) (Sub (IntLit 0) (IntLit y))
         in evalPure lhs == evalPure rhs
@@ -167,7 +243,7 @@ spec = describe "Property-Based Testing" $ do
 
   describe "Function Properties" $ do
     it "identity function returns input" $ do
-      property $ \(x :: Int) ->
+      property $ forAll genKaiInt $ \x ->
         let identity = Lambda "x" Nothing (Var "x")
             application = App identity (IntLit x)
         in case evalPure application of
@@ -175,7 +251,7 @@ spec = describe "Property-Based Testing" $ do
              _ -> False
     
     it "constant function ignores second argument" $ do
-      property $ \x y ->
+      property $ forAll genKaiInt $ \x -> forAll genKaiInt $ \y ->
         let constFunc = Lambda "x" Nothing (Lambda "y" Nothing (Var "x"))
             application = App (App constFunc (IntLit x)) (IntLit y)
         in case evalPure application of
@@ -183,7 +259,7 @@ spec = describe "Property-Based Testing" $ do
              _ -> False
     
     it "function composition works correctly" $ do
-      property $ \(x :: Int) ->
+      property $ forAll genSmallKaiInt $ \x ->
         let f = Lambda "x" Nothing (Add (Var "x") (IntLit 1))  -- x + 1
             g = Lambda "x" Nothing (Mul (Var "x") (IntLit 2))  -- x * 2
             compose = Lambda "f" Nothing (Lambda "g" Nothing (Lambda "x" Nothing (App (Var "f") (App (Var "g") (Var "x")))))
@@ -195,14 +271,14 @@ spec = describe "Property-Based Testing" $ do
 
   describe "Conditional Properties" $ do
     it "if-then-else selects correct branch" $ do
-      property $ \condition x y ->
+      property $ \condition -> forAll genKaiInt $ \x -> forAll genKaiInt $ \y ->
         let expr = If (BoolLit condition) (IntLit x) (IntLit y)
         in case evalPure expr of
              Right (VInt result) -> result == if condition then x else y
              _ -> False
     
     it "conditional with same branches returns that value" $ do
-      property $ \condition (x :: Int) ->
+      property $ \condition -> forAll genKaiInt $ \x ->
         let expr = If (BoolLit condition) (IntLit x) (IntLit x)
         in case evalPure expr of
              Right (VInt result) -> result == x
@@ -229,6 +305,27 @@ spec = describe "Property-Based Testing" $ do
         comparableValues (VFun {}) (VFun {}) = True  -- Functions are deterministic but not comparable
         comparableValues (VRef _) (VRef _) = True        -- References are deterministic but not comparable
         comparableValues v1 v2 = v1 == v2                -- Everything else should be equal
+
+valueHasType :: Type -> Value -> Bool
+valueHasType TInt (VInt _) = True
+valueHasType TBool (VBool _) = True
+valueHasType TString (VStr _) = True
+valueHasType TUnit VUnit = True
+valueHasType (TFun _ _) VFun {} = True
+valueHasType (TFun _ _) VConstructor {} = True
+valueHasType (TMaybe _) VNothing = True
+valueHasType (TMaybe ty) (VJust value) = valueHasType ty value
+valueHasType (TEither leftTy _) (VLeft value) = valueHasType leftTy value
+valueHasType (TEither _ rightTy) (VRight value) = valueHasType rightTy value
+valueHasType (TList ty) (VList values) = all (valueHasType ty) values
+valueHasType (TTuple tys) (VTuple values) =
+  length tys == length values && and (zipWith valueHasType tys values)
+valueHasType (TRecord tys) (VRecord values) =
+  Map.keysSet tys == Map.keysSet values &&
+    and [maybe False (valueHasType ty) (Map.lookup name values) | (name, ty) <- Map.toList tys]
+valueHasType (TCustom _ _) VData {} = True
+valueHasType (TVar _) _ = True
+valueHasType _ _ = False
 
 -- Helper function to normalize expressions for comparison
 normalizeExpr :: Expr -> Expr

@@ -25,12 +25,16 @@ import qualified TypeErrorSpec
 import qualified TypeInferenceSpec
 import qualified UnificationSpec
 import qualified DataStructureSpec
+import qualified DataTypeSpec
+import qualified IOSpec
 import qualified WildcardSpec
 import qualified SequencingSpec
+import qualified SiteExportSpec
 import qualified TupleSpec
 import qualified ListFunctionsSpec
 import qualified StringFunctionsSpec
 import qualified ModuleSpec
+import qualified ReplSpec
 
 main :: IO ()
 main = hspec $ do
@@ -50,7 +54,7 @@ main = hspec $ do
   PropertyBasedSpec.spec
   ReleaseWorkflowSpec.spec
   RuntimeErrorSpec.spec
-  -- Kai script files discovered under tests/ and test/
+  -- Kai scripts plus repository-wide expectation coverage
   ScriptSpec.spec
   StressTestSpec.spec
   StringSpec.spec
@@ -58,9 +62,13 @@ main = hspec $ do
   TypeInferenceSpec.spec
   UnificationSpec.spec
   DataStructureSpec.spec
+  DataTypeSpec.spec
+  IOSpec.spec
   WildcardSpec.spec
   SequencingSpec.spec
+  SiteExportSpec.spec
   TupleSpec.spec
   ListFunctionsSpec.spec
   StringFunctionsSpec.spec
   ModuleSpec.spec
+  ReplSpec.spec

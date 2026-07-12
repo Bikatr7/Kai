@@ -94,10 +94,10 @@ spec = do
               Left err -> expectationFailure $ "Eval error: " ++ show err
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
-      it "print without parentheses has different precedence" $ do
+      it "sequences print without requiring parentheses" $ do
         let expr = "print \"hello\"; 42"
         case parseExpr expr of
-          Right (Print (Seq (StrLit "hello") (IntLit 42))) -> return ()
+          Right (Seq (Print (StrLit "hello")) (IntLit 42)) -> return ()
           Right ast -> expectationFailure $ "Wrong AST structure: " ++ show ast
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
@@ -165,13 +165,11 @@ spec = do
     describe "Sequencing Evaluation Order" $ do
       it "evaluates first expression for side effects" $ do
         let expr = "let x = 1 in print (toString x); 42"
-        -- This should parse as: Let x (Print (Seq (ToString (Var x)) (IntLit 42)))
-        -- due to precedence, but still test the concept
         case parseExpr expr of
           Right ast -> do
             result <- evalWithEnv Map.empty ast
             case result of
-              Right val -> val `shouldBe` VUnit  -- print returns unit
+              Right val -> val `shouldBe` VInt 42
               Left err -> expectationFailure $ "Eval error: " ++ show err
           Left err -> expectationFailure $ "Parse error: " ++ show err
 

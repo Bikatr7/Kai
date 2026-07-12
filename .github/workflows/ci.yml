@@ -31,7 +31,10 @@ jobs:
     
     - name: Run Haskell test suite
       run: stack test
-    
+
+    - name: Validate benchmark programs
+      run: stack bench --benchmark-arguments="--iters 1"
+
     - name: Build binary
       run: |
         stack build :kai

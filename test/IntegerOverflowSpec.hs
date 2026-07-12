@@ -12,47 +12,65 @@ spec :: Spec
 spec = describe "Integer Overflow Protection" $ do
   
   describe "Parser Bounds Checking" $ do
-    it "accepts maximum Int value" $ do
-      let maxIntStr = show (maxBound :: Int)
+    it "accepts the maximum 32-bit Int value" $ do
+      let maxIntStr = show kaiIntMax
       case parseExpr maxIntStr of
-        Right (IntLit n) -> n `shouldBe` (maxBound :: Int)
+        Right (IntLit n) -> n `shouldBe` fromInteger kaiIntMax
         _ -> expectationFailure $ "Should parse max Int: " ++ maxIntStr
-    
-    it "accepts minimum Int value" $ do
-      let minIntStr = show (minBound :: Int)
+
+    it "accepts the minimum 32-bit Int value" $ do
+      let minIntStr = show kaiIntMin
       case parseExpr minIntStr of
-        Right (IntLit n) -> n `shouldBe` (minBound :: Int)
+        Right (IntLit n) -> n `shouldBe` fromInteger kaiIntMin
         _ -> expectationFailure $ "Should parse min Int: " ++ minIntStr
-    
-    it "rejects integer larger than maxBound" $ do
-      let tooBig = show ((fromIntegral (maxBound :: Int) :: Integer) + 1)
+
+    it "rejects an integer larger than the 32-bit maximum" $ do
+      let tooBig = show (kaiIntMax + 1)
       case parseExpr tooBig of
         Left _ -> True `shouldBe` True
         Right _ -> expectationFailure $ "Should reject integer larger than maxBound: " ++ tooBig
+
+    it "rejects an integer smaller than the 32-bit minimum" $ do
+      let tooSmall = show (kaiIntMin - 1)
+      case parseExpr tooSmall of
+        Left _ -> True `shouldBe` True
+        Right _ -> expectationFailure $ "Should reject integer smaller than minBound: " ++ tooSmall
     
     it "rejects extremely large integers" $ do
       case parseExpr "99999999999999999999999999999" of
         Left _ -> True `shouldBe` True
         Right _ -> expectationFailure "Should reject extremely large integer"
     
-    it "handles edge case: exactly maxBound + 1" $ do
-      let exactlyTooBig = show ((fromIntegral (maxBound :: Int) :: Integer) + 1)
+    it "handles edge case: exactly 32-bit maxBound + 1" $ do
+      let exactlyTooBig = show (kaiIntMax + 1)
       case parseExpr exactlyTooBig of
         Left _ -> True `shouldBe` True
         Right _ -> expectationFailure $ "Should reject exactly maxBound + 1: " ++ exactlyTooBig
 
   describe "Arithmetic Overflow Protection" $ do
     it "handles large valid integers in arithmetic" $ do
-      let largeInt = maxBound `div` 2 :: Int
+      let largeInt = fromInteger (kaiIntMax `div` 2) :: Int
       let expr = show largeInt ++ " + " ++ show largeInt
       case testParseTypeCheckEval expr of
         Right (VInt result) -> result `shouldBe` (largeInt * 2)
         Left err -> expectationFailure $ "Should handle large valid arithmetic: " ++ err
         Right _ -> expectationFailure "Should return VInt"
+
+    it "rejects addition above the 32-bit maximum" $ do
+      parseEvaluate (show kaiIntMax ++ " + 1") `shouldBe` Left IntegerOverflow
+
+    it "rejects subtraction below the 32-bit minimum" $ do
+      parseEvaluate (show kaiIntMin ++ " - 1") `shouldBe` Left IntegerOverflow
+
+    it "rejects multiplication outside the 32-bit range" $ do
+      parseEvaluate (show kaiIntMax ++ " * 2") `shouldBe` Left IntegerOverflow
+
+    it "rejects the signed division overflow edge case" $ do
+      parseEvaluate (show kaiIntMin ++ " / -1") `shouldBe` Left IntegerOverflow
     
     it "prevents parsing of overflow-prone literals" $ do
       property $ \(Positive (n :: Integer)) -> 
-        let intVal = n + fromIntegral (maxBound :: Int)
+        let intVal = n + kaiIntMax
             testStr = show intVal
         in case parseExpr testStr of
              Left _ -> True
@@ -66,8 +84,16 @@ spec = describe "Integer Overflow Protection" $ do
       parseEvaluate "1" `shouldBe` Right (VInt 1)
     
     it "correctly parses large valid positive number" $ do
-      let large = maxBound `div` 4 :: Int
+      let large = fromInteger (kaiIntMax `div` 4) :: Int
       parseEvaluate (show large) `shouldBe` Right (VInt large)
+
+    it "parseInt accepts both boundaries and rejects values outside them" $ do
+      parseEvaluate ("parseInt \"" ++ show kaiIntMax ++ "\"")
+        `shouldBe` Right (VJust (VInt (fromInteger kaiIntMax)))
+      parseEvaluate ("parseInt \"" ++ show kaiIntMin ++ "\"")
+        `shouldBe` Right (VJust (VInt (fromInteger kaiIntMin)))
+      parseEvaluate ("parseInt \"" ++ show (kaiIntMax + 1) ++ "\"") `shouldBe` Right VNothing
+      parseEvaluate ("parseInt \"" ++ show (kaiIntMin - 1) ++ "\"") `shouldBe` Right VNothing
 
 parseEvaluate :: String -> Either RuntimeError Value
 parseEvaluate input = case parseExpr input of

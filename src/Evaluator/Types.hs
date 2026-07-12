@@ -12,6 +12,8 @@ data Value
   | VStr String
   | VUnit
   | VFun String Expr Env
+  | VConstructor String Int [Value]
+  | VData String [Value]
   | VJust Value
   | VNothing
   | VLeft Value
@@ -27,6 +29,10 @@ instance Show Value where
   show (VStr s) = show s
   show VUnit = "()"
   show (VFun param body env) = "<function " ++ param ++ ">"
+  show (VConstructor name _ []) = "<constructor " ++ name ++ ">"
+  show (VConstructor name _ args) = "<constructor " ++ name ++ " " ++ show args ++ ">"
+  show (VData name []) = name
+  show (VData name values) = name ++ "(" ++ intercalate ", " (map show values) ++ ")"
   show (VJust v) = "Just (" ++ show v ++ ")"
   show VNothing = "Nothing"
   show (VLeft v) = "Left (" ++ show v ++ ")"
@@ -41,6 +47,7 @@ instance Eq Value where
   (VBool b1) == (VBool b2) = b1 == b2
   (VStr s1) == (VStr s2) = s1 == s2
   VUnit == VUnit = True
+  (VData n1 vs1) == (VData n2 vs2) = n1 == n2 && vs1 == vs2
   (VJust v1) == (VJust v2) = v1 == v2
   VNothing == VNothing = True
   (VLeft v1) == (VLeft v2) = v1 == v2
@@ -49,6 +56,7 @@ instance Eq Value where
   (VRecord m1) == (VRecord m2) = m1 == m2
   (VTuple vs1) == (VTuple vs2) = vs1 == vs2
   (VRef _) == (VRef _) = False
+  (VConstructor {}) == (VConstructor {}) = False
   (VFun {}) == (VFun {}) = False
   _ == _ = False
 
@@ -57,6 +65,8 @@ instance NFData Value where
   rnf (VBool b) = rnf b
   rnf (VStr s) = rnf s
   rnf VUnit = ()
+  rnf (VConstructor name arity values) = rnf name `seq` rnf arity `seq` rnf values
+  rnf (VData name values) = rnf name `seq` rnf values
   rnf (VJust v) = rnf v
   rnf VNothing = ()
   rnf (VLeft v) = rnf v
@@ -71,7 +81,9 @@ type Env = Map.Map String Value
 
 data RuntimeError
   = DivByZero
+  | IntegerOverflow
   | TypeError String
   | UnboundVariable String
   | RecordFieldNotFound String
+  | ExitRequested Int
   deriving (Show, Eq)

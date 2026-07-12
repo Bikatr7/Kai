@@ -22,42 +22,42 @@ lambdaExpr expr = do
 
 ifExpr :: ExprParser -> Parser Expr
 ifExpr expr = do
-  symbol "if"
+  keyword "if"
   cond <- expr
-  symbol "then"
+  keyword "then"
   thenExpr <- expr
-  symbol "else"
+  keyword "else"
   If cond thenExpr <$> expr
 
 letExpr :: ExprParser -> Parser Expr
 letExpr expr = do
-  symbol "let"
+  keyword "let"
   var <- identifier
   maybeType <- optional $ do
     symbol ":"
     syntaxType
   symbol "="
   val <- expr
-  symbol "in"
+  keyword "in"
   Let var maybeType val <$> expr
 
 letRecExpr :: ExprParser -> Parser Expr
 letRecExpr expr = do
-  symbol "letrec"
+  keyword "letrec"
   var <- identifier
   maybeType <- optional $ do
     symbol ":"
     syntaxType
   symbol "="
   val <- expr
-  symbol "in"
+  keyword "in"
   LetRec var maybeType val <$> expr
 
 caseExpr :: ExprParser -> Parser Expr
 caseExpr expr = do
-  symbol "case"
+  keyword "case"
   scrutinee <- expr
-  symbol "of"
+  keyword "of"
   patterns <- sepBy1 (casePattern expr) (symbol "|")
   return $ Case scrutinee patterns
 

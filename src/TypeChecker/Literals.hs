@@ -14,6 +14,7 @@ inferLiteral _ (StrLit _) = return (Map.empty, TString)
 inferLiteral _ UnitLit = return (Map.empty, TUnit)
 inferLiteral _ Input = return (Map.empty, TString)
 inferLiteral _ Args = return (Map.empty, TList TString)
+inferLiteral _ GetCurrentDirectory = return (Map.empty, TString)
 
 inferVariable :: TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferVariable env (Var x) = case Map.lookup x env of

@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // Analyze a file or a built-in sample with records, modules, and Maybe handling.
 import TextAnalysis
 let sample = "Kai examples should stay practical, typed, and honest."

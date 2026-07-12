@@ -15,10 +15,10 @@ fibExpr :: String
 fibExpr = "letrec fib = \\n -> if n < 2 then n else fib (n - 1) + fib (n - 2) in fib 10"
 
 factorialExpr :: String
-factorialExpr = "letrec fact = \\n -> if n <= 1 then 1 else n * fact (n - 1) in fact 10"
+factorialExpr = "letrec fact = \\n -> if n < 2 then 1 else n * fact (n - 1) in fact 10"
 
 listOpsExpr :: String
-listOpsExpr = "let list = [1,2,3,4,5,6,7,8,9,10] in length (map (\\x -> x * 2) (filter (\\x -> x % 2 == 0) list))"
+listOpsExpr = "let list = [1,2,3,4,5,6,7,8,9,10] in length (map (\\x -> x * 2) (filter (\\x -> x > 5) list))"
 
 stringOpsExpr :: String
 stringOpsExpr = "let str = \"hello world this is a test string for benchmarking\" in strLength (join \",\" (split \" \" str))"
@@ -29,19 +29,19 @@ deepNestingExpr = "((((((((((((((((1))))))))))))))))"
 complexExpr :: String
 complexExpr = "let x = 5 in let y = 10 in if x < y then let z = x + y in z * 2 else 0"
 
-parseEval :: String -> Either String Value
+parseEval :: String -> Value
 parseEval input = case parseExpr input of
-  Left err -> Left (show err)
+  Left err -> error $ "Invalid evaluator benchmark expression: " ++ show err
   Right expr -> case evalPure expr of
-    Left err -> Left (show err)
-    Right val -> Right val
+    Left err -> error $ "Evaluator benchmark failed: " ++ show err
+    Right val -> val
 
-parseTypeCheck :: String -> Either String Type
+parseTypeCheck :: String -> Type
 parseTypeCheck input = case parseExpr input of
-  Left err -> Left (show err)
+  Left err -> error $ "Invalid type-check benchmark expression: " ++ show err
   Right expr -> case typeCheck expr of
-    Left err -> Left (show err)
-    Right typ -> Right typ
+    Left err -> error $ "Type-check benchmark failed: " ++ show err
+    Right typ -> typ
 
 speedBenchmarks :: Benchmark
 speedBenchmarks = bgroup "Speed Benchmarks"

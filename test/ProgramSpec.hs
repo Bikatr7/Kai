@@ -109,6 +109,27 @@ spec = do
           Right ast -> evalProgram ast `shouldReturn` Right (VStr "hihihi")
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
+      it "supports annotated polymorphic recursion at top level" $ do
+        let program =
+              "letrec nestedLayers : Int -> [a] -> Int = \\depth -> \\xs -> if depth == 0 then length xs else 1 + nestedLayers (depth - 1) [xs]\n\
+              \nestedLayers 2 [1, 2, 3]"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TInt
+            evalProgram ast `shouldReturn` Right (VInt 3)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "rejects top-level polymorphic recursion without an explicit annotation" $ do
+        let program =
+              "letrec nestedLayers = \\depth -> \\xs -> if depth == 0 then length xs else 1 + nestedLayers (depth - 1) [xs]\n\
+              \nestedLayers 2 [1, 2, 3]"
+        case parseProgram program of
+          Right ast -> case typeCheckProgram ast of
+            Left (InfiniteType _ _) -> return ()
+            Left other -> expectationFailure $ "Expected InfiniteType, got " ++ show other
+            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
     describe "Complex Programs" $ do
       it "handles program with data structures" $ do
         let program = "let nums = [1, 2, 3, 4, 5]\nlet doubled = map (\\x -> x * 2) nums\nlength doubled"
@@ -266,6 +287,38 @@ spec = do
           Right ast -> do
             typeCheckProgram ast `shouldBe` Right TInt
             evalProgram ast `shouldReturn` Right (VInt 7)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports multiline top-level case alternatives without forcing parentheses" $ do
+        let program = "letrec render = \\value -> case value of\n  0 -> \"zero\"\n  | n -> \"n=\" ++ toString n\nrender 7"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TString
+            evalProgram ast `shouldReturn` Right (VStr "n=7")
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports top-level data programs whose helper definitions continue onto | lines" $ do
+        let program = "data Expr = Lit Int | Add (Expr) (Expr)\nletrec render = \\expr -> case expr of\n  Lit n -> toString n\n  | Add left right -> \"(\" ++ render left ++ \" + \" ++ render right ++ \")\"\nrender (Add (Lit 2) (Lit 3))"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TString
+            evalProgram ast `shouldReturn` Right (VStr "(2 + 3)")
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports consecutive independent letrec helpers with different result types" $ do
+        let program = "letrec render = \\n -> if n == 0 then \"zero\" else toString n\nletrec double = \\n -> if n == 0 then 0 else n * 2\n(render 7, double 7)"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right (TTuple [TString, TInt])
+            evalProgram ast `shouldReturn` Right (VTuple [VStr "7", VInt 14])
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports top-level letrec helpers with one-way forward references" $ do
+        let program = "letrec start = \\n -> bump n\nletrec bump = \\n -> if n == 0 then 1 else n + 1\nstart 4"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TInt
+            evalProgram ast `shouldReturn` Right (VInt 5)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "supports multiline top-level recursive definitions that continue after ->" $ do

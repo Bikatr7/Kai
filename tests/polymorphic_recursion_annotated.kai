@@ -1,0 +1,5 @@
+// expect: 3
+letrec nestedLayers : Int -> [a] -> Int = \depth -> \xs ->
+  if depth == 0 then length xs else 1 + nestedLayers (depth - 1) [xs]
+
+nestedLayers 2 [1, 2, 3]

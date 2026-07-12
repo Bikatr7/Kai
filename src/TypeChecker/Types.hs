@@ -13,6 +13,7 @@ data Type
   | TUnit
   | TFun Type Type
   | TVar String  -- Type variables for inference
+  | TCustom String [Type]
   | TMaybe Type  -- Maybe type for optional values
   | TEither Type Type  -- Either type for error handling
   | TList Type
@@ -50,12 +51,14 @@ syntaxTypeToType STInt = TInt
 syntaxTypeToType STBool = TBool
 syntaxTypeToType STString = TString
 syntaxTypeToType STUnit = TUnit
+syntaxTypeToType (STVar name) = TVar name
 syntaxTypeToType (STFun t1 t2) = TFun (syntaxTypeToType t1) (syntaxTypeToType t2)
 syntaxTypeToType (STMaybe t) = TMaybe (syntaxTypeToType t)
 syntaxTypeToType (STEither t1 t2) = TEither (syntaxTypeToType t1) (syntaxTypeToType t2)
 syntaxTypeToType (STList t) = TList (syntaxTypeToType t)
 syntaxTypeToType (STRecord fields) = TRecord (Map.fromList (map (second syntaxTypeToType) fields))
 syntaxTypeToType (STTuple ts) = TTuple (map syntaxTypeToType ts)
+syntaxTypeToType (STCustom name args) = TCustom name (map syntaxTypeToType args)
 
 monoScheme :: Type -> Scheme
 monoScheme = Forall []
@@ -70,6 +73,7 @@ instance NFData Type where
   rnf TUnit = ()
   rnf (TFun t1 t2) = rnf t1 `seq` rnf t2
   rnf (TVar s) = rnf s
+  rnf (TCustom name args) = rnf name `seq` rnf args
   rnf (TMaybe t) = rnf t
   rnf (TEither t1 t2) = rnf t1 `seq` rnf t2
   rnf (TList t) = rnf t

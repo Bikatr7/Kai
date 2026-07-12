@@ -10,9 +10,10 @@ module ModuleSystem (
 
 import Syntax
 import Parser
+import DataDeclarations (dataConstructorsTypeEnv, dataConstructorsValueEnv)
 import TypeChecker (typeCheckProgramWithDirIO, TypeEnv, Substitution, TypeError(..), syntaxTypeToType)
-import TypeChecker.Types (Type(..), monoScheme, schemeType)
-import TypeChecker.Substitution (applySubst, applySubstEnv, composeSubst, generalize)
+import TypeChecker.Types (Type(..), Scheme, monoScheme)
+import TypeChecker.Substitution (applySubst, applySubstEnv, composeSubst, generalize, schemeIsInstanceOf)
 import TypeChecker.Unification (unify)
 import TypeChecker.Inference (infer)
 import Evaluator.Types
@@ -145,6 +146,9 @@ evalModuleWithEnv evalFunc env currentDir (Program topLevels) loadingStack = do
                     Right val -> do
                         let env' = Map.insert var val env
                         evalDefinitions evalFunc env' rest
+    evalDefinitions evalFunc env (TLData _ _ constructors : rest) = do
+        let env' = Map.union (dataConstructorsValueEnv constructors) env
+        evalDefinitions evalFunc env' rest
     evalDefinitions evalFunc env (_ : rest) = evalDefinitions evalFunc env rest
     
     collectConsecutiveLetrecs :: [TopLevel] -> ([TopLevel], [TopLevel])
@@ -249,6 +253,9 @@ extractTypeEnvIOWithStack currentDir program loadingStack = do
           let mergedEnv = Map.union moduleTypeEnv env
           go mergedEnv rest
     go env (TLExport _ : rest) = go env rest
+    go env (TLData typeName typeVars constructors : rest) = do
+      let env' = Map.union (dataConstructorsTypeEnv typeName typeVars constructors) env
+      go env' rest
     go env (TLDef var maybeType expr : rest) = do
       case expr of
         LetRec _ _ _ _ -> do
@@ -291,25 +298,9 @@ extractTypeEnvIOWithStack currentDir program loadingStack = do
     
     processMutualRecursionTypeExtract :: TypeEnv -> [TopLevel] -> IO (Either TypeError TypeEnv)
     processMutualRecursionTypeExtract env letrecs = do
-      let funcTypes = map (\case
-            TLDef var maybeType _ -> (var, case maybeType of
-              Just sType -> syntaxTypeToType sType
-              Nothing -> TVar var)
-            _ -> error "processMutualRecursionTypeExtract: expected TLDef") letrecs
-      let mutualEnv = Map.union (Map.fromList (map (\(var, ty) -> (var, monoScheme ty)) funcTypes)) env
-      let typeCheckLetrec topLevel = case topLevel of
-            TLDef var _ (LetRec _ _ val _) ->
-              case evalStateT (infer mutualEnv val) 0 of
-                Left err -> Left err
-                Right (subst, valType) ->
-                  case unify (applySubst subst (schemeType (mutualEnv Map.! var))) (applySubst subst valType) of
-                    Left err -> Left err
-                    Right unifySubst ->
-                      let finalSubst = composeSubst unifySubst subst
-                          finalType = applySubst finalSubst (schemeType (mutualEnv Map.! var))
-                      in Right (finalSubst, finalType)
-            _ -> Left (GeneralTypeError "processMutualRecursionTypeExtract: expected TLDef with LetRec")
-      let results = map typeCheckLetrec letrecs
+      let funcTypes = map toFuncType letrecs
+      let mutualEnv = Map.union (Map.fromList [(var, scheme) | (var, _, _, scheme) <- funcTypes]) env
+      let results = map (typeCheckLetrec env mutualEnv) funcTypes
       case lefts results of
         err : _ -> return $ Left err
         [] -> do
@@ -318,7 +309,60 @@ extractTypeEnvIOWithStack currentDir program loadingStack = do
             Left err -> return $ Left err
             Right combinedSubst -> do
               let baseEnv = applySubstEnv combinedSubst env
-              let finalTypes = map (applySubst combinedSubst . snd) funcTypes
-              let generalized = zipWith (\(var, _) ty -> (var, generalize baseEnv ty)) funcTypes finalTypes
+              let finalTypes =
+                    zipWith
+                      (\(_, maybeAnnotatedType, _, _) inferredType ->
+                         case maybeAnnotatedType of
+                           Just annotatedType -> applySubst combinedSubst annotatedType
+                           Nothing -> applySubst combinedSubst inferredType)
+                      funcTypes
+                      (map snd successes)
+              let generalized =
+                    zipWith
+                      (\(var, maybeAnnotatedType, _, _) ty ->
+                         ( var
+                         , case maybeAnnotatedType of
+                             Just annotatedType -> generalize baseEnv (applySubst combinedSubst annotatedType)
+                             Nothing -> generalize baseEnv ty
+                         ))
+                      funcTypes
+                      finalTypes
               let finalEnv = Map.union (Map.fromList generalized) baseEnv
               return $ Right finalEnv
+      where
+        toFuncType :: TopLevel -> (String, Maybe Type, Type, Scheme)
+        toFuncType (TLDef var Nothing _) = (var, Nothing, TVar var, monoScheme (TVar var))
+        toFuncType (TLDef var (Just sType) _) =
+          let annotatedType = syntaxTypeToType sType
+          in (var, Just annotatedType, annotatedType, generalize env annotatedType)
+        toFuncType _ = error "processMutualRecursionTypeExtract: expected TLDef"
+
+        typeCheckLetrec :: TypeEnv -> TypeEnv -> (String, Maybe Type, Type, Scheme) -> Either TypeError (Substitution, Type)
+        typeCheckLetrec outerEnv mutualEnv (var, maybeAnnotatedType, assumedType, _) =
+          case Map.lookup var letrecMap of
+            Just (TLDef _ _ (LetRec _ _ val _)) ->
+              case evalStateT (infer mutualEnv val) 0 of
+                Left err -> Left err
+                Right (subst, valType) ->
+                  case maybeAnnotatedType of
+                    Just annotatedType ->
+                      let baseEnv = applySubstEnv subst outerEnv
+                          annotatedScheme = generalize baseEnv (applySubst subst annotatedType)
+                          inferredScheme = generalize baseEnv (applySubst subst valType)
+                      in case evalStateT (schemeIsInstanceOf annotatedScheme inferredScheme) 0 of
+                           Left err -> Left err
+                           Right True -> Right (subst, applySubst subst annotatedType)
+                           Right False -> Left $ GeneralTypeError "Recursive definition does not satisfy its annotated polymorphic type"
+                    Nothing ->
+                      case unify (applySubst subst assumedType) (applySubst subst valType) of
+                        Left err -> Left err
+                        Right unifySubst ->
+                          let finalSubst = composeSubst unifySubst subst
+                              finalType = applySubst finalSubst (applySubst subst assumedType)
+                          in Right (finalSubst, finalType)
+            _ -> Left (GeneralTypeError "processMutualRecursionTypeExtract: expected TLDef with LetRec")
+
+        letrecMap = Map.fromList
+          [ (name, topLevel)
+          | topLevel@(TLDef name _ (LetRec _ _ _ _)) <- letrecs
+          ]

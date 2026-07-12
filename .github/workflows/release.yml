@@ -1,21 +1,19 @@
 name: Build and Release Binaries
 
 on:
-  push:
-    branches:
-      - master
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   check-version:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     outputs:
       version: ${{ steps.get-version.outputs.version }}
       tag: ${{ steps.get-version.outputs.tag }}
-      should-release: ${{ steps.check-tag.outputs.should-release }}
+      should-release: ${{ steps.check-release.outputs.should-release }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,22 +28,71 @@ jobs:
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "Found version: $VERSION"
       
-      - name: Check if tag already exists
-        id: check-tag
+      - name: Check release completeness
+        id: check-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="v${{ steps.get-version.outputs.version }}"
-          if git tag -l | grep -q "^$TAG$"; then
-            echo "Tag $TAG already exists, skipping release"
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+            if [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
+              echo "Tag $TAG points to $TAG_COMMIT instead of $GITHUB_SHA" >&2
+              exit 1
+            fi
+          fi
+
+          EXISTING_ASSETS=$(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true)
+          MISSING_ASSETS=0
+          for ASSET_PATTERN in '^kai-linux-' '^kai-macos-' '^kai-windows-.*\.exe$'; do
+            if ! grep -Eq "$ASSET_PATTERN" <<< "$EXISTING_ASSETS"; then
+              echo "Release $TAG has no asset matching $ASSET_PATTERN"
+              MISSING_ASSETS=$((MISSING_ASSETS + 1))
+            fi
+          done
+
+          if [ "$MISSING_ASSETS" -eq 0 ]; then
+            echo "Release $TAG already has every platform asset, skipping"
             echo "should-release=false" >> $GITHUB_OUTPUT
           else
-            echo "Tag $TAG does not exist, proceeding with release"
+            echo "Release $TAG is absent or incomplete, proceeding"
             echo "should-release=true" >> $GITHUB_OUTPUT
           fi
+
+  validate:
+    name: Validate release candidate
+    runs-on: ubuntu-latest
+    needs: check-version
+    if: needs.check-version.outputs.should-release == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Haskell
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4.8'
+          enable-stack: true
+          stack-version: 'latest'
+
+      - name: Cache Stack
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: ${{ runner.os }}-stack-${{ hashFiles('stack.yaml.lock') }}
+
+      - name: Run full test suite
+        run: stack test --fast
+
+      - name: Validate benchmark programs
+        run: stack bench --benchmark-arguments="--iters 1"
 
   build:
     name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    needs: check-version
+    needs: [check-version, validate]
     if: needs.check-version.outputs.should-release == 'true'
     strategy:
       matrix:
@@ -177,17 +224,30 @@ jobs:
     needs: [check-version, build]
     runs-on: ubuntu-latest
     if: needs.check-version.outputs.should-release == 'true'
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
           
-      - name: Create and push tag
+      - name: Create or reuse tag
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git tag ${{ needs.check-version.outputs.tag }}
-          git push origin ${{ needs.check-version.outputs.tag }}
+          TAG=${{ needs.check-version.outputs.tag }}
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            TAG_COMMIT=$(git rev-list -n 1 "$TAG")
+            if [ "$TAG_COMMIT" != "$GITHUB_SHA" ]; then
+              echo "Tag $TAG points to $TAG_COMMIT instead of $GITHUB_SHA" >&2
+              exit 1
+            fi
+            echo "Reusing existing tag $TAG"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
 
       - uses: actions/download-artifact@v4
         with:
@@ -199,6 +259,7 @@ jobs:
           tag_name: ${{ needs.check-version.outputs.tag }}
           name: "Kai v${{ needs.check-version.outputs.version }}"
           generate_release_notes: true
+          overwrite_files: true
           files: |
             artifacts/**/kai-*
         env:

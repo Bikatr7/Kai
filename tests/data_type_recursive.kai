@@ -1,0 +1,4 @@
+// expect: 6
+data Tree a = Leaf a | Node (Tree a) (Tree a)
+letrec sumTree = \tree -> case tree of Leaf x -> x | Node left right -> sumTree left + sumTree right
+sumTree (Node (Leaf 1) (Node (Leaf 2) (Leaf 3)))

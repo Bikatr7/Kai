@@ -40,6 +40,11 @@ matchPattern (PTuple pats) (VTuple vals)
       envs <- sequence [matchPattern p v | (p, v) <- zip pats vals]
       return $ Map.unions envs
   | otherwise = Nothing
+matchPattern (PConstructor name pats) (VData valueName values)
+  | name == valueName && length pats == length values = do
+      envs <- sequence [matchPattern pat value | (pat, value) <- zip pats values]
+      return $ Map.unions envs
+  | otherwise = Nothing
 matchPattern _ _ = Nothing
 
 evalPatterns :: EvalFunc -> Env -> Expr -> Either RuntimeError Value

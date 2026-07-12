@@ -2,17 +2,28 @@ module Syntax where
 
 import Control.DeepSeq
 
+kaiIntMin :: Integer
+kaiIntMin = -2147483648
+
+kaiIntMax :: Integer
+kaiIntMax = 2147483647
+
+isKaiInt :: Integer -> Bool
+isKaiInt value = value >= kaiIntMin && value <= kaiIntMax
+
 data SyntaxType
   = STInt
   | STBool
   | STString
   | STUnit
+  | STVar String
   | STFun SyntaxType SyntaxType
   | STMaybe SyntaxType
   | STEither SyntaxType SyntaxType
   | STList SyntaxType
   | STRecord [(String, SyntaxType)]
   | STTuple [SyntaxType]
+  | STCustom String [SyntaxType]
   deriving (Show, Eq)
 
 data Expr
@@ -86,14 +97,29 @@ data Expr
   -- File I/O
   | ReadFile Expr
   | WriteFile Expr Expr
+  | AppendFile Expr Expr
+  | FileExists Expr
+  | ListDirectory Expr
+  | CreateDirectory Expr
+  | RemoveDirectory Expr
+  | GetCurrentDirectory
+  | SetCurrentDirectory Expr
+  | System Expr
+  | GetEnv Expr
+  | SetEnv Expr Expr
+  | Exit Expr
   -- Command-line arguments
   | Args
+  deriving (Show, Eq)
+
+data DataConstructor = DataConstructor String [SyntaxType]
   deriving (Show, Eq)
 
 -- Top-level definitions for modules
 data TopLevel
   = TLDef String (Maybe SyntaxType) Expr      -- let x = expr
   | TLExpr Expr                               -- top-level expression
+  | TLData String [String] [DataConstructor]  -- data Tree a = Leaf a | Node (Tree a) (Tree a)
   | TLImport String                           -- import ModuleName
   | TLExport [String]                         -- export name1, name2, ...
   deriving (Show, Eq)
@@ -116,6 +142,7 @@ data Pattern
   | PCons Pattern Pattern
   | PRecord [(String, Pattern)]
   | PTuple [Pattern]
+  | PConstructor String [Pattern]
   deriving (Show, Eq)
 
 instance NFData SyntaxType where
@@ -123,12 +150,14 @@ instance NFData SyntaxType where
   rnf STBool = ()
   rnf STString = ()
   rnf STUnit = ()
+  rnf (STVar name) = rnf name
   rnf (STFun t1 t2) = rnf t1 `seq` rnf t2
   rnf (STMaybe t) = rnf t
   rnf (STEither t1 t2) = rnf t1 `seq` rnf t2
   rnf (STList t) = rnf t
   rnf (STRecord fs) = rnf fs
   rnf (STTuple ts) = rnf ts
+  rnf (STCustom name args) = rnf name `seq` rnf args
 
 instance NFData Expr where
   rnf (IntLit n) = rnf n
@@ -191,11 +220,26 @@ instance NFData Expr where
   rnf (StrLength e) = rnf e
   rnf (ReadFile e) = rnf e
   rnf (WriteFile e1 e2) = rnf e1 `seq` rnf e2
+  rnf (AppendFile e1 e2) = rnf e1 `seq` rnf e2
+  rnf (FileExists e) = rnf e
+  rnf (ListDirectory e) = rnf e
+  rnf (CreateDirectory e) = rnf e
+  rnf (RemoveDirectory e) = rnf e
+  rnf GetCurrentDirectory = ()
+  rnf (SetCurrentDirectory e) = rnf e
+  rnf (System e) = rnf e
+  rnf (GetEnv e) = rnf e
+  rnf (SetEnv e1 e2) = rnf e1 `seq` rnf e2
+  rnf (Exit e) = rnf e
   rnf Args = ()
+
+instance NFData DataConstructor where
+  rnf (DataConstructor name tys) = rnf name `seq` rnf tys
 
 instance NFData TopLevel where
   rnf (TLDef s mt e) = rnf s `seq` rnf mt `seq` rnf e
   rnf (TLExpr e) = rnf e
+  rnf (TLData name vars ctors) = rnf name `seq` rnf vars `seq` rnf ctors
   rnf (TLImport s) = rnf s
   rnf (TLExport ss) = rnf ss
 
@@ -215,4 +259,5 @@ instance NFData Pattern where
   rnf (PList ps) = rnf ps
   rnf (PCons p1 p2) = rnf p1 `seq` rnf p2
   rnf (PRecord fs) = rnf fs
-  rnf (PTuple ps) = rnf ps 
+  rnf (PTuple ps) = rnf ps
+  rnf (PConstructor name pats) = rnf name `seq` rnf pats

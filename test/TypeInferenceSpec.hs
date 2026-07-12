@@ -51,6 +51,63 @@ spec = describe "Advanced Type Inference" $ do
         Right ty -> expectationFailure $ "Expected TBool, got: " ++ show ty
         Left err -> expectationFailure $ "Should type-check nested application: " ++ show err
 
+  describe "Fixpoint Inference" $ do
+    it "infers the result type of a constant fixpoint" $ do
+      parseAndInferType "fix (\\self -> 42)" `shouldBe` Right TInt
+
+    it "infers a recursive function fixpoint" $ do
+      let factorial = "fix (\\self -> \\n -> if n == 0 then 1 else n * self (n - 1))"
+      parseAndInferType factorial `shouldBe` Right (TFun TInt TInt)
+
+    it "rejects a fixpoint operand that is not a function" $ do
+      case parseAndInferType "fix 42" of
+        Left (UnificationError TInt (TFun (TVar inputVar) (TVar outputVar))) ->
+          inputVar `shouldBe` outputVar
+        Left err -> expectationFailure $ "Expected function unification error, got: " ++ show err
+        Right ty -> expectationFailure $ "Should reject non-function fixpoint, got: " ++ show ty
+
+  describe "Composite Type Inference" $ do
+    it "rejects an annotation that assigns conflicting record fields to one type variable" $ do
+      let unsound =
+            "let f : {a: a, b: a} -> {a: Int, b: Bool} = \\x -> x " ++
+            "in f {a = false, b = false}"
+      parseAndInferType unsound `shouldBe` Left (UnificationError TInt TBool)
+
+  describe "Composite Pattern Type Inference" $ do
+    it "rejects heterogeneous list patterns" $ do
+      shouldHaveTypeError
+        "case [] of [1, true] -> 1 | _ -> 0"
+        (UnificationError TInt TBool)
+
+    it "accepts homogeneous list patterns" $ do
+      parseAndInferType "case [] of [1, 2] -> 1 | _ -> 0" `shouldBe` Right TInt
+
+    it "threads the head constraint into a cons tail pattern" $ do
+      shouldHaveTypeError
+        "case [] of 1 :: [true] -> 1 | _ -> 0"
+        (UnificationError TInt TBool)
+
+    it "accepts consistent head and tail constraints in cons patterns" $ do
+      parseAndInferType "case [] of 1 :: [2] -> 1 | _ -> 0" `shouldBe` Right TInt
+
+    it "rejects conflicting tuple patterns when components share a type" $ do
+      shouldHaveTypeError
+        "\\x -> case (x, x) of (1, true) -> 1 | _ -> 0"
+        (UnificationError TInt TBool)
+
+    it "accepts consistent tuple patterns when components share a type" $ do
+      parseAndInferType "\\x -> case (x, x) of (1, 2) -> 1 | _ -> 0"
+        `shouldBe` Right (TFun TInt TInt)
+
+    it "rejects conflicting record patterns when fields share a type" $ do
+      shouldHaveTypeError
+        "\\x -> case {a = x, b = x} of {a = 1, b = true} -> 1 | _ -> 0"
+        (UnificationError TInt TBool)
+
+    it "accepts consistent record patterns when fields share a type" $ do
+      parseAndInferType "\\x -> case {a = x, b = x} of {a = 1, b = 2} -> 1 | _ -> 0"
+        `shouldBe` Right (TFun TInt TInt)
+
   describe "Constraint Solving" $ do
     it "unifies function parameters with usage" $ do
       case parseAndInferType "\\x -> x + 1" of
@@ -122,3 +179,9 @@ parseAndInferType input = case parseExpr input of
 
 parseAndTypeCheck :: String -> Either TypeError Type  
 parseAndTypeCheck = parseAndInferType
+
+shouldHaveTypeError :: String -> TypeError -> Expectation
+shouldHaveTypeError source expected =
+  case parseExpr source of
+    Left err -> expectationFailure $ "Parse error: " ++ show err
+    Right expr -> typeCheck expr `shouldBe` Left expected

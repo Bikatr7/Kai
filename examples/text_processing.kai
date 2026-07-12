@@ -1,3 +1,4 @@
+// expect-type: TUnit
 // Use the reusable StringUtils example module for practical text cleanup.
 import StringUtils
 let csvLine = " apples , bananas ,  pears ,  "

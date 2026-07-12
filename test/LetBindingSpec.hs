@@ -2,6 +2,8 @@ module LetBindingSpec where
 
 import Test.Hspec
 import Test.QuickCheck
+import Control.Exception (evaluate)
+import System.Timeout (timeout)
 
 import Parser
 import Evaluator (evalPure, Value(..))
@@ -29,6 +31,42 @@ spec = do
         let expr = "let f = \\x -> x * 2 in f 5"
         case parseExpr expr of
           Right ast -> evalPure ast `shouldBe` Right (VInt 10)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+    describe "Fixed-Point Evaluation" $ do
+      it "evaluates constant fixed points in pure and IO modes" $ do
+        case parseExpr "fix (\\self -> 42)" of
+          Right ast -> do
+            typeCheck ast `shouldBe` Right TInt
+            evalPure ast `shouldBe` Right (VInt 42)
+            E.eval ast `shouldReturn` Right (VInt 42)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "evaluates recursive fixed-point functions in pure and IO modes" $ do
+        let source = "fix (\\self -> \\n -> if n == 0 then 1 else n * self (n - 1)) 5"
+        case parseExpr source of
+          Right ast -> do
+            typeCheck ast `shouldBe` Right TInt
+            evalPure ast `shouldBe` Right (VInt 120)
+            E.eval ast `shouldReturn` Right (VInt 120)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "reports self-forcing fixed points without escaping a host exception" $ do
+        case parseExpr "fix (\\self -> self)" of
+          Right ast -> do
+            let expected = Left (E.TypeError "Fixpoint forced before initialization")
+            pureResult <- timeout 1000000 $ evaluate (evalPure ast)
+            pureResult `shouldBe` Just expected
+            ioResult <- timeout 1000000 $ E.eval ast
+            ioResult `shouldBe` Just expected
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "rejects non-function fixed points in both evaluator modes" $ do
+        case parseExpr "fix 42" of
+          Right ast -> do
+            let expected = Left (E.TypeError "Fix expects a function")
+            evalPure ast `shouldBe` expected
+            E.eval ast `shouldReturn` expected
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Scoping" $ do
@@ -74,6 +112,25 @@ spec = do
           Right ast -> do
             typeCheck ast `shouldBe` Right (TTuple [TInt, TBool])
             E.eval ast `shouldReturn` Right (E.VTuple [VInt 1, E.VBool True])
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "supports annotated polymorphic recursion in local letrec bindings" $ do
+        let expr =
+              "letrec nestedLayers : Int -> [a] -> Int = \\depth -> \\xs -> if depth == 0 then length xs else 1 + nestedLayers (depth - 1) [xs] in nestedLayers 2 [1, 2, 3]"
+        case parseExpr expr of
+          Right ast -> do
+            typeCheck ast `shouldBe` Right TInt
+            evalPure ast `shouldBe` Right (VInt 3)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "rejects polymorphic recursion without an explicit annotation" $ do
+        let expr =
+              "letrec nestedLayers = \\depth -> \\xs -> if depth == 0 then length xs else 1 + nestedLayers (depth - 1) [xs] in nestedLayers 2 [1, 2, 3]"
+        case parseExpr expr of
+          Right ast -> case typeCheck ast of
+            Left (InfiniteType _ _) -> return ()
+            Left other -> expectationFailure $ "Expected InfiniteType, got " ++ show other
+            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "catches type errors in let bindings" $ do
