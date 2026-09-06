@@ -16,7 +16,8 @@ The codebase follows a modular architecture with clear separation of concerns. E
 
 #### Shared Declaration Logic (`src/DataDeclarations.hs`)
 - Constructor scheme generation for user-defined algebraic data types
-- Shared runtime/type-environment construction for `data` declarations
+- Shared runtime/type-environment construction and validation for `data` declarations
+- Import compatibility checks preserve private declaration metadata
 
 #### Parser (`src/Parser/`)
 - **Lexer.hs**: Lexical analysis, reserved keywords, symbol parsing
@@ -41,7 +42,7 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - **Operations.hs**: Built-in operation type checking
 - **Patterns.hs**: Pattern type checking
 - **Inference.hs**: Main type inference dispatcher
-- **TypeChecker.hs**: Public interface with typeCheck and typeCheckWithEnv
+- **TypeChecker.hs**: Shared program/definition inference used by files, module exports, and the REPL; one fresh-variable supply per recursive block
 
 #### Evaluator (`src/Evaluator/`)
 - **Types.hs**: Runtime value definitions with NFData for benchmarking
@@ -57,12 +58,14 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - **Conversions.hs**: Type conversion functions (pure and IO variants)
 - **IOOps.hs**: I/O operations (input, print, file operations)
 - **Patterns.hs**: Pattern matching evaluation (pure and IO variants)
+- **Program.hs**: Shared top-level execution for scripts and modules
+- **Recursion.hs**: Source-order initialization with guarded recursive references
 - **Evaluator.hs**: Public interface with eval, evalWithEnv, evalPure, evalPureWithEnv
 
 #### CLI (`src/CLI.hs`, `src/Main.hs`)
 - Command-line interface with expression evaluation, file execution, and REPL entry
 - Debug mode, clean output by default, argument passing support, and package-derived `--version`/`-V` output
-- Non-zero exit codes for parse, type, and runtime failures
+- Non-zero exit codes for parse, type, runtime, and output failures; diagnostics fall back to stderr if stdout fails
 - `src/REPL.hs`: multiline REPL with `:type`, `:load`, `:reload`, and persistent environments
 - `website/`: Yesod-based static site generator used for the project website/demo.
 
@@ -71,7 +74,7 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - Evaluation: strict (call-by-value).
 - Integers: signed 32-bit values; literals, `parseInt`, and arithmetic results enforce the range, and arithmetic overflow returns `IntegerOverflow`.
 - Unit: `()` value with type `TUnit`.
-- `print : a -> Unit` prints and returns `()`.
+- `print : a -> Unit` prints, flushes stdout, and returns `()`. Write or flush failures return `TypeError "print: could not write to stdout"` and stop later effects.
 - `input : String` reads a line from stdin.
 - `args : [String]` returns command-line arguments passed to script.
 - File and directory I/O: `readFile`, `writeFile`, `appendFile`, `fileExists`, `listDirectory`, `createDirectory`, `removeDirectory`, `getCurrentDirectory`, `setCurrentDirectory`.
@@ -84,7 +87,8 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - Tuple functions: `fst`, `snd` for pairs.
 - Custom data types: top-level `data` declarations produce constructor functions and constructor patterns.
 - Equality: primitive and composite data compare structurally; different constructors compare as false, while callable values and recursive runtime references raise a runtime `TypeError` at any nesting depth.
-- Type annotations: Optional Haskell-style type annotations for lambdas and let bindings.
+- Type annotations: Optional Haskell-style annotations for lambdas and let bindings. Variables are fresh for each annotation; repeated variables within one annotation remain tied.
+- Constructor patterns require every field. Imported declaration compatibility compares parameter positions, and constructor visibility is tracked separately from ordinary values.
 - Let, letrec, top-level, and imported definitions are generalized; lambda parameters and pattern bindings remain monomorphic within each use site.
 - Recursive bindings can recurse polymorphically when they have explicit type annotations; unannotated recursive bindings remain monomorphic.
 - `fix : (a -> a) -> a` provides an explicitly typed fixed-point combinator; forcing an unproductive fixed point returns a Kai runtime error.
@@ -106,14 +110,18 @@ The codebase follows a modular architecture with clear separation of concerns. E
 Notes:
 - `+` is disambiguated from `++` in the lexer to ensure `++` parses correctly at its precedence.
 - Application binds tighter than prefix: `-f x` parses as `Sub (IntLit 0) (f x)`.
+- Prefix chains compose from right to left; `not not true` and `- - 5` are valid. Each numeric negation checks overflow.
 
 ## Build and Test
 
-Prereqs: Stack + GHC.
+Prereqs: Stack, GHC, Cabal, Python 3, Bash, Make, curl, tar, zip, and unzip. Cabal creates source archives during the packaging tests.
 
 - Build: `stack build`
-- Tests: `stack test --fast` (all 722 examples)
+- Tests: `stack test --fast` (unit, script, property, CLI, REPL, and stress tests)
+- On Windows, set `KAI_TEST_WEBSITE_HTML` to an exported site's `index.html` from the same source revision. Run `stack test --test-arguments='--skip "Kai runner and installation" --skip "Static site exporter"'`; these two POSIX tooling groups run on Linux and macOS. The native CLI, documentation examples, source/package helpers, and benchmark programs run on all three platforms.
 - Run CLI: `stack exec kai -- --help`
+- Install the checkout's runner: `make install`; `PREFIX=/path make install` selects an install prefix. The installed symlink resolves the checkout from any working directory. Add its `bin` directory to your shell's `PATH`.
+- Runner selection: `KAI_BIN`, then executables on `PATH`, then the active Stack snapshot. Runner copies and symlinks are skipped during `PATH` lookup. Without Stack, the newest local executable is used.
 - Run with debug output: `stack exec kai -- --debug -e "42 + 1"`
 - Try module-based example: `stack exec kai -- examples/text_analysis.kai`
 - Try ADT example: `stack exec kai -- examples/custom_data_types.kai`
@@ -126,10 +134,37 @@ Prereqs: Stack + GHC.
 - Unit tests: `test/*.hs` (Hspec + QuickCheck)
 - Script tests: `tests/*.kai` with `// expect:` directives
 - Property tests: `PropertyBasedSpec.hs`
+- Runner integration: `RunnerSpec.hs` covers executable selection, arguments, exit status, symlinks, and installation in temporary directories.
+- Documentation examples: `DocumentationSpec.hs` executes Markdown examples, checks stated results and builtin signatures, and runs the examples rendered by the website. Use `kai` fences for runnable examples and `text` fences for syntax templates and signature references.
+- Source archives: `SourceDistributionSpec.hs` checks that Cabal packages all scripts, fixtures, documentation, and website assets. Generate an archive with `stack sdist`.
+
+Every repository `.kai` file requires `// expect:`. All scripts under `tests/`
+and `test/`, including nested module fixtures, execute through `kai --check`.
+`// expect-type:` is an additional assertion, never a substitute for execution.
+Use a pure Kai expression for the expected value, or `error DivByZero` (or another
+exact runtime error rendering) for an expected error. Example:
+
+```kai
+// expect: "Hello, Ada"
+// expect-type: TString
+// stdin: "Ada\n"
+"Hello, " ++ input
+```
+
+`// stdin:` is a JSON string supplied by the test/release harness. The CLI itself
+reads actual stdin. Without a fixture, the harness supplies EOF. The release
+corpus runner applies a 30-second timeout per file and rejects missing or duplicate
+expectations. Runnable examples have separate smoke tests with real IO fixtures.
+Output capture uses exception-safe handle restoration and temporary files, so
+progress formatting, EOF, and large output cannot corrupt assertions.
+
+Run `make test` to exercise the progress formatter, and use
+`stack test --test-arguments="--qc-max-success=1000 --seed=42"` for a repeatable
+expanded property run.
 
 Run subsets:
 - `stack test --test-arguments "--match Arithmetic"`
-- `stack test --test-arguments "--match Script files"`
+- `stack test --test-arguments='--match "Script files"'`
 
 ## Performance Considerations
 
@@ -169,6 +204,10 @@ stack bench --benchmark-arguments="--csv=results.csv"
 
 ### Performance Baselines
 
+Use `nf work input` (or `W.func label work input` for allocation measurements).
+A closure such as `nf (\() -> work constant) ()` can share a cached result and
+produce invalid interpreter timings.
+
 All benchmark helpers fail immediately when their Kai input cannot be parsed,
 evaluated, or type-checked. CI runs every benchmark with one iteration as a
 validity gate. Performance comparisons still require before/after runs on the
@@ -205,6 +244,7 @@ same machine and build profile.
 
 ## Versioning & Release
 
+- CI runs native macOS and Windows language tests, benchmark checks, and package checks on `validation/` branches and manual dispatch, with read-only repository permissions. Documentation examples use the site exported by the Linux job from the same commit. Each native job builds, packages, extracts, and executes the CLI.
 - Bump version in `package.yaml` (hpack regenerates `.cabal`).
 - Update README header and website version display.
 - Push the synchronized `package.yaml` version bump to `master`; it automatically starts the release workflow. Manual dispatch remains available for retries. The workflow builds permission-preserving platform packages, writes `SHA256SUMS`, creates a draft, verifies the exact downloads natively, and only then publishes the release.
@@ -231,13 +271,13 @@ same machine and build profile.
 - **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
 - **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels) through parser and type checker optimizations
 - **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed for development
-- **Comprehensive testing**: 722 passing examples spanning unit, meaningful typed properties, asserted scripts, CLI, REPL, 1000-level stress, and example smoke coverage
+- **Comprehensive testing**: Tests span unit, properties, asserted scripts, CLI, REPL, 1000-level stress, and example smoke coverage
 
 ## Notes / TODOs
 
 - **For each release**: Keep package, docs, website, tests, and benchmark validation synchronized, then push the `package.yaml` version bump to `master`. The release workflow starts automatically and publishes only after every validation gate passes.
-- **Post-v0.0.4.5 focus**: REPL polish (`history`, `completion`, better diagnostics)
-- **Post-v0.0.4.5 focus**: Fill stdlib gaps that matter for scripts (line-oriented file helpers, JSON/HTTP, a few missing utilities)
+- **Development focus**: REPL polish (`history`, `completion`, better diagnostics)
+- **Development focus**: Fill stdlib gaps that matter for scripts (line-oriented file helpers, JSON/HTTP, a few missing utilities)
 - **Defer by default**: Package manager, formatter/linter/LSP, and full polymorphic-recursion inference or other advanced type-system work unless scripting ergonomics are already in good shape
 - When changing semantics, align README.md, SPEC.md, website, and DEVELOPING.md immediately.
 - Always verify that stress tests pass after performance-critical changes.

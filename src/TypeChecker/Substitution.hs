@@ -4,6 +4,7 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Control.Monad.State
 import TypeChecker.Types
+import Syntax (SyntaxType)
 
 freshTVar :: TypeInfer Type
 freshTVar = do
@@ -158,3 +159,17 @@ occursInType name (TList t) = occursInType name t
 occursInType name (TRecord fields) = any (occursInType name) (Map.elems fields)
 occursInType name (TTuple ts) = any (occursInType name) ts
 occursInType _ _ = False
+
+-- Each annotation owns its variables. Instantiate before unification so source
+-- names (including t0, t1, ...) cannot capture inference-generated variables.
+inferAnnotation :: TypeEnv -> SyntaxType -> TypeInfer Type
+inferAnnotation env syntax = do
+  ty <- lift $ validateSyntaxType env syntax
+  instantiate (generalize Map.empty ty)
+
+-- Declaration parameters are positional; their spelling is not type identity.
+alphaEquivalentSchemes :: Scheme -> Scheme -> Bool
+alphaEquivalentSchemes left right = canonical left == canonical right
+  where
+    canonical (Forall vars ty) =
+      (length vars, applySubst (Map.fromList (zip vars [TVar ("@bound" ++ show i) | i <- [0 :: Int ..]])) ty)

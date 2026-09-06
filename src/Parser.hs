@@ -32,7 +32,7 @@ data SplitMode
   = SplitNormal
   | SplitString Bool
   | SplitLineComment
-  | SplitBlockComment
+  | SplitBlockComment Int
 
 splitTopLevelChunks :: String -> [String]
 splitTopLevelChunks input = reverse $ finalize depthParens depthBrackets depthBraces mode current chunks
@@ -43,7 +43,7 @@ splitTopLevelChunks input = reverse $ finalize depthParens depthBrackets depthBr
     go dp db dbr SplitNormal currentChunk acc ('/':'/':rest) =
       go dp db dbr SplitLineComment (' ' : currentChunk) acc rest
     go dp db dbr SplitNormal currentChunk acc ('/':'*':rest) =
-      go dp db dbr SplitBlockComment (' ' : currentChunk) acc rest
+      go dp db dbr (SplitBlockComment 1) (' ' : currentChunk) acc rest
     go dp db dbr SplitNormal currentChunk acc ('"':rest) =
       go dp db dbr (SplitString False) ('"' : currentChunk) acc rest
     go dp db dbr SplitNormal currentChunk acc ('(':rest) =
@@ -87,20 +87,21 @@ splitTopLevelChunks input = reverse $ finalize depthParens depthBrackets depthBr
     go dp db dbr SplitLineComment currentChunk acc (_:rest) =
       go dp db dbr SplitLineComment currentChunk acc rest
 
-    go dp db dbr SplitBlockComment currentChunk acc ('*':'/':rest) =
-      go dp db dbr SplitNormal currentChunk acc rest
-    go dp db dbr SplitBlockComment currentChunk acc ('\r':rest) =
-      go dp db dbr SplitBlockComment currentChunk acc rest
-    go dp db dbr SplitBlockComment currentChunk acc ('\n':rest) =
-      go dp db dbr SplitBlockComment ('\n' : currentChunk) acc rest
-    go dp db dbr SplitBlockComment currentChunk acc (_:rest) =
-      go dp db dbr SplitBlockComment currentChunk acc rest
+    go dp db dbr (SplitBlockComment depth) currentChunk acc ('/':'*':rest) =
+      go dp db dbr (SplitBlockComment (depth + 1)) currentChunk acc rest
+    go dp db dbr (SplitBlockComment depth) currentChunk acc ('*':'/':rest) =
+      go dp db dbr (if depth == 1 then SplitNormal else SplitBlockComment (depth - 1)) currentChunk acc rest
+    go dp db dbr (SplitBlockComment depth) currentChunk acc ('\n':rest) =
+      go dp db dbr (SplitBlockComment depth) ('\n' : currentChunk) acc rest
+    go dp db dbr (SplitBlockComment depth) currentChunk acc (_:rest) =
+      go dp db dbr (SplitBlockComment depth) currentChunk acc rest
 
     finishChunk chunk acc =
       let cleaned = reverse chunk
       in if all isSpace cleaned then acc else cleaned : acc
 
-    finalize _ _ _ _ = finishChunk
+    finalize _ _ _ (SplitBlockComment _) chunk acc = finishChunk (reverse " /*" ++ chunk) acc
+    finalize _ _ _ _ chunk acc = finishChunk chunk acc
 
 statements :: Parser [Expr]
 statements = many (expr <* Lexer.sc <* (eol <|> eof))
@@ -214,7 +215,7 @@ coalesceProgramChunks = go []
         consume current remaining =
           case remaining of
             next:more
-              | startsWithContinuationPipe next ->
+              | startsWithContinuationPipe next || startsWithKeyword "in" next ->
                   consume (current ++ "\n" ++ next) more
             _ ->
               case parseTopLevelChunk current of

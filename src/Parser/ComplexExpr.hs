@@ -16,7 +16,7 @@ lambdaExpr expr = do
   param <- identifier
   maybeType <- optional $ do
     symbol ":"
-    syntaxType
+    syntaxTypeApplication
   symbol "->"
   Lambda param maybeType <$> expr
 

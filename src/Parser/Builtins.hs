@@ -6,183 +6,157 @@ import Parser.Lexer
 
 type ExprParser = Parser Expr
 
+-- Internal names cannot occur in user identifiers. Supplied arguments are
+-- bound before returning a partial application, preserving strict evaluation.
+builtin :: String -> ([Expr] -> Expr) -> Int -> ExprParser -> Parser Expr
+builtin name build arity atom = do
+  keyword name
+  supplied <- arguments arity
+  let names = ["@" ++ name ++ show i | i <- [0 .. arity - 1]]
+      body = build (map Var names)
+      partial = foldr (`Lambda` Nothing) body (drop (length supplied) names)
+  return $ if length supplied == arity then build supplied
+    else foldr (\(n,e) rest -> Let n Nothing e rest) partial (zip names supplied)
+  where
+    arguments 0 = pure []
+    arguments n = do
+      next <- optional (try atom)
+      case next of
+        Nothing -> pure []
+        Just e -> (e :) <$> arguments (n - 1)
+
+unary :: String -> (Expr -> Expr) -> ExprParser -> Parser Expr
+unary name build = builtin name (\es -> case es of [a] -> build a; _ -> error "unary arity") 1
+binary :: String -> (Expr -> Expr -> Expr) -> ExprParser -> Parser Expr
+binary name build = builtin name (\es -> case es of [a,b] -> build a b; _ -> error "binary arity") 2
+ternary :: String -> (Expr -> Expr -> Expr -> Expr) -> ExprParser -> Parser Expr
+ternary name build = builtin name (\es -> case es of [a,b,c] -> build a b c; _ -> error "ternary arity") 3
+
 printExpr :: ExprParser -> Parser Expr
-printExpr expr = do
-  keyword "print"
-  Print <$> expr
-
-inputExpr :: Parser Expr
-inputExpr = keyword "input" >> return Input
-
-argsExpr :: Parser Expr
-argsExpr = keyword "args" >> return Args
-
-parseIntExpr :: ExprParser -> Parser Expr
-parseIntExpr expr = do
-  keyword "parseInt"
-  ParseInt <$> expr
-
-toStringExpr :: ExprParser -> Parser Expr
-toStringExpr expr = do
-  keyword "toString"
-  ToString <$> expr
-
-showExpr :: ExprParser -> Parser Expr
-showExpr expr = do
-  keyword "show"
-  Show <$> expr
-
-headExpr :: ExprParser -> Parser Expr
-headExpr expr = keyword "head" >> Head <$> expr
-
-tailExpr :: ExprParser -> Parser Expr
-tailExpr expr = keyword "tail" >> Tail <$> expr
-
-nullExpr :: ExprParser -> Parser Expr
-nullExpr expr = keyword "null" >> Null <$> expr
-
-fixExpr :: ExprParser -> Parser Expr
-fixExpr expr = keyword "fix" >> Fix <$> expr
-
-fstExpr :: ExprParser -> Parser Expr
-fstExpr expr = keyword "fst" >> Fst <$> expr
-
-sndExpr :: ExprParser -> Parser Expr
-sndExpr expr = keyword "snd" >> Snd <$> expr
-
-mapExpr :: ExprParser -> Parser Expr
-mapExpr atom = do
-  keyword "map"
-  f <- atom
-  Map f <$> atom
-
-filterExpr :: ExprParser -> Parser Expr
-filterExpr atom = do
-  keyword "filter"
-  f <- atom
-  Filter f <$> atom
-
-foldlExpr :: ExprParser -> Parser Expr
-foldlExpr atom = do
-  keyword "foldl"
-  f <- atom
-  acc <- atom
-  Foldl f acc <$> atom
-
-lengthExpr :: ExprParser -> Parser Expr
-lengthExpr atom = keyword "length" >> Length <$> atom
-
-reverseExpr :: ExprParser -> Parser Expr
-reverseExpr atom = keyword "reverse" >> Reverse <$> atom
-
-takeExpr :: ExprParser -> Parser Expr
-takeExpr atom = do
-  keyword "take"
-  n <- atom
-  Take n <$> atom
-
-dropExpr :: ExprParser -> Parser Expr
-dropExpr atom = do
-  keyword "drop"
-  n <- atom
-  Drop n <$> atom
-
-zipExpr :: ExprParser -> Parser Expr
-zipExpr atom = do
-  keyword "zip"
-  l1 <- atom
-  Zip l1 <$> atom
-
-splitExpr :: ExprParser -> Parser Expr
-splitExpr atom = do
-  keyword "split"
-  delim <- atom
-  Split delim <$> atom
-
-joinExpr :: ExprParser -> Parser Expr
-joinExpr atom = do
-  keyword "join"
-  delim <- atom
-  Join delim <$> atom
-
-trimExpr :: ExprParser -> Parser Expr
-trimExpr atom = keyword "trim" >> Trim <$> atom
-
-replaceExpr :: ExprParser -> Parser Expr
-replaceExpr atom = do
-  keyword "replace"
-  old <- atom
-  new <- atom
-  Replace old new <$> atom
-
-strLengthExpr :: ExprParser -> Parser Expr
-strLengthExpr atom = keyword "strLength" >> StrLength <$> atom
-
-readFileExpr :: ExprParser -> Parser Expr
-readFileExpr atom = keyword "readFile" >> ReadFile <$> atom
-
-writeFileExpr :: ExprParser -> Parser Expr
-writeFileExpr atom = do
-  keyword "writeFile"
-  path <- atom
-  WriteFile path <$> atom
-
-appendFileExpr :: ExprParser -> Parser Expr
-appendFileExpr atom = do
-  keyword "appendFile"
-  path <- atom
-  AppendFile path <$> atom
-
-fileExistsExpr :: ExprParser -> Parser Expr
-fileExistsExpr atom = keyword "fileExists" >> FileExists <$> atom
-
-listDirectoryExpr :: ExprParser -> Parser Expr
-listDirectoryExpr atom = keyword "listDirectory" >> ListDirectory <$> atom
-
-createDirectoryExpr :: ExprParser -> Parser Expr
-createDirectoryExpr atom = keyword "createDirectory" >> CreateDirectory <$> atom
-
-removeDirectoryExpr :: ExprParser -> Parser Expr
-removeDirectoryExpr atom = keyword "removeDirectory" >> RemoveDirectory <$> atom
-
-getCurrentDirectoryExpr :: Parser Expr
-getCurrentDirectoryExpr = keyword "getCurrentDirectory" >> return GetCurrentDirectory
-
-setCurrentDirectoryExpr :: ExprParser -> Parser Expr
-setCurrentDirectoryExpr atom = keyword "setCurrentDirectory" >> SetCurrentDirectory <$> atom
-
-systemExpr :: ExprParser -> Parser Expr
-systemExpr atom = keyword "system" >> System <$> atom
-
-getEnvExpr :: ExprParser -> Parser Expr
-getEnvExpr atom = keyword "getEnv" >> GetEnv <$> atom
-
-setEnvExpr :: ExprParser -> Parser Expr
-setEnvExpr atom = do
-  keyword "setEnv"
-  name <- atom
-  SetEnv name <$> atom
-
-exitExpr :: ExprParser -> Parser Expr
-exitExpr atom = keyword "exit" >> Exit <$> atom
-
-justExpr :: ExprParser -> Parser Expr
-justExpr expr = do
-  keyword "Just"
-  MJust <$> expr
-
-nothingExpr :: Parser Expr
-nothingExpr = keyword "Nothing" >> return MNothing
-
-leftExpr :: ExprParser -> Parser Expr
-leftExpr expr = do
-  keyword "Left"
-  ELeft <$> expr
-
-rightExpr :: ExprParser -> Parser Expr
-rightExpr expr = do
-  keyword "Right"
-  ERight <$> expr
+printExpr = unary "print" Print
 
 discardExpr :: ExprParser -> Parser Expr
-discardExpr expr = keyword "discard" >> Discard <$> expr
+discardExpr = unary "discard" Discard
+
+parseIntExpr :: ExprParser -> Parser Expr
+parseIntExpr = unary "parseInt" ParseInt
+
+toStringExpr :: ExprParser -> Parser Expr
+toStringExpr = unary "toString" ToString
+
+showExpr :: ExprParser -> Parser Expr
+showExpr = unary "show" Show
+
+headExpr :: ExprParser -> Parser Expr
+headExpr = unary "head" Head
+
+tailExpr :: ExprParser -> Parser Expr
+tailExpr = unary "tail" Tail
+
+nullExpr :: ExprParser -> Parser Expr
+nullExpr = unary "null" Null
+
+fixExpr :: ExprParser -> Parser Expr
+fixExpr = unary "fix" Fix
+
+fstExpr :: ExprParser -> Parser Expr
+fstExpr = unary "fst" Fst
+
+sndExpr :: ExprParser -> Parser Expr
+sndExpr = unary "snd" Snd
+
+lengthExpr :: ExprParser -> Parser Expr
+lengthExpr = unary "length" Length
+
+reverseExpr :: ExprParser -> Parser Expr
+reverseExpr = unary "reverse" Reverse
+
+trimExpr :: ExprParser -> Parser Expr
+trimExpr = unary "trim" Trim
+
+strLengthExpr :: ExprParser -> Parser Expr
+strLengthExpr = unary "strLength" StrLength
+
+readFileExpr :: ExprParser -> Parser Expr
+readFileExpr = unary "readFile" ReadFile
+
+fileExistsExpr :: ExprParser -> Parser Expr
+fileExistsExpr = unary "fileExists" FileExists
+
+listDirectoryExpr :: ExprParser -> Parser Expr
+listDirectoryExpr = unary "listDirectory" ListDirectory
+
+createDirectoryExpr :: ExprParser -> Parser Expr
+createDirectoryExpr = unary "createDirectory" CreateDirectory
+
+removeDirectoryExpr :: ExprParser -> Parser Expr
+removeDirectoryExpr = unary "removeDirectory" RemoveDirectory
+
+setCurrentDirectoryExpr :: ExprParser -> Parser Expr
+setCurrentDirectoryExpr = unary "setCurrentDirectory" SetCurrentDirectory
+
+systemExpr :: ExprParser -> Parser Expr
+systemExpr = unary "system" System
+
+getEnvExpr :: ExprParser -> Parser Expr
+getEnvExpr = unary "getEnv" GetEnv
+
+exitExpr :: ExprParser -> Parser Expr
+exitExpr = unary "exit" Exit
+
+justExpr :: ExprParser -> Parser Expr
+justExpr = unary "Just" MJust
+
+leftExpr :: ExprParser -> Parser Expr
+leftExpr = unary "Left" ELeft
+
+rightExpr :: ExprParser -> Parser Expr
+rightExpr = unary "Right" ERight
+
+mapExpr :: ExprParser -> Parser Expr
+mapExpr = binary "map" Map
+
+filterExpr :: ExprParser -> Parser Expr
+filterExpr = binary "filter" Filter
+
+takeExpr :: ExprParser -> Parser Expr
+takeExpr = binary "take" Take
+
+dropExpr :: ExprParser -> Parser Expr
+dropExpr = binary "drop" Drop
+
+zipExpr :: ExprParser -> Parser Expr
+zipExpr = binary "zip" Zip
+
+splitExpr :: ExprParser -> Parser Expr
+splitExpr = binary "split" Split
+
+joinExpr :: ExprParser -> Parser Expr
+joinExpr = binary "join" Join
+
+writeFileExpr :: ExprParser -> Parser Expr
+writeFileExpr = binary "writeFile" WriteFile
+
+appendFileExpr :: ExprParser -> Parser Expr
+appendFileExpr = binary "appendFile" AppendFile
+
+setEnvExpr :: ExprParser -> Parser Expr
+setEnvExpr = binary "setEnv" SetEnv
+
+foldlExpr :: ExprParser -> Parser Expr
+foldlExpr = ternary "foldl" Foldl
+
+replaceExpr :: ExprParser -> Parser Expr
+replaceExpr = ternary "replace" Replace
+
+inputExpr :: Parser Expr
+inputExpr = keyword "input" >> pure Input
+
+argsExpr :: Parser Expr
+argsExpr = keyword "args" >> pure Args
+
+nothingExpr :: Parser Expr
+nothingExpr = keyword "Nothing" >> pure MNothing
+
+getCurrentDirectoryExpr :: Parser Expr
+getCurrentDirectoryExpr = keyword "getCurrentDirectory" >> pure GetCurrentDirectory

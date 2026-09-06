@@ -2,6 +2,12 @@ module Main where
 
 import Test.Hspec
 
+import qualified SelfReviewSpec
+import qualified RunnerSpec
+import qualified DocumentationSpec
+import qualified SourceDistributionSpec
+import qualified OutputFailureSpec
+import qualified AuditRegressionSpec
 import qualified ArithmeticSpec
 import qualified BooleanSpec
 import qualified ComparisonSpec
@@ -38,6 +44,12 @@ import qualified ReplSpec
 
 main :: IO ()
 main = hspec $ do
+  RunnerSpec.spec
+  DocumentationSpec.spec
+  SourceDistributionSpec.spec
+  OutputFailureSpec.spec
+  SelfReviewSpec.spec
+  AuditRegressionSpec.spec
   ArithmeticSpec.spec
   BooleanSpec.spec
   ComparisonSpec.spec

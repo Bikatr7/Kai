@@ -1,3 +1,4 @@
+// expect: ()
 // expect-type: TUnit
 // Discard keeps side-effect-only helpers small and composable.
 let log = \message -> discard (print ("[log] " ++ message))

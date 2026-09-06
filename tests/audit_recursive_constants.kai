@@ -1,0 +1,4 @@
+// expect: 42
+letrec first = 41
+letrec second = first+1
+second

@@ -5,14 +5,223 @@ cabal-version: 2.2
 -- see: https://github.com/sol/hpack
 
 name:           kai-lang
-version:        0.0.4.5
-description:    A functional-first scripting language with static typing
+version:        0.0.4.6
+synopsis:       A functional-first scripting language with static typing
+description:    Kai combines static type inference, first-class functions, algebraic data types, and scripting tools in an interpreter implemented in Haskell.
+category:       Language
 homepage:       https://github.com/bikatr7/kai
+bug-reports:    https://github.com/Bikatr7/Kai/issues
 author:         Kaden Bilyeu (Bikatr7)
 maintainer:     bikatr7@proton.me
 license:        AGPL-3.0-only
 license-file:   LICENSE
 build-type:     Simple
+extra-source-files:
+    AGENTS.md
+    CLAUDE.md
+    DEVELOPING.md
+    FEATURES.md
+    GEMINI.md
+    README.md
+    SPEC.md
+    package.yaml
+    stack.yaml
+    stack.yaml.lock
+    Makefile
+    .hlint.yaml
+    .github/workflows/ci.yml
+    .github/workflows/deploy.yml
+    .github/workflows/release.yml
+    scripts/check-doc-examples.py
+    scripts/check-script-corpus.py
+    scripts/export-site.sh
+    scripts/extract-release-package.sh
+    scripts/kai
+    scripts/package-release-binary.sh
+    scripts/release-asset-name.sh
+    scripts/release-package-name.sh
+    scripts/test-release-binary.sh
+    benchmarks/README.md
+    test/doc_examples_test.py
+    test/fixtures/legacy-kai-runner.sh
+    tests/all_conversions.kai
+    tests/application_chain.kai
+    tests/args_test.kai
+    tests/arithmetic.kai
+    tests/audit_parser_builtins.kai
+    tests/audit_pattern_wildcards.kai
+    tests/audit_recursive_constants.kai
+    tests/audit_recursive_initialization_error.kai
+    tests/audit_top_level_sequence.kai
+    tests/audit_typed_tuple.kai
+    tests/boolean.kai
+    tests/boolean_logic.kai
+    tests/closure_add.kai
+    tests/combined_wildcard_sequencing.kai
+    tests/comparison.kai
+    tests/complex.kai
+    tests/composition_chain.kai
+    tests/conditionals.kai
+    tests/conversion_functions.kai
+    tests/curried.kai
+    tests/curried_arithmetic.kai
+    tests/data_type_basic.kai
+    tests/data_type_partial_constructor.kai
+    tests/data_type_recursive.kai
+    tests/deep_nesting.kai
+    tests/discard.kai
+    tests/do_block_basic.kai
+    tests/do_block_definition.kai
+    tests/do_block_trailing_semicolon.kai
+    tests/equality_numeric.kai
+    tests/higher_order.kai
+    tests/input.kai
+    tests/input_basic_interaction.kai
+    tests/input_boolean_logic.kai
+    tests/input_comparison_chain.kai
+    tests/input_complex_workflow.kai
+    tests/input_conditional.kai
+    tests/input_deep_nesting.kai
+    tests/input_empty_handling.kai
+    tests/input_function_basic.kai
+    tests/input_function_compose.kai
+    tests/input_function_conditional.kai
+    tests/input_function_higher_order.kai
+    tests/input_let_basic.kai
+    tests/input_let_complex.kai
+    tests/input_let_conditional.kai
+    tests/input_let_nested.kai
+    tests/input_nested_conditionals.kai
+    tests/input_nested_expressions.kai
+    tests/input_pattern_matching.kai
+    tests/input_print_chain.kai
+    tests/input_recursive_let.kai
+    tests/input_special_chars.kai
+    tests/input_string_ops.kai
+    tests/input_whitespace_handling.kai
+    tests/lambda.kai
+    tests/lambda_conditional.kai
+    tests/lambda_inc.kai
+    tests/let_arithmetic.kai
+    tests/let_basic.kai
+    tests/let_boolean_logic.kai
+    tests/let_church_encoding.kai
+    tests/let_combinators.kai
+    tests/let_complex_closures.kai
+    tests/let_complex_expression.kai
+    tests/let_conditional.kai
+    tests/let_deep_nesting.kai
+    tests/let_edge_cases.kai
+    tests/let_function.kai
+    tests/let_mutual_recursion.kai
+    tests/let_nested.kai
+    tests/let_recursive_function.kai
+    tests/let_scoping.kai
+    tests/let_string_ops.kai
+    tests/let_variable_shadowing_complex.kai
+    tests/let_with_print.kai
+    tests/list_composition.kai
+    tests/list_filter.kai
+    tests/list_foldl.kai
+    tests/list_head.kai
+    tests/list_let.kai
+    tests/list_map.kai
+    tests/list_null.kai
+    tests/list_null_empty.kai
+    tests/list_tail.kai
+    tests/list_zip.kai
+    tests/lists.kai
+    tests/mixed_comparisons.kai
+    tests/modules/Math.kai
+    tests/modules/Math/Math.kai
+    tests/modules/module_basic.kai
+    tests/modules/module_complex.kai
+    tests/modules/module_data_structures.kai
+    tests/modules/module_multiple_defs.kai
+    tests/modules/module_multiple_imports.kai
+    tests/modules/module_mutual_recursion.kai
+    tests/modules/module_recursive.kai
+    tests/modules/module_scoping.kai
+    tests/modules/module_shadowing.kai
+    tests/modules/Mutual.kai
+    tests/modules/Mutual/Mutual.kai
+    tests/modules/Recursive.kai
+    tests/modules/Recursive/Recursive.kai
+    tests/modules/Util.kai
+    tests/modules/Util/Util.kai
+    tests/negatives.kai
+    tests/nested_conditional.kai
+    tests/nested_if.kai
+    tests/polymorphic_recursion_annotated.kai
+    tests/polymorphic_top_level.kai
+    tests/precedence.kai
+    tests/prefix_chains.kai
+    tests/print_chain.kai
+    tests/print_sample.kai
+    tests/program_basic.kai
+    tests/program_final_let_expr.kai
+    tests/program_functions.kai
+    tests/program_multiple_defs.kai
+    tests/program_types.kai
+    tests/record_access_b.kai
+    tests/record_access_nested.kai
+    tests/records.kai
+    tests/recursive_arithmetic.kai
+    tests/sequencing_arithmetic.kai
+    tests/sequencing_basic.kai
+    tests/sequencing_types.kai
+    tests/shebang_basic.kai
+    tests/string_concat.kai
+    tests/string_join.kai
+    tests/string_length.kai
+    tests/string_replace.kai
+    tests/string_split.kai
+    tests/string_trim.kai
+    tests/test_concat.kai
+    tests/tuple_basic.kai
+    tests/tuple_fst.kai
+    tests/tuple_nested.kai
+    tests/tuple_pattern.kai
+    tests/tuple_snd.kai
+    tests/tuple_swap.kai
+    tests/type_annotations.kai
+    tests/unary_minus_expr.kai
+    tests/unary_minus_var.kai
+    tests/whitespace.kai
+    tests/wildcard_basic.kai
+    tests/wildcard_mixed_types.kai
+    tests/wildcard_patterns.kai
+    tests/wildcard_print.kai
+    tests/wildcard_top_level_program.kai
+    examples/calculator.kai
+    examples/custom_data_types.kai
+    examples/discard_demo.kai
+    examples/file_counter.kai
+    examples/file_io.kai
+    examples/fizzbuzz.kai
+    examples/greet.kai
+    examples/guess_the_number.kai
+    examples/list_processing.kai
+    examples/MathUtils.kai
+    examples/modules/MathUtils.kai
+    examples/modules/MathUtils/MathUtils.kai
+    examples/modules/StringUtils.kai
+    examples/modules/StringUtils/StringUtils.kai
+    examples/modules/TextAnalysis.kai
+    examples/modules/TextAnalysis/MathUtils.kai
+    examples/modules/TextAnalysis/StringUtils.kai
+    examples/modules/TextAnalysis/TextAnalysis.kai
+    examples/StringUtils.kai
+    examples/text_analysis.kai
+    examples/text_processing.kai
+    examples/TextAnalysis.kai
+    examples/wildcard_patterns.kai
+    website/static/favicon.svg
+    website/static/style.css
+
+source-repository head
+  type: git
+  location: https://github.com/Bikatr7/Kai
 
 library
   exposed-modules:
@@ -35,6 +244,8 @@ library
       Evaluator.IOOps
       Evaluator.Literals
       Evaluator.Patterns
+      Evaluator.Program
+      Evaluator.Recursion
       Evaluator.StringOps
       Evaluator.Types
       Main
@@ -46,6 +257,8 @@ library
       Parser.Patterns
       Parser.Types
       REPL
+      ScriptCheck
+      SourceIO
       TopLevelRecursion
       TypeChecker.Arithmetic
       TypeChecker.Bindings
@@ -65,34 +278,17 @@ library
   hs-source-dirs:
       src
   build-depends:
-      QuickCheck
-    , aeson
-    , base >=4.7 && <5
-    , bytestring
+      base >=4.7 && <5
     , containers
     , deepseq
     , directory
     , filepath
-    , hspec
     , megaparsec
     , mtl
     , parser-combinators
     , process
     , split
-    , text
-    , weigh
   default-language: Haskell2010
-  if os(windows)
-  else
-    build-depends:
-        criterion
-      , shakespeare
-      , unix
-      , warp
-      , yesod
-      , yesod-core
-      , yesod-form
-      , yesod-static
 
 executable kai
   main-is: Main.hs
@@ -111,6 +307,8 @@ executable kai
       Evaluator.IOOps
       Evaluator.Literals
       Evaluator.Patterns
+      Evaluator.Program
+      Evaluator.Recursion
       Evaluator.StringOps
       Evaluator.Types
       ModuleSystem
@@ -123,6 +321,8 @@ executable kai
       Parser.Patterns
       Parser.Types
       REPL
+      ScriptCheck
+      SourceIO
       Syntax
       TopLevelRecursion
       TypeChecker
@@ -145,34 +345,17 @@ executable kai
       src
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      QuickCheck
-    , aeson
-    , base >=4.7 && <5
-    , bytestring
+      base >=4.7 && <5
     , containers
     , deepseq
     , directory
     , filepath
-    , hspec
     , megaparsec
     , mtl
     , parser-combinators
     , process
     , split
-    , text
-    , weigh
   default-language: Haskell2010
-  if os(windows)
-  else
-    build-depends:
-        criterion
-      , shakespeare
-      , unix
-      , warp
-      , yesod
-      , yesod-core
-      , yesod-form
-      , yesod-static
 
 executable kai-website
   main-is: Main.hs
@@ -184,34 +367,18 @@ executable kai-website
       website
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      QuickCheck
-    , aeson
-    , base >=4.7 && <5
-    , bytestring
+      base >=4.7 && <5
     , containers
     , deepseq
     , directory
     , filepath
-    , hspec
     , megaparsec
     , mtl
     , parser-combinators
     , process
     , split
     , text
-    , weigh
   default-language: Haskell2010
-  if os(windows)
-  else
-    build-depends:
-        criterion
-      , shakespeare
-      , unix
-      , warp
-      , yesod
-      , yesod-core
-      , yesod-form
-      , yesod-static
   if os(windows)
     buildable: False
   else
@@ -229,12 +396,14 @@ test-suite kai-test
   main-is: Spec.hs
   other-modules:
       ArithmeticSpec
+      AuditRegressionSpec
       BooleanSpec
       CLISpec
       ComparisonSpec
       ConditionalSpec
       DataStructureSpec
       DataTypeSpec
+      DocumentationSpec
       EdgeCaseSpec
       ExampleSpec
       InputSpec
@@ -244,18 +413,23 @@ test-suite kai-test
       LetBindingSpec
       ListFunctionsSpec
       ModuleSpec
+      OutputFailureSpec
       ParserSpec
       ProgramSpec
       PropertyBasedSpec
       ReleaseWorkflowSpec
       ReplSpec
+      RunnerSpec
       RuntimeErrorSpec
       ScriptSpec
+      SelfReviewSpec
       SequencingSpec
       SiteExportSpec
+      SourceDistributionSpec
       StressTestSpec
       StringFunctionsSpec
       StringSpec
+      TestIO
       TupleSpec
       TypeErrorSpec
       TypeInferenceSpec
@@ -285,24 +459,7 @@ test-suite kai-test
     , parser-combinators
     , process
     , split
-    , text
-    , weigh
   default-language: Haskell2010
-  if os(windows)
-  else
-    build-depends:
-        criterion
-      , shakespeare
-      , unix
-      , warp
-      , yesod
-      , yesod-core
-      , yesod-form
-      , yesod-static
-  if os(windows)
-  else
-    build-depends:
-        unix
 
 benchmark kai-bench
   type: exitcode-stdio-1.0
@@ -318,15 +475,12 @@ benchmark kai-bench
       benchmarks
   ghc-options: -threaded -rtsopts -with-rtsopts=-N -O2
   build-depends:
-      QuickCheck
-    , aeson
-    , base >=4.7 && <5
-    , bytestring
+      base >=4.7 && <5
     , containers
+    , criterion
     , deepseq
     , directory
     , filepath
-    , hspec
     , kai-lang
     , megaparsec
     , mtl
@@ -336,23 +490,3 @@ benchmark kai-bench
     , text
     , weigh
   default-language: Haskell2010
-  if os(windows)
-  else
-    build-depends:
-        criterion
-      , shakespeare
-      , unix
-      , warp
-      , yesod
-      , yesod-core
-      , yesod-form
-      , yesod-static
-  if os(windows)
-    build-depends:
-        deepseq
-      , weigh
-  else
-    build-depends:
-        criterion
-      , deepseq
-      , weigh

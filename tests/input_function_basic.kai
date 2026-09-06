@@ -1,3 +1,5 @@
+// expect: "Processed: Ada"
+// stdin: "Ada\n"
 // Test input with function application
 // expect-type: TString
 

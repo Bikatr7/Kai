@@ -9,8 +9,7 @@ import Parser
 import Evaluator
 import TypeChecker
 
--- Note: This test is POSIX-specific because it uses functions from System.Posix.IO.
-import System.Posix.IO
+import TestIO (captureOutput, withStdin)
 
 splitOn :: Eq a => [a] -> [a] -> [[a]]
 splitOn _ [] = [[]]
@@ -25,38 +24,14 @@ splitOn delim str = go str []
     isPrefixOf _ [] = False
     isPrefixOf (x:xs) (y:ys) = x == y && isPrefixOf xs ys
 
-captureOutput :: IO a -> IO (a, String)
-captureOutput action = do
-    (readFd, writeFd) <- createPipe
-    oldStdout <- dup stdOutput
-    dupTo writeFd stdOutput
-    closeFd writeFd
-    result <- action
-    dupTo oldStdout stdOutput
-    closeFd oldStdout
-    readHandle <- fdToHandle readFd
-    hGetContents readHandle >>= \out -> evaluate (length out) >> return (result, out)
 
-withStdin :: String -> IO a -> IO a
-withStdin input action = do
-    (readFd, writeFd) <- createPipe
-    writeHandle <- fdToHandle writeFd
-    hPutStrLn writeHandle input
-    hClose writeHandle
-    oldStdin <- dup stdInput
-    dupTo readFd stdInput
-    closeFd readFd
-    result <- action
-    dupTo oldStdin stdInput
-    closeFd oldStdin
-    return result
 
 spec :: Spec
 spec = describe "Input Support" $ do
   it "reads from stdin and uses the value" $ do
     let kaiScript = "print (\"Hello, \" ++ input)"
     let expectedOutput = "Hello, World\n"
-    let providedInput = "World"
+    let providedInput = "World\n"
 
     case parseExpr kaiScript of
       Left _ -> expectationFailure "Parser error"
@@ -65,9 +40,4 @@ spec = describe "Input Support" $ do
           Left err -> expectationFailure $ "Type error: " ++ show err
           Right _ -> do
             (_, output) <- captureOutput $ withStdin providedInput $ eval expr
-            -- Extract the actual program output by filtering out test framework progress dots
-            -- and taking only the last line to avoid capturing extra output
-            let cleanOutput = filter (\c -> c /= '.' && c /= '\r') output
-                lastLine = last $ lines cleanOutput
-                trimmedLine = dropWhile (== ' ') lastLine
-            trimmedLine `shouldBe` init expectedOutput  -- remove the \n from expected
+            output `shouldBe` expectedOutput

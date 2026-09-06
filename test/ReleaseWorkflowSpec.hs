@@ -1,11 +1,12 @@
 module ReleaseWorkflowSpec where
 
 import Control.Exception (bracket)
-import Control.Monad (when)
+import Control.Monad (when, forM_)
 import qualified Data.ByteString as BS
 import Data.List (isInfixOf)
 import System.Directory
-  ( createDirectory
+  ( findExecutable
+  , createDirectory
   , createDirectoryIfMissing
   , executable
   , getCurrentDirectory
@@ -16,10 +17,11 @@ import System.Directory
   , setPermissions
   , withCurrentDirectory
   )
+import System.Environment (getEnvironment)
+import System.Process (proc, readCreateProcessWithExitCode, CreateProcess(..), readProcessWithExitCode)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
 import System.IO (hClose, openTempFile)
-import System.Process (readProcessWithExitCode)
 import Test.Hspec
 
 runAssetNameScript :: String -> String -> IO (ExitCode, String, String)
@@ -170,6 +172,31 @@ spec = describe "Release workflow asset naming" $ do
   it "contains no malformed patch markers in shell command continuations" $ do
     workflow <- readFile ".github/workflows/release.yml"
     workflow `shouldSatisfy` not . isInfixOf "+            "
+
+  it "verifies actual release results including deliberate counterexamples" $ do
+    found <- findExecutable "kai"
+    binary <- maybe (expectationFailure "Built kai executable is missing from PATH" >> return "") return found
+    environment <- getEnvironment
+    forM_ [("// expect: 42\n42", True), ("// expect: 42\n0", False),
+           ("// expect-type: TInt\n42", False),
+           ("// expect: \"Ada\"\n// stdin: \"Ada\\n\"\ninput", True),
+           ("// expect: error DivByZero\n1/0", True),
+           ("// expect: error DivByZero\nhead []", False)] $ \(source, success) ->
+      withTempDirectory $ \dir -> do
+        createDirectory (dir </> "tests")
+        writeFile (dir </> "tests" </> "fixture.kai") source
+        (versionCode, versionOut, _) <- readProcessWithExitCode binary ["--version"] ""
+        versionCode `shouldBe` ExitSuccess
+        let version = takeWhile (/= '\n') (drop 5 versionOut)
+            process = (proc "bash" ["scripts/test-release-binary.sh", binary, version])
+              { env = Just (("KAI_TEST_ROOT", dir) : filter ((/= "KAI_TEST_ROOT") . fst) environment) }
+        (code, out, err) <- readCreateProcessWithExitCode process ""
+        if success then do
+          if code == ExitSuccess then pure () else expectationFailure (out ++ err)
+          out `shouldContain` "release binary tests passed: 1/1"
+        else do
+          code `shouldBe` ExitFailure 1
+          err `shouldContain` "release binary failure:"
 
   it "syntax-checks every release helper script" $ do
     let scripts =

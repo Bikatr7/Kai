@@ -5,12 +5,10 @@ module REPL
   , renderType
   ) where
 
-import Control.Monad (foldM, when)
-import Control.Monad.State (evalStateT)
+import Control.Monad (when)
 import qualified Data.List as List
 import qualified Data.Map as Map
 import Data.Char (isSpace)
-import Data.IORef (IORef, newIORef, writeIORef)
 import Data.Version (showVersion)
 import Data.Void (Void)
 import Paths_kai_lang (version)
@@ -21,16 +19,16 @@ import System.IO (hFlush, isEOF, stdout)
 import Text.Megaparsec (ParseError(..), ParseErrorBundle(..))
 import Text.Megaparsec.Error (ErrorItem(..))
 
-import DataDeclarations (constructorScheme, dataConstructorsTypeEnv, dataConstructorsValueEnv)
+import DataDeclarations (constructorScheme, registerDataDeclaration, mergeTypeEnvironments, dataConstructorsValueEnv)
 import Evaluator (Env, RuntimeError(..), Value(..), evalWithEnv)
 import Evaluator.Helpers (showValue)
 import ModuleSystem (ModuleInfo(..), loadModule, loadModuleTypeEnvIO)
 import Parser (parseExpr, parseProgram)
 import Syntax
-import TypeChecker (Type(..), TypeEnv, TypeError(..), infer, syntaxTypeToType, typeCheckWithEnv)
-import TypeChecker.Substitution (applySubst, applySubstEnv, composeSubst, generalize, schemeIsInstanceOf)
-import TypeChecker.Types (Scheme, Substitution, monoScheme, schemeType)
-import TypeChecker.Unification (unify)
+import TypeChecker (Type(..), TypeEnv, typeCheckWithEnv, inferProgramWithEnvIO, inferDefinitionType, inferRecursiveDefinitions)
+import TypeChecker.Types (schemeType)
+import Evaluator.Recursion (initializeRecursiveBindings)
+import SourceIO (readSourceFile)
 
 data ReplState = ReplState
   { replEnv :: Env
@@ -172,17 +170,18 @@ loadFileIntoState debug state rawPath = do
   if not exists
     then return $ Left $ "File not found: " ++ rawPath
     else do
-      content <- readFile resolvedPath
-      let resetState =
-            (baseState (takeDirectory resolvedPath) (replArgs state))
-              { replLoadedFile = Just resolvedPath
-              }
-      result <- handleProgramInput debug False resetState content
-      case result of
-        Left message -> return $ Left message
-        Right (exitCode, newState) -> do
-          putStrLn $ "Loaded " ++ rawPath
-          return $ Right (exitCode, newState { replLoadedFile = Just resolvedPath })
+      source <- readSourceFile resolvedPath
+      case source of
+        Left err -> return $ Left $ "IO error: " ++ show err
+        Right content -> do
+          let resetState = (baseState (takeDirectory resolvedPath) (replArgs state))
+                             { replLoadedFile = Just resolvedPath }
+          result <- handleProgramInput debug False resetState content
+          case result of
+            Left message -> return $ Left message
+            Right (exitCode, newState) -> do
+              putStrLn $ "Loaded " ++ rawPath
+              return $ Right (exitCode, newState { replLoadedFile = Just resolvedPath })
 
 resolvePath :: FilePath -> FilePath -> IO FilePath
 resolvePath currentDir rawPath =
@@ -195,11 +194,15 @@ handleProgramInput :: Bool -> Bool -> ReplState -> String -> IO (Either String (
 handleProgramInput debug announceDefinitions state source =
   case parseProgram source of
     Left parseErr -> return $ Left $ "Parse error: " ++ show parseErr
-    Right (Program topLevels) -> processTopLevels debug announceDefinitions state topLevels
+    Right program@(Program topLevels) -> do
+      checked <- inferProgramWithEnvIO loadModuleTypeEnvIO (replCurrentDir state) (replTypeEnv state) program
+      case checked of
+        Left err -> return $ Left $ "Type error: " ++ show err
+        Right _ -> processTopLevels debug announceDefinitions state topLevels
 
 processTopLevels :: Bool -> Bool -> ReplState -> [TopLevel] -> IO (Either String (Maybe ExitCode, ReplState))
 processTopLevels _ _ state [] = return $ Right (Nothing, state)
-processTopLevels debug _ state [TLExpr expr] = do
+processTopLevels debug announce state (TLExpr expr : rest) = do
   when debug $ putStrLn $ "AST: " ++ show expr
   case typeCheckWithEnv (replTypeEnv state) expr of
     Left err -> return $ Left $ "Type error: " ++ show err
@@ -210,13 +213,11 @@ processTopLevels debug _ state [TLExpr expr] = do
         Left (ExitRequested code) -> return $ Right (Just (toExitCode code), state)
         Left err -> return $ Left $ "Runtime error: " ++ show err
         Right value -> do
-          putStrLn $ showValue value
-          return $ Right (Nothing, state)
-processTopLevels _ _ _ (TLExpr _ : _) =
-  return $ Left "Expressions must be at the end of the input."
+          when (null rest) $ putStrLn $ showValue value
+          processTopLevels debug announce state rest
 processTopLevels debug announce state (TLImport moduleName : rest) = do
   typeEnvResult <- loadModuleTypeEnvIO (replCurrentDir state) moduleName
-  case typeEnvResult of
+  case typeEnvResult >>= (`mergeTypeEnvironments` replTypeEnv state) of
     Left err -> return $ Left $ "Type error: " ++ show err
     Right importedTypeEnv -> do
       moduleResult <- loadModule evalWithEnv (replCurrentDir state) moduleName []
@@ -227,30 +228,28 @@ processTopLevels debug announce state (TLImport moduleName : rest) = do
           let newState =
                 state
                   { replEnv = Map.union importedEnv (replEnv state)
-                  , replTypeEnv = Map.union importedTypeEnv (replTypeEnv state)
+                  , replTypeEnv = importedTypeEnv
                   }
           when announce $ putStrLn $ "imported " ++ moduleName
           processTopLevels debug announce newState rest
-processTopLevels debug announce state (TLData typeName typeVars constructors : rest) = do
-  let constructorTypeEnv = dataConstructorsTypeEnv typeName typeVars constructors
-  let constructorValueEnv = dataConstructorsValueEnv constructors
-  let newState =
-        state
-          { replEnv = Map.union constructorValueEnv (replEnv state)
-          , replTypeEnv = Map.union constructorTypeEnv (replTypeEnv state)
-          }
-  when announce $
-    mapM_ (putStrLn . renderConstructorBinding typeName typeVars) constructors
-  processTopLevels debug announce newState rest
+processTopLevels debug announce state (TLData typeName typeVars constructors : rest) =
+  case registerDataDeclaration (replTypeEnv state) typeName typeVars constructors of
+    Left err -> return $ Left $ "Type error: " ++ show err
+    Right next -> do
+      let newState = state
+            { replEnv = Map.union (dataConstructorsValueEnv constructors) (replEnv state)
+            , replTypeEnv = next }
+      when announce $ mapM_ (putStrLn . renderConstructorBinding typeName typeVars) constructors
+      processTopLevels debug announce newState rest
 processTopLevels debug announce state (TLExport _ : rest) =
   processTopLevels debug announce state rest
 processTopLevels debug announce state defs@(TLDef _ _ expr : _)
   | isLetrecExpr expr = do
       let (letrecs, remaining) = collectConsecutiveLetrecs defs
-      case processMutualRecursionTypes (replTypeEnv state) letrecs of
+      case inferRecursiveDefinitions (replTypeEnv state) letrecs of
         Left err -> return $ Left $ "Type error: " ++ show err
         Right (newTypeEnv, bindingTypes) -> do
-          valueResult <- processMutualRecursionValues (replEnv state) letrecs
+          valueResult <- initializeRecursiveBindings evalWithEnv (replEnv state) [(name, value) | TLDef name _ (LetRec _ _ value _) <- letrecs]
           case valueResult of
             Left (ExitRequested code) -> return $ Right (Just (toExitCode code), state)
             Left err -> return $ Left $ "Runtime error: " ++ show err
@@ -278,143 +277,6 @@ processTopLevels debug announce state (TLDef var maybeType expr : rest) =
                   then replEnv state
                   else Map.insert var value (replEnv state)
           processTopLevels debug announce state { replEnv = newEnv, replTypeEnv = newTypeEnv } rest
-
-inferDefinitionType :: TypeEnv -> String -> Maybe SyntaxType -> Expr -> Either TypeError (TypeEnv, Type)
-inferDefinitionType env var maybeType expr = do
-  (subst, defType) <- evalStateT (infer env expr) 0
-  let inferredType = applySubst subst defType
-  let baseEnv = applySubstEnv subst env
-  case maybeType of
-    Just annotatedType -> do
-      let expectedType = syntaxTypeToType annotatedType
-      unifySubst <- unify inferredType expectedType
-      let finalSubst = composeSubst unifySubst subst
-      let finalType = applySubst finalSubst inferredType
-      let finalBaseEnv = applySubstEnv finalSubst env
-      let newEnv =
-            if var == "_"
-              then finalBaseEnv
-              else Map.insert var (generalize finalBaseEnv finalType) finalBaseEnv
-      return (newEnv, finalType)
-    Nothing -> do
-      let newEnv =
-            if var == "_"
-              then baseEnv
-              else Map.insert var (generalize baseEnv inferredType) baseEnv
-      return (newEnv, inferredType)
-
-processMutualRecursionTypes :: TypeEnv -> [TopLevel] -> Either TypeError (TypeEnv, [(String, Type)])
-processMutualRecursionTypes env letrecs = do
-  let funcTypes = map toFuncType letrecs
-  let mutualEnv = Map.union (Map.fromList [(var, scheme) | (var, _, _, scheme) <- funcTypes]) env
-  results <- mapM (typeCheckLetrec env mutualEnv) funcTypes
-  combinedSubst <- mergeMutualSubstitutions (map fst results)
-  let baseEnv = applySubstEnv combinedSubst env
-  let finalTypes =
-        zipWith
-          (\(_, maybeAnnotatedType, _, _) inferredType ->
-             case maybeAnnotatedType of
-               Just annotatedType -> applySubst combinedSubst annotatedType
-               Nothing -> applySubst combinedSubst inferredType)
-          funcTypes
-          (map snd results)
-  let generalized =
-        zipWith
-          (\(var, maybeAnnotatedType, _, _) ty ->
-             ( var
-             , case maybeAnnotatedType of
-                 Just annotatedType -> generalize baseEnv (applySubst combinedSubst annotatedType)
-                 Nothing -> generalize baseEnv ty
-             ))
-          funcTypes
-          finalTypes
-  let finalEnv = Map.union (Map.fromList generalized) baseEnv
-  return (finalEnv, zip [var | (var, _, _, _) <- funcTypes] finalTypes)
-  where
-    toFuncType :: TopLevel -> (String, Maybe Type, Type, Scheme)
-    toFuncType (TLDef var Nothing _) = (var, Nothing, TVar var, monoScheme (TVar var))
-    toFuncType (TLDef var (Just sType) _) =
-      let annotatedType = syntaxTypeToType sType
-      in (var, Just annotatedType, annotatedType, generalize env annotatedType)
-    toFuncType _ = error "processMutualRecursionTypes: expected letrec definition"
-
-    typeCheckLetrec :: TypeEnv -> TypeEnv -> (String, Maybe Type, Type, Scheme) -> Either TypeError (Substitution, Type)
-    typeCheckLetrec outerEnv mutualEnv (var, maybeAnnotatedType, assumedType, _) =
-      case Map.lookup var letrecMap of
-        Just (TLDef _ _ (LetRec _ _ value _)) -> do
-          (subst, valueType) <- evalStateT (infer mutualEnv value) 0
-          case maybeAnnotatedType of
-            Just annotatedType -> do
-              let baseEnv = applySubstEnv subst outerEnv
-              let annotatedScheme = generalize baseEnv (applySubst subst annotatedType)
-              let inferredScheme = generalize baseEnv (applySubst subst valueType)
-              matches <- evalStateT (schemeIsInstanceOf annotatedScheme inferredScheme) 0
-              if matches
-                then return (subst, applySubst subst annotatedType)
-                else Left $ GeneralTypeError "Recursive definition does not satisfy its annotated polymorphic type"
-            Nothing -> do
-              let assumedType' = applySubst subst assumedType
-              unifySubst <- unify assumedType' (applySubst subst valueType)
-              let finalSubst = composeSubst unifySubst subst
-              let finalType = applySubst finalSubst assumedType'
-              return (finalSubst, finalType)
-        _ -> Left $ GeneralTypeError "Expected letrec definition"
-
-    letrecMap = Map.fromList
-      [ (name, topLevel)
-      | topLevel@(TLDef name _ (LetRec _ _ _ _)) <- letrecs
-      ]
-
-mergeMutualSubstitutions :: [Substitution] -> Either TypeError Substitution
-mergeMutualSubstitutions = foldM mergeSubstitution Map.empty
-  where
-    mergeSubstitution acc sub = foldM mergeBinding acc (Map.toList sub)
-
-    mergeBinding acc (name, ty) =
-      let ty' = applySubst acc ty
-      in case Map.lookup name acc of
-        Nothing -> Right $ Map.insert name ty' acc
-        Just existing -> do
-          unifySubst <- unify (applySubst acc existing) ty'
-          let acc' = composeSubst unifySubst acc
-          return $ Map.insert name (applySubst acc' ty') acc'
-
-processMutualRecursionValues :: Env -> [TopLevel] -> IO (Either RuntimeError Env)
-processMutualRecursionValues env letrecs = do
-  refs <- mapM (\_ -> newIORef (VFun "_placeholder" (IntLit 0) Map.empty)) letrecs
-  let refMap =
-        Map.fromList
-          [ (var, VRef ref)
-          | (TLDef var _ _, ref) <- zip letrecs refs
-          ]
-  let mutualEnv = Map.union refMap env
-  results <- mapM (evalLetrecBody mutualEnv) letrecs
-  case firstLeft results of
-    Just err -> return $ Left err
-    Nothing -> do
-      let values = rightsOnly results
-      updateResults <- mapM updateRef (zip values refs)
-      case firstLeft updateResults of
-        Just err -> return $ Left err
-        Nothing -> return $ Right mutualEnv
-  where
-    evalLetrecBody :: Env -> TopLevel -> IO (Either RuntimeError Value)
-    evalLetrecBody mutualEnv (TLDef _ _ (LetRec _ _ value _)) = evalWithEnv mutualEnv value
-    evalLetrecBody _ _ = return $ Left $ TypeError "Expected letrec definition"
-
-    updateRef :: (Value, IORef Value) -> IO (Either RuntimeError ())
-    updateRef (value, ref) =
-      case value of
-        VFun {} -> writeIORef ref value >> return (Right ())
-        _ -> return $ Left $ TypeError ("LetRec value must be a function, got: " ++ show value)
-
-rightsOnly :: [Either e a] -> [a]
-rightsOnly = foldr (\result acc -> case result of Right value -> value : acc; Left _ -> acc) []
-
-firstLeft :: [Either e a] -> Maybe e
-firstLeft [] = Nothing
-firstLeft (Left err : _) = Just err
-firstLeft (_ : rest) = firstLeft rest
 
 filterByExports :: Map.Map String a -> [String] -> Map.Map String a
 filterByExports env [] = env

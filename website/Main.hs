@@ -27,7 +27,7 @@ instance Yesod Site
 
 -- Handlers (define each exactly once)
 getFaviconR :: Handler TypedContent
-getFaviconR = redirect (StaticR (StaticRoute ["favicon.ico"] []))
+getFaviconR = redirect (StaticR (StaticRoute ["favicon.svg"] []))
 
 getHomeR :: Handler Html
 getHomeR = do
@@ -40,7 +40,7 @@ getHomeR = do
     setTitle "Kai Language"
     addStylesheet (StaticR (StaticRoute ["style.css"] []))
     toWidgetHead [hamlet|
-      <link rel="icon" href=@{StaticR (StaticRoute ["favicon.ico"] [])}>
+      <link rel="icon" type="image/svg+xml" href=@{StaticR (StaticRoute ["favicon.svg"] [])}>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <meta name="kai-site" content="kai-language">
     |]
@@ -51,8 +51,8 @@ getHomeR = do
         <p .tagline>A functional-first scripting language with static typing
         <div .stats-container>
           <div .stat-item>
-            <div .stat-number>722
-            <div .stat-label>Tests Passing
+            <div .stat-number>Hspec
+            <div .stat-label>Tests & Properties
           <div .stat-item>
             <div .stat-number>8
             <div .stat-label>Core Types
@@ -60,7 +60,7 @@ getHomeR = do
             <div .stat-number>39
             <div .stat-label>Built-in Functions
           <div .stat-item>
-            <div .stat-number>v0.0.4.5
+            <div .stat-number>v0.0.4.6
             <div .stat-label>Current Version
 
       <nav>
@@ -80,22 +80,23 @@ getHomeR = do
             <p>Static type inference with unification, occurs check, generalized let-polymorphism, and explicitly annotated polymorphic recursion for ints, bools, strings, functions, and data structures.
           <div .feature>
             <h3>Clean Syntax
-            <p>Haskell-like lambdas, `do { ... }` blocks, precedence, keywords, and multi-statement files with expression-only core.
+            <p>Typed lambdas, tuple annotations, partially applied builtins, `do { ... }` blocks, and multi-statement files.
           <div .feature>
             <h3>Interactive I/O & Conversions
             <p>User input with `input`, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, expression trees, and workspace-style file flows.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>722 passing examples with typed properties, asserted script results, CLI and REPL coverage, 1000-level full-pipeline stress checks, and example smoke coverage.
+            <p>Unit, property, script, and integration tests cover language features, interactive input, modules, and deeply nested expressions.
           <div .feature>
             <h3>Developer Experience
             <p>CLI plus a multiline REPL with `:type`, `:load`, and `:reload`, alongside file execution, --debug, --version/-V, and comprehensive documentation.
           <div .feature>
             <h3>Module System
-            <p>Import modules with `import ModuleName`, top-level definitions with `let` and `letrec`, mutual recursion support, circular import detection, explicit exports, and module resolution.
+            <p>Import modules with `import ModuleName`, define values with `let` and `letrec`, and control constructor visibility with explicit exports. Recursive initializers run in source order and stop on errors.
 
       <section #quickstart>
         <h2>Quick Start
+        <p>The CLI builds on Linux, macOS, and Windows. Build the website and use the POSIX runner/exporter on Linux or macOS.
           <div .element-block>
           <h3>Install & Run
           <div .code-example>
@@ -119,6 +120,7 @@ getHomeR = do
 
         <div .element-block>
           <h3>Install CLI
+          <p>Link the runner to this checkout and add it to PATH. It works from other directories; keep the checkout in place or use stack install for a standalone binary. Set KAI_BIN to select an executable explicitly.
           <div .code-example>
             <code>make install
             <br>
@@ -131,11 +133,12 @@ getHomeR = do
 
         <div .element-block>
           <h3>Basic Types
-          <div .code-example>
+          <div .code-example .kai-example>
             <code>42
             <code>-3
             <code>true
             <code>false
+            <code>not not true
             <code>"hi"
             <code>()
 
@@ -156,27 +159,27 @@ getHomeR = do
 
         <div .element-block>
           <h3>Control Flow
-          <div .code-example>
-            <code>if condition then expr1 else expr2
+          <div .code-example .kai-example>
+            <code>if 5 > 3 then 42 else 0
 
         <div .element-block>
           <h3>Lambda Functions
-          <div .code-example>
-            <code>\\x -> x + 1
-            <code>\\f -> f 42
+          <div .code-example .kai-example>
+            <code>\x -> x + 1
+            <code>\f -> f 42
 
         <div .element-block>
           <h3>Let Bindings, Blocks & Wildcards
-          <div .code-example>
+          <div .code-example .kai-example>
             <code>let x = 42 in x + 1
             <code>do { print "hello"; 42 }      <!-- Preferred sequencing form -->
-            <code>let _ = expensiveCall in 42   <!-- Explicit discard when needed -->
-            <code>letrec factorial = \\n -> if n == 0 then 1 else n * (factorial (n - 1)) in factorial 5
+            <code>let _ = print "hello" in 42   <!-- Explicit discard when needed -->
+            <code>letrec factorial = \n -> if n == 0 then 1 else n * (factorial (n - 1)) in factorial 5
 
         <div .element-block>
           <h3>Type Annotations & Conversions
-          <div .code-example>
-            <code>let add : Int -> Int -> Int = \\x : Int -> \\y : Int -> x + y
+          <div .code-example .kai-example>
+            <code>let add : Int -> Int -> Int = \x : Int -> \y : Int -> x + y
             <code>parseInt "42"     <!-- String to Maybe Int -->
             <code>toString 100      <!-- Int to String -->
             <code>discard 42        <!-- Evaluates and discards any value -->
@@ -184,7 +187,7 @@ getHomeR = do
 
         <div .element-block>
           <h3>Data Structures
-          <div .code-example>
+          <div .code-example .kai-example>
             <code>[1, 2, 3]         <!-- Lists -->
             <code>(1, "hi", true)   <!-- Tuples -->
             <code>{a = 1, b = true} <!-- Records -->
@@ -193,15 +196,17 @@ getHomeR = do
 
         <div .element-block>
           <h3>List & String Functions
-          <div .code-example>
-            <code>map filter foldl
-            <code>length reverse take drop zip
-            <code>split join trim replace strLength
-            <code>head tail null fst snd
+          <div .code-example .kai-example>
+            <code>map (\n -> n * 2) [1, 2, 3]
+            <code>filter (\n -> n > 1) [1, 2, 3]
+            <code>foldl (\total -> \n -> total + n) 0 [1, 2, 3]
+            <code>join ", " (split " " "hello world")
+            <code>fst (42, "kai")
 
         <div .element-block>
           <h3>Interactive I/O & File Operations
-          <div .code-example>
+          <p>Print flushes each value to stdout. Output failures stop subsequent effects and return a runtime error.
+          <div .code-example .kai-example>
             <code>input             <!-- Read line from stdin -->
             <code>print "Hello"     <!-- Print and return () -->
             <code>readFile "path"   <!-- Read file contents -->
@@ -213,7 +218,7 @@ getHomeR = do
         <h2>Example Scripts & Patterns
         <div .element-block>
           <h3>Module-Based Text Analysis
-          <div .code-example>
+          <div .code-example .kai-example>
             <code>import TextAnalysis
             <code>let text = case args of [] -> "Kai examples should stay practical, typed, and honest." | path :: _ -> readFile path
             <code>let summary = summarize text
@@ -222,45 +227,49 @@ getHomeR = do
 
         <div .element-block>
           <h3>Validated CLI Scripts
-          <div .code-example>
-            <code>let validateNames : [String] -> Either String [String] = \\cliArgs -> if null cliArgs then Left "Usage..." else Right cliArgs
-            <code>letrec greetAll : [String] -> Unit = \\names -> case names of [] -> print "All greetings sent." | name :: rest -> do { print ("Hello, " ++ name ++ "!"); greetAll rest }
+          <div .code-example .kai-example>
+            <code>let validateNames : [String] -> Either String [String] = \cliArgs -> if null cliArgs then Left "Usage..." else Right cliArgs
+            <code>letrec greetAll : [String] -> Unit = \names -> case names of [] -> print "All greetings sent." | name :: rest -> do { print ("Hello, " ++ name ++ "!"); greetAll rest }
             <code>case validateNames args of Left message -> print message | Right names -> greetAll names
 
         <div .element-block>
           <h3>List Processing & Let Polymorphism
-          <div .code-example>
-            <code>let report = {count = length numbers, evenCount = length (filter even numbers), total = foldl (\\acc -> \\n -> acc + n) 0 numbers, labels = zip numbers (map (\\n -> if n > 20 then "high" else "steady") numbers)}
-            <code>let tag = \\label -> \\value -> {label = label, value = value}
+          <div .code-example .kai-example>
+            <code>let numbers = [10, 15, 20, 25]
+            <code>let even = \n -> (n / 2) * 2 == n
+            <code>let report = {count = length numbers, evenCount = length (filter even numbers), total = foldl (\acc -> \n -> acc + n) 0 numbers, labels = zip numbers (map (\n -> if n > 20 then "high" else "steady") numbers)}
+            <code>let tag = \label -> \value -> {label = label, value = value}
             <code>show (tag "total" (report.total))
             <code>show (tag "status" "ready")
 
         <div .element-block>
           <h3>Interactive Input & Parsing
-          <div .code-example>
-            <code>let parseSecret : [String] -> Int = \\cliArgs -> case cliArgs of value :: _ -> (case parseInt value of Just n -> n | Nothing -> 42) | [] -> 42
-            <code>let promptGuess : Int -> String = \\attempt -> do { print ("Attempt " ++ toString attempt ++ ": enter a guess"); input }
-            <code>case parseInt guessText of Just guess -> ... | Nothing -> do { print "Please enter an integer."; loop secret attempt }
+          <div .code-example .kai-example>
+            <code>let parseSecret : [String] -> Int = \cliArgs -> case cliArgs of value :: _ -> (case parseInt value of Just n -> n | Nothing -> 42) | [] -> 42
+            <code>let promptGuess : Int -> String = \attempt -> do { print ("Attempt " ++ toString attempt ++ ": enter a guess"); input }
+            <code>let secret = parseSecret args
+            <code>let guessText = promptGuess 1
+            <code>case parseInt guessText of Just guess -> print (if guess == secret then "Correct!" else "Try again.") | Nothing -> print "Please enter an integer."
 
         <div .element-block>
           <h3>Workspace-Style File I/O
-          <div .code-example>
+          <div .code-example .kai-example>
             <code>let workspace = case args of path :: _ -> path | [] -> "."
             <code>let reportPath = if workspace == "." then "kai_output.txt" else workspace ++ "/report.txt"
-            <code>do { if workspace == "." then () else createDirectory workspace; setEnv "KAI_EXAMPLE_MODE" "workspace-demo"; ... }
+            <code>do { if workspace == "." then () else createDirectory workspace; writeFile reportPath "Kai report"; appendFile reportPath "\nComplete" }
             <code>print ("Read back: " ++ replace "\n" " | " (readFile reportPath))
 
         <div .element-block>
           <h3>Custom Data Types
-          <div .code-example>
+          <div .code-example .kai-example>
             <code>data Expr = Lit Int | Add (Expr) (Expr) | Mul (Expr) (Expr) | Neg (Expr)
             <code>let liftByFive = Add (Lit 5)
             <code>let program = Mul (liftByFive (Lit 3)) (Neg (Lit 2))
-            <code>letrec eval = \\expr -> case expr of Lit n -> n | Add l r -> eval l + eval r | Mul l r -> eval l * eval r | Neg inner -> 0 - eval inner
+            <code>letrec eval = \expr -> case expr of Lit n -> n | Add l r -> eval l + eval r | Mul l r -> eval l * eval r | Neg inner -> 0 - eval inner
 
         <div .element-block>
           <h3>Wildcard Patterns
-          <div .code-example>
+          <div .code-example .kai-example>
             <code>case Right {ok = true, message = "loaded"} of Right {ok = true, message = _} -> "status: success" | Left _ -> "status: failure" | Right _ -> "status: unexpected"
             <code>case (42, "kai", true) of (_, name, true) -> "tuple for " ++ name | _ -> "tuple mismatch"
             <code>case [1, 2, 3, 4] of _ :: _ -> "list has values" | [] -> "list is empty"
@@ -269,10 +278,10 @@ getHomeR = do
           <h3>Type Safety Examples
           <div .code-example>
             <code>1 + true
-            <span .error-comment>// Type error: TypeMismatch TInt TBool
+            <span .error-comment>// Type error: UnificationError TBool TInt
             <br>
             <code>if 5 then 1 else 2
-            <span .error-comment>// Type error: ExpectedBool TInt
+            <span .error-comment>// Type error: UnificationError TInt TBool
 
       <section #limitations>
         <h2>Current Limitations
@@ -283,7 +292,7 @@ getHomeR = do
             <span>REPL is still minimal: no history or completion yet
             <br>
             <span .limitation>×
-            <span>No error recovery (one parse error stops execution)
+            <span>Scripts stop at the first error; the REPL accepts the next input
             <br>
             <span .limitation>×
             <span>Integer-only arithmetic (no floating-point)
@@ -292,10 +301,10 @@ getHomeR = do
             <span>Polymorphic recursion requires explicit annotations; unannotated recursive bindings remain monomorphic
             <br>
             <span .limitation>×
-            <span>No JSON/HTTP/package-manager story yet
+            <span>No JSON/HTTP/package-manager story yet; records require exact field sets, and show/print are display rather than serialization
 
       <section #roadmap>
-        <h2>Current Release (v0.0.4.5) & Next Focus
+        <h2>Kai v0.0.4.6 & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -321,7 +330,7 @@ getHomeR = do
             <div .timeline-marker data-step="5">
             <div .timeline-content>
               <h3>Let Bindings (Done)
-              <p>Variable bindings and recursive function definitions with letrec
+              <p>Variable bindings and recursive definitions with letrec, including constants and guarded initialization
           <div .timeline-item>
             <div .timeline-marker data-step="6">
             <div .timeline-content>
@@ -352,13 +361,18 @@ getHomeR = do
             <div .timeline-content>
               <h3>v0.0.4.4 (Released 2026-07-11)
               <p>REPL, custom data types, constructor patterns, checked integers, sound composite inference, and essential scripting stdlib work
-          <div .timeline-item .current>
-            <div .timeline-marker .current data-step="12">
+          <div .timeline-item>
+            <div .timeline-marker data-step="12">
             <div .timeline-content>
               <h3>v0.0.4.5 (Released 2026-07-11)
               <p>Version flags, permission-preserving archives, checksums, automatic version-driven releases, pinned deployment baselines, and native verification of exact release downloads
+          <div .timeline-item .current>
+            <div .timeline-marker .current data-step="13">
+            <div .timeline-content>
+              <h3>v0.0.4.6
+              <p>Partially applied builtins, typed lambdas and tuples, consistent recursion, private constructors, and predictable type annotations across scripts, modules, and the REPL
           <div .timeline-item>
-            <div .timeline-marker data-step="13">
+            <div .timeline-marker data-step="14">
             <div .timeline-content>
               <h3>Later Releases
               <p>REPL polish, friendlier diagnostics, richer stdlib helpers, formatter/linter, package manager, HTTP/JSON work, and fuller polymorphic-recursion ergonomics

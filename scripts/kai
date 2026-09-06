@@ -1,38 +1,78 @@
 #!/usr/bin/env bash
+# Kai command runner
 set -euo pipefail
 
-# A friendly runner for Kai scripts, so you can run:
-#   kai myscript.kai
-# without typing `stack exec` explicitly.
+# Resolve installed symlinks so the repository remains available from any cwd.
+RUNNER_SOURCE=${BASH_SOURCE[0]}
+while [ -L "$RUNNER_SOURCE" ]; do
+  RUNNER_DIR=$(cd "$(dirname "$RUNNER_SOURCE")" && pwd)
+  RUNNER_SOURCE=$(readlink "$RUNNER_SOURCE")
+  case "$RUNNER_SOURCE" in
+    /*) ;;
+    *) RUNNER_SOURCE="$RUNNER_DIR/$RUNNER_SOURCE" ;;
+  esac
+done
+RUNNER_DIR=$(cd "$(dirname "$RUNNER_SOURCE")" && pwd)
+RUNNER_SOURCE="$RUNNER_DIR/$(basename "$RUNNER_SOURCE")"
+REPO_DIR=$(cd "$RUNNER_DIR/.." && pwd)
 
-# 1) If a compiled `kai` binary exists in PATH (and it's not this script), use it.
-if command -v kai >/dev/null 2>&1 && [ "$(command -v kai)" != "${BASH_SOURCE[0]}" ]; then
-  if [ -n "${KAI_BIN:-}" ] && [ -x "${KAI_BIN}" ]; then
-    exec "${KAI_BIN}" "$@"
-  else
-    exec kai "$@"
+is_binary() {
+  [ -f "$1" ] && [ -x "$1" ] && [ ! "$1" -ef "$RUNNER_SOURCE" ] &&
+    ! grep -Fqx -e '# Kai command runner' \
+      -e '# A friendly runner for Kai scripts, so you can run:' "$1"
+}
+
+# An explicit override takes precedence, including when kai is absent from PATH.
+if [ -n "${KAI_BIN:-}" ]; then
+  if ! is_binary "$KAI_BIN"; then
+    echo "kai: KAI_BIN must name an executable other than the Kai runner: $KAI_BIN" >&2
+    exit 1
   fi
+  exec "$KAI_BIN" "$@"
 fi
 
-# 2) If inside the repo, try the locally built binary under .stack-work
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "${SCRIPT_DIR}"/.. && pwd)"
-
-for CAND in \
-  "${REPO_DIR}"/.stack-work/install/*/*/*/bin/kai \
-  "${REPO_DIR}"/.stack-work/install/*/*/bin/kai \
-  "${REPO_DIR}"/.stack-work/dist/*/build/kai/kai
-do
-  if [ -x "${CAND}" ]; then
-    exec "${CAND}" "$@"
+# Search every PATH entry, skipping this runner, its links, and installed copies.
+RUNNER_PATH=${PATH-}:
+while [[ "$RUNNER_PATH" == *:* ]]; do
+  RUNNER_ENTRY=${RUNNER_PATH%%:*}
+  RUNNER_PATH=${RUNNER_PATH#*:}
+  RUNNER_CANDIDATE="${RUNNER_ENTRY:-.}/kai"
+  if is_binary "$RUNNER_CANDIDATE"; then
+    exec "$RUNNER_CANDIDATE" "$@"
   fi
 done
 
-# 3) Fallback to stack if available
+if [ -f "$REPO_DIR/stack.yaml" ] && [ -f "$REPO_DIR/package.yaml" ]; then
+  if command -v stack >/dev/null 2>&1; then
+    # Ask Stack for the active snapshot instead of choosing an old cache by name.
+    if RUNNER_INSTALL=$(stack --stack-yaml "$REPO_DIR/stack.yaml" path --local-install-root 2>/dev/null) &&
+       is_binary "$RUNNER_INSTALL/bin/kai"; then
+      exec "$RUNNER_INSTALL/bin/kai" "$@"
+    fi
+    exec stack --stack-yaml "$REPO_DIR/stack.yaml" exec kai -- "$@"
+  fi
+
+  # Without Stack, use the most recently built executable, including GHC's dist layout.
+  RUNNER_NEWEST=""
+  for RUNNER_CANDIDATE in \
+    "$REPO_DIR"/.stack-work/install/*/*/*/bin/kai \
+    "$REPO_DIR"/.stack-work/install/*/*/bin/kai \
+    "$REPO_DIR"/.stack-work/dist/*/*/build/kai/kai \
+    "$REPO_DIR"/.stack-work/dist/*/build/kai/kai
+  do
+    if is_binary "$RUNNER_CANDIDATE" &&
+       { [ -z "$RUNNER_NEWEST" ] || [ "$RUNNER_CANDIDATE" -nt "$RUNNER_NEWEST" ]; }; then
+      RUNNER_NEWEST=$RUNNER_CANDIDATE
+    fi
+  done
+  if [ -n "$RUNNER_NEWEST" ]; then
+    exec "$RUNNER_NEWEST" "$@"
+  fi
+fi
+
 if command -v stack >/dev/null 2>&1; then
   exec stack exec kai -- "$@"
 fi
 
 echo "kai: no runnable binary found. Install via 'stack install' or add this script to PATH." >&2
 exit 1
-

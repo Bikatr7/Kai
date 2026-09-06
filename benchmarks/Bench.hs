@@ -46,24 +46,24 @@ parseTypeCheck input = case parseExpr input of
 speedBenchmarks :: Benchmark
 speedBenchmarks = bgroup "Speed Benchmarks"
   [ bgroup "End-to-End"
-      [ bench "Fibonacci (n=10)" $ nf (\() -> parseEval fibExpr) ()
-      , bench "Factorial (n=10)" $ nf (\() -> parseEval factorialExpr) ()
-      , bench "List Operations" $ nf (\() -> parseEval listOpsExpr) ()
-      , bench "String Operations" $ nf (\() -> parseEval stringOpsExpr) ()
-      , bench "Deep Nesting" $ nf (\() -> parseEval deepNestingExpr) ()
-      , bench "Complex Expression" $ nf (\() -> parseEval complexExpr) ()
+      [ bench "Fibonacci (n=10)" $ nf parseEval fibExpr
+      , bench "Factorial (n=10)" $ nf parseEval factorialExpr
+      , bench "List Operations" $ nf parseEval listOpsExpr
+      , bench "String Operations" $ nf parseEval stringOpsExpr
+      , bench "Deep Nesting" $ nf parseEval deepNestingExpr
+      , bench "Complex Expression" $ nf parseEval complexExpr
       ]
   , bgroup "Type Checking"
-      [ bench "Fibonacci" $ nf (\() -> parseTypeCheck fibExpr) ()
-      , bench "Complex Expression" $ nf (\() -> parseTypeCheck complexExpr) ()
+      [ bench "Fibonacci" $ nf parseTypeCheck fibExpr
+      , bench "Complex Expression" $ nf parseTypeCheck complexExpr
       ]
 
-  , bgroup "Memory Usage (Allocations)"
-      [ bench "Parse Small Expr" $ whnf (\() -> parseExpr "1 + 2") ()
-      , bench "Parse List" $ whnf (\() -> parseExpr "[1,2,3,4,5]") ()
-      , bench "Eval Simple" $ whnf (\() -> parseEval "42") ()
-      , bench "Eval List Length" $ whnf (\() -> parseEval "length [1,2,3,4,5]") ()
-      , bench "Type Check Simple" $ whnf (\() -> parseTypeCheck "1 + 2") ()
+  , bgroup "Small-input latency"
+      [ bench "Parse Small Expr" $ whnf parseExpr "1 + 2"
+      , bench "Parse List" $ whnf parseExpr "[1,2,3,4,5]"
+      , bench "Eval Simple" $ whnf parseEval "42"
+      , bench "Eval List Length" $ whnf parseEval "length [1,2,3,4,5]"
+      , bench "Type Check Simple" $ whnf parseTypeCheck "1 + 2"
       ]
 
   , parserBenchmarks
@@ -73,14 +73,14 @@ speedBenchmarks = bgroup "Speed Benchmarks"
 
 memoryBenchmarks :: W.Weigh ()
 memoryBenchmarks = do
-  W.action "Memory: Parse Small Expr" (return $ parseExpr "1 + 2")
-  W.action "Memory: Parse List" (return $ parseExpr "[1,2,3,4,5]")
-  W.action "Memory: Parse String" (return $ parseExpr "\"hello\"")
-  W.action "Memory: Eval Simple" (return $ parseEval "42")
-  W.action "Memory: Eval List" (return $ parseEval "length [1,2,3]")
-  W.action "Memory: Eval String" (return $ parseEval "strLength \"hi\"")
-  W.action "Memory: TypeCheck Simple" (return $ parseTypeCheck "1 + 2")
-  W.action "Memory: TypeCheck Function" (return $ parseTypeCheck "\\x -> x")
+  W.func "Memory: Parse Small Expr" parseExpr "1 + 2"
+  W.func "Memory: Parse List" parseExpr "[1,2,3,4,5]"
+  W.func "Memory: Parse String" parseExpr "\"hello\""
+  W.func "Memory: Eval Simple" parseEval "42"
+  W.func "Memory: Eval List" parseEval "length [1,2,3]"
+  W.func "Memory: Eval String" parseEval "strLength \"hi\""
+  W.func "Memory: TypeCheck Simple" parseTypeCheck "1 + 2"
+  W.func "Memory: TypeCheck Function" parseTypeCheck "\\x -> x"
 
 main :: IO ()
 main = do

@@ -1,3 +1,5 @@
+// expect: "prefix-Ada-middle-suffix"
+// stdin: "Ada\n"
 // Test input in deeply nested expressions
 // expect-type: TString
 

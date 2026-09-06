@@ -20,12 +20,12 @@ import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>))
 import System.Info (os)
 import System.IO (hClose, openTempFile)
-import System.Posix.IO (closeFd, createPipe, dup, dupTo, stdInput)
 
 import Evaluator (RuntimeError(..), Value(..), evalWithEnv)
 import Parser (parseExpr)
 import TypeChecker (Type(..), typeCheck)
 import Syntax
+import TestIO (withReadOnlyStdout, withStdin)
 
 withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir action = do
@@ -50,18 +50,7 @@ evalSource :: String -> IO (Either RuntimeError Value)
 evalSource source = parseOrFail source >>= evalWithEnv Map.empty
 
 withEofStdin :: IO a -> IO a
-withEofStdin action = bracket setup restore (const action)
-  where
-    setup = do
-      (readFd, writeFd) <- createPipe
-      closeFd writeFd
-      oldStdin <- dup stdInput
-      dupTo readFd stdInput
-      closeFd readFd
-      return oldStdin
-    restore oldStdin = do
-      dupTo oldStdin stdInput
-      closeFd oldStdin
+withEofStdin = withStdin ""
 
 commandWithExitCode :: Int -> String
 commandWithExitCode code
@@ -70,6 +59,16 @@ commandWithExitCode code
 
 spec :: Spec
 spec = describe "Extended IO Stdlib" $ do
+  it "returns a typed error when stdout is not writable" $ do
+    result <- withReadOnlyStdout $ evalSource "print 42"
+    result `shouldBe` Left (TypeError "print: could not write to stdout")
+
+  it "stops subsequent effects after a failed print" $ withTempDir $ \dir -> do
+    let path = dir </> "after-print.txt"
+    result <- withReadOnlyStdout $ evalSource ("print 42; writeFile " ++ show path ++ " \"unexpected\"")
+    result `shouldBe` Left (TypeError "print: could not write to stdout")
+    doesFileExist path `shouldReturn` False
+
   it "converts stdin EOF into a Kai runtime error" $ do
     withEofStdin $ evalSource "input"
       `shouldReturn` Left (TypeError "input: could not read from stdin")

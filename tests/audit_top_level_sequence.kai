@@ -1,0 +1,6 @@
+// expect: 42
+// expect-type: TInt
+/* Outer comment /* Nested comment */ remains open until here. */
+print "first"
+print "second"
+42

@@ -55,6 +55,7 @@ resolveCallableIO = go []
       | ref `elem` seen =
           return $ Left $ TypeError "Cannot apply cyclic recursive reference"
       | otherwise = readIORef ref >>= go (ref:seen)
+    go _ (VUninitialized name) = return $ Left $ UninitializedRecursion name
     go _ value = return $ Right value
 
 finishConstructorApplication :: String -> Int -> [Value] -> Either RuntimeError Value

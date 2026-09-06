@@ -1,3 +1,5 @@
+// expect: "Input was: \"a\"b\""
+// stdin: "a\"b\n"
 // Test input with special characters and escapes
 // expect-type: TString
 

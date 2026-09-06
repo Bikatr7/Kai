@@ -41,3 +41,12 @@ stack bench --benchmark-arguments="--iters 1"
 
 Benchmark results are machine- and build-specific. Do not copy old timings into
 release documentation without rerunning them on the current revision.
+
+## Measurement integrity
+
+Pass the changing input to the measured function: `nf parseEval source`, not
+`nf (\() -> parseEval source) ()`. The latter can be optimized into repeated
+forcing of a cached result. Speed cases use explicit inputs, and Weigh uses `W.func` for pure work. The one-iteration CI gate validates programs only; it does
+not prove performance or impose a timing threshold. Evaluator/type-checker cases
+currently include parsing; their category names describe the workload, not an
+isolated phase measurement.

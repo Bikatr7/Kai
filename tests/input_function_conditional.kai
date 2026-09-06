@@ -1,3 +1,5 @@
+// expect: "Welcome admin"
+// stdin: "admin\n"
 // Test input with function returning conditional
 // expect-type: TString
 

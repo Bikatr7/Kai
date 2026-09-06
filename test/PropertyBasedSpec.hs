@@ -6,7 +6,7 @@ import Test.QuickCheck
 import Syntax
 import Parser
 import TypeChecker
-import Evaluator (Value(..), evalPure)
+import Evaluator (Value(..), evalPure, evalProgram)
 import Control.Monad (liftM, liftM2, liftM3)
 import qualified Data.Map as Map
 
@@ -188,7 +188,7 @@ spec = describe "Property-Based Testing" $ do
             expr2 = Add (IntLit y) (IntLit x)
         in case (evalPure expr1, evalPure expr2) of
              (Right v1, Right v2) -> v1 == v2
-             _ -> True  -- Errors are fine (overflow etc)
+             _ -> False  -- Generated operands cannot overflow signed 32-bit addition.
     
     it "addition is associative" $ do
       property $ forAll genSmallKaiInt $ \x -> forAll genSmallKaiInt $ \y -> forAll genSmallKaiInt $ \z ->
@@ -196,7 +196,7 @@ spec = describe "Property-Based Testing" $ do
             expr2 = Add (IntLit x) (Add (IntLit y) (IntLit z))
         in case (evalPure expr1, evalPure expr2) of
              (Right v1, Right v2) -> v1 == v2
-             _ -> True
+             _ -> False  -- The three bounded operands also remain within range.
     
     it "multiplication by zero gives zero" $ do
       property $ forAll genKaiInt $ \x ->
@@ -284,6 +284,43 @@ spec = describe "Property-Based Testing" $ do
              Right (VInt result) -> result == x
              _ -> False
 
+  describe "Declaration and pattern preservation properties" $ do
+    it "rejects repeated record binders for either field order" $ property $
+      forAll genKaiInt $ \n flag reverseFields ->
+        let fields = [("number", PVar "x"), ("flag", PVar "x")]
+            patternFields = if reverseFields then reverse fields else fields
+            expression = Case (RecordLit [("number",IntLit n),("flag",BoolLit flag)])
+                           [(PRecord patternFields, Var "x")]
+        in typeCheck expression == Left (DuplicatePatternBinding "x")
+    it "preserves generated custom constructor payloads through evaluation" $ property $
+      forAll genKaiInt $ \n flag -> ioProperty $ do
+        let declarations = [TLData "Envelope" ["a"] [DataConstructor "Wrap" [STVar "a", STBool]]]
+            expression = App (App (Var "Wrap") (IntLit n)) (BoolLit flag)
+            program = Program (declarations ++ [TLExpr expression])
+            constructors = Map.singleton "Wrap" (TCustom "Envelope" [TVar "a"], [TVar "a", TBool])
+        actual <- evalProgram program
+        return $ case (typeCheckProgram program, actual) of
+          (Right ty, Right value) -> valueHasTypeWith constructors ty value && value == VData "Wrap" [VInt n,VBool flag]
+          _ -> False
+    it "rejects generated incompatible redeclarations before evaluation" $ property $
+      forAll genKaiInt $ \n ->
+        let program = Program [TLData "T" [] [DataConstructor "Mk" [STInt]],
+                               TLDef "old" Nothing (App (Var "Mk") (IntLit n)),
+                               TLData "T" [] [DataConstructor "Mk" [STBool]], TLExpr (Var "old")]
+        in case typeCheckProgram program of
+          Left (InvalidDataDeclaration _) -> True
+          _ -> False
+    it "validates custom constructor identity, arity, and every payload" $ do
+      let schemas = Map.singleton "Wrap" (TCustom "Envelope" [TVar "a"], [TVar "a", TBool])
+          expected = TCustom "Envelope" [TInt]
+          check = valueHasTypeWith schemas expected
+      check (VData "Wrap" [VInt 1,VBool True]) `shouldBe` True
+      map check [VData "Missing" [VInt 1,VBool True], VData "Wrap" [],
+                 VData "Wrap" [VBool True,VBool True], VData "Wrap" [VInt 1,VInt 2],
+                 VData "Wrap" [VInt 1,VBool True,VInt 2]] `shouldBe` replicate 5 False
+      valueHasTypeWith schemas (TCustom "Other" [TInt]) (VData "Wrap" [VInt 1,VBool True]) `shouldBe` False
+      valueHasType expected (VData "Wrap" [VInt 1,VBool True]) `shouldBe` False
+
   describe "Error Handling Properties" $ do
     it "type errors are consistent" $ do
       property $ forAll (resize 2 arbitrary) $ \(ValidExpr expr) ->
@@ -306,26 +343,38 @@ spec = describe "Property-Based Testing" $ do
         comparableValues (VRef _) (VRef _) = True        -- References are deterministic but not comparable
         comparableValues v1 v2 = v1 == v2                -- Everything else should be equal
 
+-- Constructor schemas include the declared result and payload types. An
+-- unregistered constructor cannot establish preservation for a custom type.
 valueHasType :: Type -> Value -> Bool
-valueHasType TInt (VInt _) = True
-valueHasType TBool (VBool _) = True
-valueHasType TString (VStr _) = True
-valueHasType TUnit VUnit = True
-valueHasType (TFun _ _) VFun {} = True
-valueHasType (TFun _ _) VConstructor {} = True
-valueHasType (TMaybe _) VNothing = True
-valueHasType (TMaybe ty) (VJust value) = valueHasType ty value
-valueHasType (TEither leftTy _) (VLeft value) = valueHasType leftTy value
-valueHasType (TEither _ rightTy) (VRight value) = valueHasType rightTy value
-valueHasType (TList ty) (VList values) = all (valueHasType ty) values
-valueHasType (TTuple tys) (VTuple values) =
-  length tys == length values && and (zipWith valueHasType tys values)
-valueHasType (TRecord tys) (VRecord values) =
-  Map.keysSet tys == Map.keysSet values &&
-    and [maybe False (valueHasType ty) (Map.lookup name values) | (name, ty) <- Map.toList tys]
-valueHasType (TCustom _ _) VData {} = True
-valueHasType (TVar _) _ = True
-valueHasType _ _ = False
+valueHasType = valueHasTypeWith Map.empty
+
+valueHasTypeWith :: Map.Map String (Type, [Type]) -> Type -> Value -> Bool
+valueHasTypeWith constructors = matches
+  where
+    matches TInt (VInt _) = True
+    matches TBool (VBool _) = True
+    matches TString (VStr _) = True
+    matches TUnit VUnit = True
+    matches (TFun _ _) VFun {} = True
+    matches (TFun _ _) VConstructor {} = True
+    matches (TMaybe _) VNothing = True
+    matches (TMaybe ty) (VJust value) = matches ty value
+    matches (TEither leftTy _) (VLeft value) = matches leftTy value
+    matches (TEither _ rightTy) (VRight value) = matches rightTy value
+    matches (TList ty) (VList values) = all (matches ty) values
+    matches (TTuple tys) (VTuple values) =
+      length tys == length values && and (zipWith matches tys values)
+    matches (TRecord tys) (VRecord values) =
+      Map.keysSet tys == Map.keysSet values &&
+        and [maybe False (matches ty) (Map.lookup name values) | (name, ty) <- Map.toList tys]
+    matches ty@(TCustom _ _) (VData name values) = case Map.lookup name constructors of
+      Nothing -> False
+      Just (declared, payload) -> case unify declared ty of
+        Left _ -> False
+        Right subst -> length payload == length values &&
+          and (zipWith matches (map (applySubst subst) payload) values)
+    matches (TVar _) _ = True
+    matches _ _ = False
 
 -- Helper function to normalize expressions for comparison
 normalizeExpr :: Expr -> Expr
@@ -348,4 +397,4 @@ prettyExpr (Lt a b)  = "(" ++ prettyExpr a ++ " < " ++ prettyExpr b ++ ")"
 prettyExpr (Gt a b)  = "(" ++ prettyExpr a ++ " > " ++ prettyExpr b ++ ")"
 prettyExpr (If c t e) = "(if " ++ prettyExpr c ++ " then " ++ prettyExpr t ++ " else " ++ prettyExpr e ++ ")"
 prettyExpr (Lambda p _ b) = "(\\" ++ p ++ " -> " ++ prettyExpr b ++ ")"
-prettyExpr (App f x) = "(" ++ prettyExpr f ++ " " ++ prettyExpr x ++ ")"
+prettyExpr (App f x) = "(" ++ prettyExpr f ++ " (" ++ prettyExpr x ++ "))"

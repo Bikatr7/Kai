@@ -1,3 +1,5 @@
+// expect: "user access"
+// stdin: "user\nuser\n"
 // Test input in nested conditional expressions
 // expect-type: TString
 

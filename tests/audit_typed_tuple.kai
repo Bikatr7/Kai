@@ -1,0 +1,4 @@
+// expect: (42, true)
+let apply = \f : (Int -> Int) -> f 41
+let pair : (Int, Bool) = (apply (\x -> x+1), true)
+pair

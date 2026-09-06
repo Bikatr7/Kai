@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, 'validation/**' ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -46,3 +50,88 @@ jobs:
       run: |
         VERSION=$(grep '^version:' package.yaml | cut -d' ' -f2)
         bash scripts/test-release-binary.sh ./dist/kai-ci "$VERSION"
+
+    - name: Render documentation for native interpreters
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/validation/')
+      env:
+        KAI_SITE_EXPORT_OUT_DIR: dist/documentation-site
+      run: bash scripts/export-site.sh
+
+    - uses: actions/upload-artifact@v4
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/validation/')
+      with:
+        name: validation-documentation
+        path: dist/documentation-site
+        if-no-files-found: error
+
+  native-packages:
+    name: Native language and package checks (${{ matrix.os }})
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/validation/')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            macos-target: '11.3'
+          - os: windows-2022
+            macos-target: ''
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
+      KAI_TEST_WEBSITE_HTML: dist/documentation-site/index.html
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: haskell-actions/setup@v2
+        with:
+          ghc-version: '9.4.8'
+          enable-stack: true
+          stack-version: 'latest'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.stack
+            .stack-work
+          key: native-check-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('stack.yaml.lock', 'package.yaml') }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: validation-documentation
+          path: dist/documentation-site
+      - name: Run language and integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = Windows ]; then
+            # POSIX permission/symlink and shell-exporter behavior is covered by Ubuntu and macOS.
+            stack --no-terminal test --test-arguments='--skip "Kai runner and installation" --skip "Static site exporter"'
+          else
+            stack --no-terminal test
+          fi
+      - name: Validate benchmark programs
+        shell: bash
+        run: stack --no-terminal bench --benchmark-arguments="--iters 1"
+      - name: Build, package, extract, and execute the CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          stack --no-terminal build :kai
+          VERSION=$(grep '^version:' package.yaml | cut -d' ' -f2)
+          INSTALL_ROOT=$(stack path --local-install-root)
+          if [ "$RUNNER_OS" = Windows ]; then
+            BINARY="$INSTALL_ROOT/bin/kai.exe"
+          else
+            BINARY="$INSTALL_ROOT/bin/kai"
+          fi
+          bash scripts/test-release-binary.sh "$BINARY" "$VERSION"
+          PACKAGE=$(bash scripts/package-release-binary.sh "$RUNNER_OS" "$RUNNER_ARCH" "$BINARY" dist/native-package)
+          EXTRACTED=$(bash scripts/extract-release-package.sh "$RUNNER_OS" "$PACKAGE" dist/native-extracted)
+          bash scripts/test-release-binary.sh "$EXTRACTED" "$VERSION"
+      - name: Check macOS deployment target
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          xcrun vtool -show-build dist/native-extracted/kai > dist/macos-build-info.txt
+          cat dist/macos-build-info.txt
+          grep -Eq 'minos[[:space:]]+11\.3([[:space:]]|$)' dist/macos-build-info.txt

@@ -8,20 +8,8 @@ import System.IO (hClose, hGetContents, hPutStr, openTempFile)
 
 import CLI (runCLI, versionString)
 
--- POSIX-specific stdout capture, consistent with the existing input tests.
-import System.Posix.IO
+import TestIO (captureOutput, withStdin)
 
-captureOutput :: IO a -> IO (a, String)
-captureOutput action = do
-    (readFd, writeFd) <- createPipe
-    oldStdout <- dup stdOutput
-    dupTo writeFd stdOutput
-    closeFd writeFd
-    result <- action
-    dupTo oldStdout stdOutput
-    closeFd oldStdout
-    readHandle <- fdToHandle readFd
-    hGetContents readHandle >>= \out -> evaluate (length out) >> return (result, out)
 
 withTempKaiFile :: String -> (FilePath -> IO a) -> IO a
 withTempKaiFile content action = do

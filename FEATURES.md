@@ -1,13 +1,13 @@
 # Kai Language Features
 
-**Version**: 0.0.4.5 (released 2026-07-11)
-**Last Updated**: 2026-07-11
+**Version**: 0.0.4.6
+**Last Updated**: 2026-09-05
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
 ---
 
-## Implemented Features (v0.0.4.5)
+## Implemented Features (v0.0.4.6)
 
 ### Core Language
 
@@ -19,7 +19,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 #### Operators
 - ✅ **Arithmetic**: `+`, `-`, `*`, `/` (integer division with checked 32-bit overflow)
-- ✅ **Unary minus**: `-expr` (proper prefix operator)
+- ✅ **Unary minus**: `-expr`; repeated prefix operators apply from right to left
 - ✅ **Boolean logic**: `and`, `or` (right-associative), `not` (prefix)
 - ✅ **Comparison**: `==`, `<`, `>` (non-associative); equality is structural for data and rejects callable/reference values
 - ✅ **String concatenation**: `++` (right-associative)
@@ -35,14 +35,14 @@ This document provides a comprehensive overview of all implemented and planned f
 #### Functions
 - ✅ **Lambda expressions**: `\x -> expr`
 - ✅ **Function application**: Left-associative, higher precedence than operators
-- ✅ **First-class functions**: Pass as arguments, return from functions, store in variables
+- ✅ **First-class functions**: Pass as arguments, return from functions, store in variables; builtins support partial application
 - ✅ **Closures**: Lambda expressions capture lexical environment
 - ✅ **Recursion**: Via `letrec` bindings
 - ✅ **Fixed points**: `fix : (a -> a) -> a`, with safe rejection of unproductive self-forcing values
 
 #### Variable Bindings
 - ✅ **Let bindings**: `let x = value in body`
-- ✅ **Recursive bindings**: `letrec f = value in body`
+- ✅ **Recursive bindings**: `letrec f = value in body`; constants and closures initialize in source order with guarded recursive reads
 - ✅ **Wildcard variables**: `let _ = expr in body` to explicitly discard values
 - ✅ **Type annotations**: Optional Haskell-style (`let x : Int = 42`, `\x : String -> expr`)
 - ✅ **Top-level definitions**: `let` and `letrec` at module level (v0.0.4.2)
@@ -115,7 +115,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ `snd : (a, b) -> b` - Second element of pair
 
 #### I/O Operations (16)
-- ✅ `print : a -> Unit` - Print value and return unit
+- ✅ `print : a -> Unit` - Print and flush value, then return unit; output failures stop later effects
 - ✅ `input : String` - Read line from stdin
 - ✅ `readFile : String -> String` - Read entire file as string
 - ✅ `writeFile : String -> String -> Unit` - Write string to file (overwrite)
@@ -181,16 +181,16 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Script arguments**: Pass arguments to scripts
 - ✅ **Failure exit codes**: Parse, type, and runtime failures return non-zero exit codes
 - ✅ **Clean output**: No debug noise by default
-- ✅ **Install script**: `make install` to `~/.local/bin`
-- ✅ **Runner script**: Lightweight wrapper for compiled binary
+- ✅ **Install script**: `make install` links the checkout's runner into `~/.local/bin`; supports a custom `PREFIX`
+- ✅ **Runner script**: Explicit `KAI_BIN` selection, executable lookup on `PATH`, active Stack build selection, and invocation from other directories
 
 ### Testing Infrastructure
 
-- ✅ **722 test examples**: Hspec, meaningful typed QuickCheck properties, asserted scripts, CLI, REPL, stress, and example smoke coverage
+- ✅ **Executable test suite**: Hspec, QuickCheck properties, asserted scripts, CLI, REPL, stress, and example smoke coverage
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
 - ✅ **Script tests**: `.kai` files with `// expect:` directives
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
-- ✅ **Type checking tests**: All type inference scenarios
+- ✅ **Type checking tests**: Unification, polymorphism, annotations, declarations, and imports
 - ✅ **Parser tests**: Edge cases and error messages
 - ✅ **Clean codebase**: Well-structured Haskell with comprehensive test coverage
 
@@ -222,17 +222,16 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Memory profiling**: Comprehensive heap usage analysis
 
 #### Performance Baselines
-Benchmark timings are machine- and build-specific. The suite validates its Kai
-inputs before measuring them; use same-machine before/after runs for regression
-decisions rather than historical numbers in documentation.
+The suite checks its Kai inputs before measuring them. Compare benchmark timings
+on the same machine and build profile when checking performance changes.
 
 ---
 
 ## Roadmap
 
-Kai is now past the point where a giant feature wishlist is useful. The v0.0.4.5 release sharpened the CLI and distribution path instead of broadening the language surface.
+Development focuses on practical scripting tools, useful standard-library additions, and REPL ergonomics.
 
-### Post-v0.0.4.5 Priorities
+### Priorities
 
 #### 1. REPL Polish
 - ⏳ **History and completion**: The core REPL works; now it needs comfort features
@@ -266,7 +265,7 @@ Kai is now past the point where a giant feature wishlist is useful. The v0.0.4.5
 - ❌ **Limited pattern matching**: No guards, no as-patterns
 - ❌ **Wildcard restrictions**: `_` not allowed in `letrec` bindings (cannot be meaningfully recursive)
 - ❌ **Polymorphic recursion still needs explicit annotations**: Unannotated recursive bindings remain monomorphic
-- ❌ **No error recovery**: One parse/type error stops execution
+- ❌ **Script failures**: A parse/type error stops a script; the REPL accepts subsequent input
 - ❌ **Integer-only arithmetic**: No floating-point numbers
 - ❌ **Limited escape sequences**: Only `\"`, `\\`, `\n` supported
 - ❌ **No regex support**: String operations are basic
@@ -290,14 +289,13 @@ Kai is now past the point where a giant feature wishlist is useful. The v0.0.4.5
 - ❌ **No formatter**: Manual code formatting only
 - ❌ **No linter**: Only HLint for Haskell implementation
 - ❌ **No debugger**: Print-based debugging only
-- ❌ **No profiler**: Can't measure performance
+- ❌ **No language-level profiler**: Use the Haskell benchmark suites for implementation performance
 
 ---
 
 ## Implementation Statistics
 
-- **Lines of Haskell**: ~5,800 across `src/` and `benchmarks/`
-- **Test Coverage**: 722 passing examples; no line-coverage percentage is claimed
+- **Tests**: Hspec, QuickCheck, script expectations, CLI and REPL integration, and stress tests
 - **HLint Warnings**: 0
 - **Core Types**: 8 (Int, Bool, String, Unit, List, Tuple, Record, Function)
 - **Built-in Functions**: 39
@@ -312,6 +310,18 @@ Kai is now past the point where a giant feature wishlist is useful. The v0.0.4.5
 ---
 
 ## Version History
+
+### v0.0.4.6
+
+- First-class and partially applied builtins, typed lambda parameters, and tuple annotations
+- Consistent recursive inference and initialization across scripts, modules, and the REPL
+- Type variables scoped to each annotation, compatible renamed data parameters, and private constructor visibility
+- Exact constructor-pattern arity and duplicate-pattern validation
+- Arithmetic spacing, nested block comments, and multiline top-level expressions
+- Repeated prefix operators with checked integer negation
+- Source decoding errors reported by the CLI and REPL
+- Script expectation checks with stdin fixtures and nested module coverage
+- Runner installation, explicit executable selection, and active build lookup
 
 ### v0.0.4.5 (2026-07-11)
 - Added `kai --version` and `kai -V`, including clean debug-prefixed behavior

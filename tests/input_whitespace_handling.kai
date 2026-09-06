@@ -1,3 +1,5 @@
+// expect: "[  Ada  ]"
+// stdin: "  Ada  \n"
 // Test input with whitespace and trimming patterns
 // expect-type: TString
 

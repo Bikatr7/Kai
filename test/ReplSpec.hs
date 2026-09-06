@@ -8,33 +8,9 @@ import System.IO (hClose, hGetContents, hPutStr, openTempFile)
 
 import CLI (runCLI, versionString)
 
-import System.Posix.IO
+import TestIO (captureOutput, withStdin)
 
-captureOutput :: IO a -> IO (a, String)
-captureOutput action = do
-  (readFd, writeFd) <- createPipe
-  oldStdout <- dup stdOutput
-  dupTo writeFd stdOutput
-  closeFd writeFd
-  result <- action
-  dupTo oldStdout stdOutput
-  closeFd oldStdout
-  readHandle <- fdToHandle readFd
-  hGetContents readHandle >>= \out -> evaluate (length out) >> return (result, out)
 
-withStdin :: String -> IO a -> IO a
-withStdin input action = do
-  (readFd, writeFd) <- createPipe
-  writeHandle <- fdToHandle writeFd
-  hPutStr writeHandle input
-  hClose writeHandle
-  oldStdin <- dup stdInput
-  dupTo readFd stdInput
-  closeFd readFd
-  result <- action
-  dupTo oldStdin stdInput
-  closeFd oldStdin
-  return result
 
 withTempKaiFile :: String -> (FilePath -> IO a) -> IO a
 withTempKaiFile content action = do

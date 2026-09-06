@@ -106,6 +106,7 @@ recordAccess = do
 
 application :: Parser Expr -> Parser (Expr -> Expr)
 application atomParser = do
+  notFollowedBy (char '+' <|> char '-')
   arg <- atomParser
   return (`App` arg)
 
@@ -142,11 +143,7 @@ typeAnnotationExpr exprParser = do
 
 operatorTable :: Bool -> [[Operator Parser Expr]]
 operatorTable allowSeq =
-  [ [ Prefix (Not <$ keyword "not")
-    , Prefix ( Sub (IntLit 0)
-             <$ try (char '-' <* notFollowedBy digitChar <* sc)
-             )
-    ]
+  [ [Prefix (foldr (.) id <$> some prefixOperator)]
   , [ InfixL (Mul <$ symbol "*")
     , InfixL (Div <$ symbol "/")
     ]
@@ -162,3 +159,7 @@ operatorTable allowSeq =
   , [ InfixR (And <$ keyword "and") ]
   , [ InfixR (Or <$ keyword "or") ]
   ] ++ [[InfixR (Seq <$ symbol ";")] | allowSeq]
+
+prefixOperator :: Parser (Expr -> Expr)
+prefixOperator = (Not <$ keyword "not") <|>
+  (Sub (IntLit 0) <$ try (char '-' <* notFollowedBy digitChar <* sc))

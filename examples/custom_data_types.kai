@@ -1,3 +1,4 @@
+// expect: ()
 // expect-type: TUnit
 // Expression-tree example with constructor functions, recursive transforms, and constructor patterns.
 data Expr = Lit Int | Add (Expr) (Expr) | Mul (Expr) (Expr) | Neg (Expr)

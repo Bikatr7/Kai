@@ -1,43 +1,41 @@
 name: kai-lang
-version: 0.0.4.5
-description: A functional-first scripting language with static typing
+version: 0.0.4.6
+synopsis: A functional-first scripting language with static typing
+description: Kai combines static type inference, first-class functions, algebraic data types, and scripting tools in an interpreter implemented in Haskell.
+category: Language
+github: Bikatr7/Kai
 homepage: https://github.com/bikatr7/kai
 license: AGPL-3.0-only
 author: Kaden Bilyeu (Bikatr7)
 maintainer: bikatr7@proton.me
 
+extra-source-files:
+  - '*.md'
+  - package.yaml
+  - stack.yaml
+  - stack.yaml.lock
+  - Makefile
+  - .hlint.yaml
+  - .github/workflows/*.yml
+  - scripts/*
+  - benchmarks/README.md
+  - test/*.py
+  - test/fixtures/*.sh
+  - tests/**/*.kai
+  - examples/**/*.kai
+  - website/static/*
+
 dependencies:
   - base >= 4.7 && < 5
-  - text
   - containers
-  - bytestring
   - megaparsec
   - parser-combinators
-  - hspec
-  - QuickCheck
   - mtl
   - split
-  - weigh
   - deepseq
   - filepath
   - directory
-  - aeson
   - process
-
-when:
-  - condition: os(windows)
-    then:
-      dependencies: []
-    else:
-      dependencies:
-        - yesod
-        - yesod-core
-        - yesod-static
-        - yesod-form
-        - shakespeare
-        - warp
-        - criterion
-        - unix
 
 library:
   source-dirs: src
@@ -59,6 +57,7 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - directory
+      - text
     when:
       - condition: os(windows)
         then:
@@ -100,13 +99,8 @@ tests:
       - filepath
       - containers
       - process
-    when:
-      - condition: os(windows)
-        then:
-          dependencies: []
-        else:
-          dependencies:
-            - unix
+      - aeson
+      - bytestring
     build-tools:
       - hspec-discover
 
@@ -123,14 +117,5 @@ benchmarks:
       - kai-lang
       - containers
       - text
-    when:
-      - condition: os(windows)
-        then:
-          dependencies:
-            - weigh
-            - deepseq
-        else:
-          dependencies:
-            - criterion
-            - weigh
-            - deepseq
+      - weigh
+      - criterion

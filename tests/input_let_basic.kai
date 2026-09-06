@@ -1,3 +1,5 @@
+// expect: "You said: Ada"
+// stdin: "Ada\n"
 // Test input with basic let binding
 // expect-type: TString
 

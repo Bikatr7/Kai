@@ -1,3 +1,5 @@
+// expect: "empty input detected"
+// stdin: "\n"
 // Test input with empty string and special handling
 // expect-type: TString
 

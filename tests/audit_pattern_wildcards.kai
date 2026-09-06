@@ -1,0 +1,3 @@
+// expect: (42, true)
+data Pair a b = Pair a b
+case Pair 42 true of Pair x flag -> case (x, flag) of (_, _) -> (x, flag)

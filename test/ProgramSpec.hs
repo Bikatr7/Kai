@@ -362,10 +362,10 @@ spec = do
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Additional Error Cases" $ do
-      it "reports error when letrec value is not a function" $ do
+      it "initializes a nonrecursive constant in a letrec binding" $ do
         let program = "letrec x = 42\nx"
         case parseProgram program of
-          Right ast -> evalProgram ast `shouldReturn` Left (E.TypeError "LetRec value must be a function, got: 42")
+          Right ast -> evalProgram ast `shouldReturn` Right (VInt 42)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "reports mutual recursion type errors without crashing" $ do
@@ -376,8 +376,8 @@ spec = do
             Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
-      it "reports error when expression appears before final expression" $ do
+      it "evaluates successive top-level expressions and returns the last" $ do
         let program = "let x = 42\nx + 1\nx"
         case parseProgram program of
-          Right ast -> evalProgram ast `shouldReturn` Left (E.TypeError "Expressions must be at the end of the program")
+          Right ast -> evalProgram ast `shouldReturn` Right (VInt 42)
           Left err -> expectationFailure $ "Parse error: " ++ show err

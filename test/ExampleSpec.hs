@@ -13,33 +13,9 @@ import Parser (parseProgram)
 import TypeChecker (typeCheckProgramWithDirIO)
 import qualified ModuleSystem
 
-import System.Posix.IO
+import TestIO (captureOutput, withStdin)
 
-captureOutput :: IO a -> IO (a, String)
-captureOutput action = do
-  (readFd, writeFd) <- createPipe
-  oldStdout <- dup stdOutput
-  dupTo writeFd stdOutput
-  closeFd writeFd
-  result <- action
-  dupTo oldStdout stdOutput
-  closeFd oldStdout
-  readHandle <- fdToHandle readFd
-  hGetContents readHandle >>= \out -> evaluate (length out) >> return (result, out)
 
-withStdin :: String -> IO a -> IO a
-withStdin input action = do
-  (readFd, writeFd) <- createPipe
-  writeHandle <- fdToHandle writeFd
-  hPutStr writeHandle input
-  hClose writeHandle
-  oldStdin <- dup stdInput
-  dupTo readFd stdInput
-  closeFd readFd
-  result <- action
-  dupTo oldStdin stdInput
-  closeFd oldStdin
-  return result
 
 withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir action = do

@@ -1,3 +1,5 @@
+// expect: "confirmed"
+// stdin: "yes\n"
 // Test input in conditional expressions
 // expect-type: TString
 

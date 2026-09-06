@@ -1,3 +1,5 @@
+// expect: "User typed: Ada (end)"
+// stdin: "Ada\n"
 // Test input with various string operations
 // expect-type: TString
 

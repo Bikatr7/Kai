@@ -1,3 +1,5 @@
+// expect: "Hello, stranger!"
+// stdin: "\n"
 // Test input with recursive let binding
 // expect-type: TString
 

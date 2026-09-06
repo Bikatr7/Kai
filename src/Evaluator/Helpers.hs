@@ -39,7 +39,9 @@ showValue VNothing = "Nothing"
 showValue (VLeft v) = "Left " ++ showValue v
 showValue (VRight v) = "Right " ++ showValue v
 showValue (VList l) = "[" ++ intercalate ", " (map showValue l) ++ "]"
-showValue (VRecord r) = "{" ++ concatMap (\(k,v) -> k ++ ": " ++ showValue v) (Map.toList r) ++ "}"
+showValue (VRecord r) = "{" ++ intercalate ", " [k ++ ": " ++ showValue v | (k,v) <- Map.toList r] ++ "}"
+showValue (VRef _) = "<ref>"
+showValue (VUninitialized name) = "<uninitialized " ++ name ++ ">"
 showValue (VTuple vs) = "(" ++ intercalate ", " (map showValue vs) ++ ")"
 
 extractString :: Value -> Either RuntimeError String

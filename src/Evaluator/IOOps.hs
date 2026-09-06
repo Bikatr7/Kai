@@ -26,7 +26,7 @@ lookupArgs env =
       Nothing -> VList []
 
 evalIOPure :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
-evalIOPure _ _ Input = Right $ VStr "World" -- For test compatibility
+evalIOPure _ _ Input = Left $ TypeError "input not available in pure evaluation"
 evalIOPure _ env Args = Right $ lookupArgs env
 evalIOPure eval env (Print e) = do
   _ <- eval env e
@@ -68,7 +68,11 @@ evalIOWithEnv eval env (Print e) = do
   result <- eval env e
   case result of
     Left err -> return $ Left err
-    Right v -> putStrLn (showValue v) >> return (Right VUnit)
+    Right v -> do
+      written <- try (putStrLn (showValue v) >> IO.hFlush IO.stdout) :: IO (Either IOException ())
+      return $ case written of
+        Left _ -> Left $ TypeError "print: could not write to stdout"
+        Right () -> Right VUnit
 evalIOWithEnv eval env (ReadFile path) = do
     pathResult <- eval env path
     case pathResult of

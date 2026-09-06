@@ -1,3 +1,4 @@
+// expect: ()
 // expect-type: TUnit
 // StringUtils.kai - Text helpers for scripts.
 let words : String -> [String] = \text -> filter (\word -> not (word == "")) (split " " (trim text))

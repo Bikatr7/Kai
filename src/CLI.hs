@@ -15,8 +15,11 @@ import Data.List (intercalate)
 import qualified Data.Map as Map
 import Paths_kai_lang (version)
 import Data.Version (showVersion)
-import Control.Monad (when)
-import Control.Exception (try, IOException)
+import Control.Monad (when, void)
+import Control.Exception (IOException, try)
+import System.IO (hPutStrLn, hFlush, stdout, stderr)
+import SourceIO (readSourceFile)
+import ScriptCheck (checkScriptFile)
 import qualified ModuleSystem
 
 versionString :: String
@@ -33,6 +36,7 @@ usageText = unlines
   , "  kai --debug FILE.kai [args...] # run a script file with debug output"
   , "  kai -e 'EXPR'                # evaluate a one-liner expression"
   , "  kai --debug -e 'EXPR'        # evaluate with debug output"
+  , "  kai --check FILE.kai         # verify script expectation directives"
   , "  kai --version, kai -V        # show the Kai version"
   , "  kai --help                   # this message"
   ]
@@ -47,8 +51,15 @@ cliArgsEnv scriptArgs =
 
 reportFailure :: String -> IO ExitCode
 reportFailure message = do
-  putStrLn message
+  written <- try (putStrLn message >> hFlush stdout) :: IO (Either IOException ())
+  case written of
+    Left _ -> reportToStderr message
+    Right () -> pure ()
   return (ExitFailure 1)
+
+reportToStderr :: String -> IO ()
+reportToStderr message =
+  void (try (hPutStrLn stderr message >> hFlush stderr) :: IO (Either IOException ()))
 
 runtimeToExitCode :: RuntimeError -> IO ExitCode
 runtimeToExitCode (ExitRequested 0) = return ExitSuccess
@@ -97,7 +108,7 @@ runProgram debug currentDir scriptArgs program = do
 runFile :: Bool -> FilePath -> [String] -> IO ExitCode
 runFile debug filename scriptArgs = do
   when debug $ putStrLn $ "Running file: " ++ filename
-  readResult <- try (readFile filename) :: IO (Either IOException String)
+  readResult <- readSourceFile filename
   case readResult of
     Left ioErr -> reportFailure $ "IO error: " ++ show ioErr
     Right content -> do
@@ -132,39 +143,21 @@ runSingleExpression debug scriptArgs expr = do
 
 runStatements :: Bool -> [String] -> [Expr] -> IO ExitCode
 runStatements debug scriptArgs stmts =
-  if null stmts
-    then do
-      putStrLn "No statements found"
-      return ExitSuccess
-    else do
-      let argsEnv = cliArgsEnv scriptArgs
-      result <- evalStatements argsEnv stmts
-      case result of
-        Left err -> runtimeToExitCode err
-        Right val -> do
-          let expr = last stmts
-          when debug $ putStrLn $ "AST: " ++ show expr
-          when debug $ putStr "Type: "
-          case typeCheck expr of
-            Left err -> reportFailure $ "Type error: " ++ show err
-            Right ty -> do
-              when debug $ print ty
-              when debug $ putStr "Evaluation: "
-              when debug $ print val
-              return ExitSuccess
-  where
-    evalStatements :: Map.Map String Value -> [Expr] -> IO (Either RuntimeError Value)
-    evalStatements _ [] = return $ Right VUnit
-    evalStatements env [stmt] = evalWithEnv env stmt
-    evalStatements env (stmt : rest) = do
-      result <- evalWithEnv env stmt
-      case result of
-        Left err -> return $ Left err
-        Right _ -> evalStatements env rest
+  runProgram debug "." scriptArgs (Program (map TLExpr stmts))
 
 runCLI :: [String] -> IO ExitCode
-runCLI ("--debug" : args) = runCLIWithDebug True args
-runCLI args = runCLIWithDebug False args
+runCLI args = do
+  result <- try run :: IO (Either IOException ExitCode)
+  case result of
+    Right code -> return code
+    Left err -> reportToStderr ("IO error: " ++ show err) >> return (ExitFailure 1)
+  where
+    run = do
+      code <- case args of
+        "--debug" : rest -> runCLIWithDebug True rest
+        _ -> runCLIWithDebug False args
+      when (code == ExitSuccess) $ hFlush stdout
+      return code
 
 runCLIWithDebug :: Bool -> [String] -> IO ExitCode
 runCLIWithDebug debug args =
@@ -173,6 +166,11 @@ runCLIWithDebug debug args =
     ["-h"] -> putStrLn usageText >> return ExitSuccess
     ["--version"] -> putStrLn versionString >> return ExitSuccess
     ["-V"] -> putStrLn versionString >> return ExitSuccess
+    ["--check", filename] -> do
+      result <- checkScriptFile filename
+      case result of
+        Left err -> reportFailure $ "Script check failed: " ++ err
+        Right () -> putStrLn "Script checks passed" >> return ExitSuccess
     ["-e", exprStr] -> runExpression debug exprStr
     [] -> runREPL debug []
     ("repl" : scriptArgs) -> runREPL debug scriptArgs

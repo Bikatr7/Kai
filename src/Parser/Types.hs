@@ -7,15 +7,16 @@ import Parser.Lexer
 import Parser.Literals (constructorIdentifier, identifier, lowerIdentifier)
 
 syntaxType :: Parser SyntaxType
-syntaxType = makeExprParser typeApplication typeOperatorTable
-  where
-    typeApplication = do
-      headType <- syntaxTypeAtom
-      case headType of
-        STCustom name [] -> STCustom name <$> many syntaxTypeAtom
-        _ -> return headType
+syntaxType = makeExprParser syntaxTypeApplication [[InfixR (STFun <$ symbol "->")]]
 
-    typeOperatorTable = [ [ InfixR (STFun <$ symbol "->") ] ]
+-- Lambda parameter annotations stop before the lambda arrow. Function-valued
+-- parameters use parentheses, e.g. \f : (Int -> Int) -> f 1.
+syntaxTypeApplication :: Parser SyntaxType
+syntaxTypeApplication = do
+  headType <- syntaxTypeAtom
+  case headType of
+    STCustom name [] -> STCustom name <$> many syntaxTypeAtom
+    _ -> return headType
 
 syntaxTypeAtom :: Parser SyntaxType
 syntaxTypeAtom = choice
@@ -29,7 +30,7 @@ syntaxTypeAtom = choice
   , recordType
   , STCustom <$> constructorIdentifier <*> pure []
   , STVar <$> lowerIdentifier
-  , parens syntaxType
+  , tupleOrParensType
   ]
   where
     maybeType = do
@@ -50,3 +51,11 @@ syntaxTypeAtom = choice
       symbol ":"
       ty <- syntaxType
       return (name, ty)
+
+tupleOrParensType :: Parser SyntaxType
+tupleOrParensType = do
+  types <- parens (sepBy syntaxType (symbol ","))
+  return $ case types of
+    [] -> STUnit
+    [ty] -> ty
+    tys -> STTuple tys

@@ -157,7 +157,7 @@ spec = describe "Advanced Type Inference" $ do
 
   describe "Property-Based Type Checking" $ do
     it "identity function preserves type" $ do
-      property $ \x -> case parseAndTypeCheck ("(\\y -> y) " ++ show (x :: Int)) of
+      property $ \x -> case parseAndTypeCheck ("(\\y -> y) (" ++ show (x :: Int) ++ ")") of
         Right TInt -> True
         _ -> False
     

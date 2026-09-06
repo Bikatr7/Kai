@@ -1,3 +1,5 @@
+// expect: "hello and world"
+// stdin: "hello\n"
 // Test input with function composition
 // expect-type: TString
 
