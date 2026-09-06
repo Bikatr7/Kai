@@ -92,12 +92,25 @@ class ExecutionTests(unittest.TestCase):
             root = Path(directory)
             (root / 'examples').mkdir()
             for module in ['MathUtils', 'StringUtils', 'TextAnalysis']:
-                (root / 'examples' / (module + '.kai')).write_text('// expect: ()\n')
-            (root / 'README.md').write_text(MATH + extra)
-            (root / 'SPEC.md').write_text(signature)
+                (root / 'examples' / (module + '.kai')).write_text('// expect: ()\n', encoding='utf-8')
+            (root / 'README.md').write_text(MATH + extra, encoding='utf-8')
+            (root / 'SPEC.md').write_text(signature, encoding='utf-8')
             for file in ['DEVELOPING.md', 'FEATURES.md']:
-                (root / file).write_text('')
+                (root / file).write_text('', encoding='utf-8')
             return checker.check_examples(BINARY, root, html)
+
+    def test_reads_and_executes_utf8_examples_with_a_legacy_default_encoding(self):
+        original_open = io.open
+
+        def legacy_open(file, mode='r', buffering=-1, encoding=None, *args, **kwargs):
+            if 'b' not in mode and encoding in (None, 'locale'):
+                encoding = 'cp1252'
+            return original_open(file, mode, buffering, encoding, *args, **kwargs)
+
+        for expected, success in [('2', True), ('0', False)]:
+            with self.subTest(expected=expected), patch.object(io, 'open', side_effect=legacy_open):
+                results = self.run_examples('Unicode: ā\n```kai\nstrLength "é雪" // => ' + expected + '\n```')
+                self.assertEqual(all(row['passed'] for row in results), success, results)
 
     def test_accepts_values_signatures_and_exact_errors(self):
         results = self.run_examples('```kai\n40+2 // => 42\n```\n'

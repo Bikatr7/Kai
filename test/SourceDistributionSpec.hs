@@ -3,7 +3,7 @@ module SourceDistributionSpec where
 import Control.Monad (when)
 import Data.List (isPrefixOf, isSuffixOf)
 import System.Directory (doesFileExist, listDirectory)
-import System.FilePath ((</>))
+import System.FilePath ((</>), normalise)
 import System.Exit (ExitCode(..))
 import System.Process (readProcessWithExitCode)
 import Test.Hspec
@@ -22,7 +22,7 @@ spec = describe "Source distribution" $
       doesFileExist archive `shouldReturn` True
       (tarCode, listing, tarErr) <- readProcessWithExitCode "tar" ["-tzf",archive] ""
       (tarCode,tarErr) `shouldBe` (ExitSuccess,"")
-      let files = map (drop 1 . dropWhile (/= '/')) (lines listing)
+      let files = map (normalise . drop 1 . dropWhile (/= '/')) (lines listing)
           required = ["README.md","DEVELOPING.md","FEATURES.md","SPEC.md","AGENTS.md",
                       "package.yaml","stack.yaml","stack.yaml.lock","Makefile",
                       "scripts/kai","scripts/check-script-corpus.py","scripts/check-doc-examples.py",
@@ -31,5 +31,5 @@ spec = describe "Source distribution" $
                       ".github/workflows/release.yml",".github/workflows/deploy.yml",
                       "website/static/style.css","website/static/favicon.svg"]
       kaiFiles <- concat <$> mapM allKaiFilesIn ["test","tests","examples"]
-      filter (`notElem` files) (required ++ kaiFiles) `shouldBe` []
-      filter (isPrefixOf ".stack-work/") files `shouldBe` []
+      filter (`notElem` files) (map normalise (required ++ kaiFiles)) `shouldBe` []
+      filter (isPrefixOf (normalise ".stack-work/")) files `shouldBe` []

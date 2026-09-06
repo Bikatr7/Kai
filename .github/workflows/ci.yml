@@ -99,6 +99,18 @@ jobs:
         with:
           name: validation-documentation
           path: dist/documentation-site
+      - name: Select Git Bash for Windows subprocesses
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $gitRoot = Split-Path (Split-Path (Get-Command git.exe).Source -Parent) -Parent
+          $gitBin = Join-Path $gitRoot "bin"
+          $gitUsrBin = Join-Path $gitRoot "usr/bin"
+          if (!(Test-Path (Join-Path $gitBin "bash.exe"))) {
+            throw "Git Bash was not found beside git.exe"
+          }
+          $gitBin >> $env:GITHUB_PATH
+          $gitUsrBin >> $env:GITHUB_PATH
       - name: Run language and integration tests
         shell: bash
         run: |
@@ -110,9 +122,11 @@ jobs:
             stack --no-terminal test
           fi
       - name: Validate benchmark programs
+        if: success() || failure()
         shell: bash
         run: stack --no-terminal bench --benchmark-arguments="--iters 1"
       - name: Build, package, extract, and execute the CLI
+        if: success() || failure()
         shell: bash
         run: |
           set -euo pipefail
@@ -129,7 +143,7 @@ jobs:
           EXTRACTED=$(bash scripts/extract-release-package.sh "$RUNNER_OS" "$PACKAGE" dist/native-extracted)
           bash scripts/test-release-binary.sh "$EXTRACTED" "$VERSION"
       - name: Execute Windows package without compiler DLLs on PATH
-        if: runner.os == 'Windows'
+        if: (success() || failure()) && runner.os == 'Windows'
         shell: python
         run: |
           import os
@@ -147,7 +161,7 @@ jobs:
               cwd=binary.parent, env=environment, check=True,
           )
       - name: Check macOS deployment target
-        if: runner.os == 'macOS'
+        if: (success() || failure()) && runner.os == 'macOS'
         shell: bash
         run: |
           xcrun vtool -show-build dist/native-extracted/kai > dist/macos-build-info.txt

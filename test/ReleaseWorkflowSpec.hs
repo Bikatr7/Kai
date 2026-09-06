@@ -20,17 +20,27 @@ import System.Directory
 import System.Environment (getEnvironment)
 import System.Process (proc, readCreateProcessWithExitCode, CreateProcess(..), readProcessWithExitCode)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>))
+import System.FilePath ((</>), normalise)
 import System.IO (hClose, openTempFile)
 import Test.Hspec
 
 runAssetNameScript :: String -> String -> IO (ExitCode, String, String)
 runAssetNameScript os arch =
-  readProcessWithExitCode "bash" ["scripts/release-asset-name.sh", os, arch] ""
+  runBash ["scripts/release-asset-name.sh", os, arch]
 
 runPackageNameScript :: String -> String -> IO (ExitCode, String, String)
 runPackageNameScript os arch =
-  readProcessWithExitCode "bash" ["scripts/release-package-name.sh", os, arch] ""
+  runBash ["scripts/release-package-name.sh", os, arch]
+
+requireBash :: IO FilePath
+requireBash = do
+  found <- findExecutable "bash"
+  maybe (expectationFailure "Bash is missing from PATH" >> pure "") pure found
+
+runBash :: [String] -> IO (ExitCode, String, String)
+runBash arguments = do
+  bash <- requireBash
+  readProcessWithExitCode bash arguments ""
 
 withTempDirectory :: (FilePath -> IO a) -> IO a
 withTempDirectory action = do
@@ -94,10 +104,8 @@ spec = describe "Release workflow asset naming" $ do
       tarStderr `shouldBe` ""
 
       (extractExit, extractStdout, extractStderr) <-
-        readProcessWithExitCode
-          "bash"
+        runBash
           ["scripts/extract-release-package.sh", "Windows", packagePath, extractedDir]
-          ""
       extractExit `shouldBe` ExitFailure 1
       extractStdout `shouldBe` ""
       extractStderr `shouldContain` "not a valid non-empty ZIP archive"
@@ -176,6 +184,7 @@ spec = describe "Release workflow asset naming" $ do
   it "verifies actual release results including deliberate counterexamples" $ do
     found <- findExecutable "kai"
     binary <- maybe (expectationFailure "Built kai executable is missing from PATH" >> return "") return found
+    bash <- requireBash
     environment <- getEnvironment
     forM_ [("// expect: 42\n42", True), ("// expect: 42\n0", False),
            ("// expect-type: TInt\n42", False),
@@ -188,7 +197,7 @@ spec = describe "Release workflow asset naming" $ do
         (versionCode, versionOut, _) <- readProcessWithExitCode binary ["--version"] ""
         versionCode `shouldBe` ExitSuccess
         let version = takeWhile (/= '\n') (drop 5 versionOut)
-            process = (proc "bash" ["scripts/test-release-binary.sh", binary, version])
+            process = (proc bash ["scripts/test-release-binary.sh", binary, version])
               { env = Just (("KAI_TEST_ROOT", dir) : filter ((/= "KAI_TEST_ROOT") . fst) environment) }
         (code, out, err) <- readCreateProcessWithExitCode process ""
         if success then do
@@ -228,34 +237,30 @@ spec = describe "Release workflow asset naming" $ do
           createDirectoryIfMissing True packageDir
 
           (packageExit, packageStdout, packageStderr) <-
-            readProcessWithExitCode
-              "bash"
+            runBash
               [repoDir </> "scripts/package-release-binary.sh", os, arch, binary, packageDir]
-              ""
           packageExit `shouldBe` ExitSuccess
           packageStderr `shouldBe` ""
           let packagePath = trimNewline packageStdout
-          packagePath `shouldBe` packageDir </> expectedPackage
+          normalise packagePath `shouldBe` normalise (packageDir </> expectedPackage)
           when (os /= "Linux") $ do
             header <- BS.take 4 <$> BS.readFile packagePath
             header `shouldBe` BS.pack [0x50, 0x4b, 0x03, 0x04]
 
           (extractExit, extractStdout, extractStderr) <-
-            readProcessWithExitCode
-              "bash"
+            runBash
               [repoDir </> "scripts/extract-release-package.sh", os, packagePath, extractedDir]
-              ""
           extractExit `shouldBe` ExitSuccess
           extractStderr `shouldBe` ""
           let extractedBinary = trimNewline extractStdout
-          extractedBinary `shouldBe` extractedDir </> expectedBinary
+          normalise extractedBinary `shouldBe` normalise (extractedDir </> expectedBinary)
           readFile extractedBinary `shouldReturn` contents
           when shouldBeExecutable $ do
             extractedPermissions <- getPermissions extractedBinary
             executable extractedPermissions `shouldBe` True
 
     assertBashSyntax script = do
-      (exitCode, stdout, stderr) <- readProcessWithExitCode "bash" ["-n", script] ""
+      (exitCode, stdout, stderr) <- runBash ["-n", script]
       exitCode `shouldBe` ExitSuccess
       stdout `shouldBe` ""
       stderr `shouldBe` ""

@@ -118,7 +118,7 @@ Prereqs: Stack, GHC, Cabal, Python 3, Bash, Make, curl, tar, zip, and unzip. Cab
 
 - Build: `stack build`
 - Tests: `stack test --fast` (unit, script, property, CLI, REPL, and stress tests)
-- On Windows, set `KAI_TEST_WEBSITE_HTML` to an exported site's `index.html` from the same source revision. Run `stack test --test-arguments='--skip "Kai runner and installation" --skip "Static site exporter"'`; these two POSIX tooling groups run on Linux and macOS. The native CLI, documentation examples, source/package helpers, and benchmark programs run on all three platforms.
+- On Windows, put Git for Windows' `bin` and `usr/bin` directories before the Windows system directories in `PATH`, so helper subprocesses find Git Bash. Set `KAI_TEST_WEBSITE_HTML` to an exported site's `index.html` from the same source revision. Run `stack test --test-arguments='--skip "Kai runner and installation" --skip "Static site exporter"'`; these two POSIX tooling groups run on Linux and macOS. The native CLI, documentation examples, source/package helpers, and benchmark programs run on all three platforms.
 - Run CLI: `stack exec kai -- --help`
 - Install the checkout's runner: `make install`; `PREFIX=/path make install` selects an install prefix. The installed symlink resolves the checkout from any working directory. Add its `bin` directory to your shell's `PATH`.
 - Runner selection: `KAI_BIN`, then executables on `PATH`, then the active Stack snapshot. Runner copies and symlinks are skipped during `PATH` lookup. Without Stack, the newest local executable is used.

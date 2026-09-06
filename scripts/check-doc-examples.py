@@ -112,7 +112,7 @@ def website_html(binary):
 
 def check_examples(binary, root, html):
     results = []
-    readme = (root / "README.md").read_text()
+    readme = (root / "README.md").read_text(encoding="utf-8")
     math = next(body.split("// Main.kai")[0] for _, body in fences(readme)
                 if "// Math.kai" in body)
 
@@ -121,20 +121,20 @@ def check_examples(binary, root, html):
             work = Path(directory)
             for module in ["MathUtils", "StringUtils", "TextAnalysis"]:
                 shutil.copyfile(root / "examples" / (module + ".kai"), work / (module + ".kai"))
-            (work / "Math.kai").write_text(math)
+            (work / "Math.kai").write_text(math, encoding="utf-8")
             for name_in in ["input.txt", "path"]:
-                (work / name_in).write_text("Ada\n")
+                (work / name_in).write_text("Ada\n", encoding="utf-8")
             source_file = work / "example.kai"
             if expected is not None:
                 source += "\n// expect: " + expected + "\n"
-            source_file.write_text(source)
+            source_file.write_text(source, encoding="utf-8")
             fixture = re.search(r"^// stdin:\s*(.+)$", source, re.M)
             stdin = json.loads(fixture.group(1)) if fixture else "Ada\n42\n"
             checked = expected is not None or re.search(r"^// expect:", source, re.M)
             command = [binary, "--check", str(source_file)] if checked else [binary, str(source_file), *arguments]
             try:
                 run = subprocess.run(command, cwd=work, input=stdin, capture_output=True,
-                                     text=True, timeout=10)
+                                     text=True, encoding="utf-8", timeout=10)
                 passed = (run.returncode == 1 and run.stdout.strip() == error) if error else run.returncode == 0
                 detail = run.stdout + run.stderr
             except subprocess.TimeoutExpired:
@@ -142,7 +142,7 @@ def check_examples(binary, root, html):
             results.append({"name": name, "passed": passed, "detail": detail})
 
     for filename in ["README.md", "SPEC.md", "DEVELOPING.md", "FEATURES.md"]:
-        for index, (language, source) in enumerate(fences((root / filename).read_text()), 1):
+        for index, (language, source) in enumerate(fences((root / filename).read_text(encoding="utf-8")), 1):
             label = f"{filename} block {index}"
             if language == "kai":
                 errors = [(code, comment) for code, comment in map(line_comment, source.splitlines())
@@ -205,7 +205,7 @@ def main(argv=None):
     for result in failures:
         print(result["name"] + ": " + result["detail"])
     if args.json:
-        args.json.write_text(json.dumps(results, indent=2) + "\n")
+        args.json.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     print(f"Documentation examples: {len(results) - len(failures)}/{len(results)} passed")
     return bool(failures)
 
