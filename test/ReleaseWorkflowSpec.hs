@@ -46,6 +46,10 @@ runBash arguments = do
   bash <- requireBash
   readProcessWithExitCode bash arguments ""
 
+runBashWithoutZip :: [String] -> IO (ExitCode, String, String)
+runBashWithoutZip arguments = runBash $
+  ["-c", "command() { case \"$*\" in '-v ditto'|'-v zip'|'-v unzip') return 1 ;; *) builtin command \"$@\" ;; esac; }; export -f command; exec bash \"$@\"", "--"] ++ arguments
+
 withTempDirectory :: (FilePath -> IO a) -> IO a
 withTempDirectory action = do
   base <- getTemporaryDirectory
@@ -95,6 +99,9 @@ spec = describe "Release workflow asset naming" $ do
 
   it "round-trips a real Windows ZIP with kai.exe at its root" $
     assertPackageRoundTrip "Windows" "X64" "kai-windows-amd64.zip" "kai.exe" False
+
+  it "preserves macOS ZIP contents and permissions using Python when archive tools are absent" $
+    assertPackageRoundTripWith runBashWithoutZip "macOS" "ARM64" "kai-macos-arm64.zip" "kai" True
 
   it "rejects a tar archive mislabeled as a Windows ZIP" $
     withTempDirectory $ \tempDir -> do
@@ -227,7 +234,9 @@ spec = describe "Release workflow asset naming" $ do
       stdout `shouldBe` expected
       stderr `shouldBe` ""
 
-    assertPackageRoundTrip os arch expectedPackage expectedBinary shouldBeExecutable =
+    assertPackageRoundTrip = assertPackageRoundTripWith runBash
+
+    assertPackageRoundTripWith execute os arch expectedPackage expectedBinary shouldBeExecutable =
       withTempDirectory $ \tempDir -> do
         repoDir <- getCurrentDirectory
         let binary = "fake-kai"
@@ -241,7 +250,7 @@ spec = describe "Release workflow asset naming" $ do
           createDirectoryIfMissing True packageDir
 
           (packageExit, packageStdout, packageStderr) <-
-            runBash
+            execute
               [repoDir </> "scripts/package-release-binary.sh", os, arch, binary, packageDir]
           packageExit `shouldBe` ExitSuccess
           packageStderr `shouldBe` ""
@@ -265,7 +274,7 @@ spec = describe "Release workflow asset naming" $ do
             (modeExit, modeOut, modeErr) `shouldBe` (ExitSuccess, "0o755\n", "")
 
           (extractExit, extractStdout, extractStderr) <-
-            runBash
+            execute
               [repoDir </> "scripts/extract-release-package.sh", os, packagePath, extractedDir]
           extractExit `shouldBe` ExitSuccess
           extractStderr `shouldBe` ""

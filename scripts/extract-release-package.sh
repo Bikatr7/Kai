@@ -55,8 +55,21 @@ case "$os" in
       ditto -x -k "$package" "$output_dir"
     elif command -v unzip >/dev/null 2>&1; then
       unzip -q "$package" -d "$output_dir"
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 - "$package" "$output_dir" <<'PY'
+from pathlib import Path
+import os
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as archive:
+    archive.extractall(sys.argv[2])
+    mode = archive.getinfo("kai").external_attr >> 16
+    if mode:
+        os.chmod(Path(sys.argv[2]) / "kai", mode & 0o777)
+PY
     else
-      echo "ditto or unzip is required to extract the macOS release" >&2
+      echo "ditto, unzip, or python3 is required to extract the macOS release" >&2
       exit 1
     fi
     binary="$output_dir/kai"

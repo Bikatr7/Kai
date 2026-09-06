@@ -25,7 +25,7 @@ def check_corpus(binary, root):
             result = subprocess.run([str(binary), '--check', str(path)], input=stdin,
                                     text=True, capture_output=True, timeout=30)
             if result.returncode or not result.stdout.endswith('Script checks passed\n'):
-                failures.append(f'{path}: {result.stdout}{result.stderr}')
+                failures.append(f'{path}: exit {result.returncode}: {result.stdout}{result.stderr}')
         except (OSError, ValueError, subprocess.TimeoutExpired) as error:
             failures.append(f'{path}: {error}')
     for failure in failures:

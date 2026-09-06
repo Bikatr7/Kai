@@ -154,6 +154,7 @@ jobs:
         with:
           path: |
             ~/.stack
+            ${{ env.STACK_ROOT }}
             .stack-work
           key: ${{ matrix.os }}-${{ runner.arch }}-macos-${{ matrix.macos-target }}-stack-${{ hashFiles('stack.yaml.lock') }}
 
@@ -477,7 +478,7 @@ jobs:
           root = Path.cwd()
           binary = root / "extracted/kai.exe"
           environment = os.environ.copy()
-          windows = Path(environment["SystemRoot"])
+          windows = Path(os.environ["SystemRoot"])
           environment["PATH"] = os.pathsep.join(map(str, [windows / "System32", windows]))
           subprocess.run(
               [sys.executable, str(root / "scripts/check-script-corpus.py"), str(binary), str(root / "tests")],

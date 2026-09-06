@@ -80,10 +80,10 @@ getHomeR = do
             <p>Static type inference with unification, occurs check, generalized let-polymorphism, and explicitly annotated polymorphic recursion for ints, bools, strings, functions, and data structures.
           <div .feature>
             <h3>Clean Syntax
-            <p>Typed lambdas, tuple annotations, partially applied builtins, `do { ... }` blocks, and multi-statement files.
+            <p>Typed lambdas, tuple annotations, partially applied builtins, `do { ... }` blocks, and multi-statement UTF-8 source files.
           <div .feature>
             <h3>Interactive I/O & Conversions
-            <p>User input with `input`, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, expression trees, and workspace-style file flows.
+            <p>User input with `input`, UTF-8 text-file reads and writes, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, expression trees, and workspace-style file flows.
           <div .feature>
             <h3>Comprehensive Testing
             <p>Unit, property, script, and integration tests cover language features, interactive input, modules, and deeply nested expressions.
@@ -370,7 +370,7 @@ getHomeR = do
             <div .timeline-marker .current data-step="13">
             <div .timeline-content>
               <h3>v0.0.4.6
-              <p>Partially applied builtins, typed lambdas and tuples, consistent recursion, private constructors, and predictable type annotations across scripts, modules, and the REPL
+              <p>Partially applied builtins, typed lambdas and tuples, consistent recursion, private constructors, UTF-8 source and text files, and predictable type annotations across scripts, modules, and the REPL
           <div .timeline-item>
             <div .timeline-marker data-step="14">
             <div .timeline-content>

@@ -187,6 +187,7 @@ extra-source-files:
     tests/type_annotations.kai
     tests/unary_minus_expr.kai
     tests/unary_minus_var.kai
+    tests/unicode_source.kai
     tests/whitespace.kai
     tests/wildcard_basic.kai
     tests/wildcard_mixed_types.kai
@@ -272,6 +273,7 @@ library
       TypeChecker.Substitution
       TypeChecker.Types
       TypeChecker.Unification
+      UTF8
       Paths_kai_lang
   autogen-modules:
       Paths_kai_lang
@@ -338,6 +340,7 @@ executable kai
       TypeChecker.Substitution
       TypeChecker.Types
       TypeChecker.Unification
+      UTF8
       Paths_kai_lang
   autogen-modules:
       Paths_kai_lang
@@ -434,6 +437,7 @@ test-suite kai-test
       TypeErrorSpec
       TypeInferenceSpec
       UnificationSpec
+      UTF8Spec
       WildcardSpec
       Paths_kai_lang
   autogen-modules:

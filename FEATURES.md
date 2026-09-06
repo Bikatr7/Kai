@@ -117,9 +117,9 @@ This document provides a comprehensive overview of all implemented and planned f
 #### I/O Operations (16)
 - ✅ `print : a -> Unit` - Print and flush value, then return unit; output failures stop later effects
 - ✅ `input : String` - Read line from stdin
-- ✅ `readFile : String -> String` - Read entire file as string
-- ✅ `writeFile : String -> String -> Unit` - Write string to file (overwrite)
-- ✅ `appendFile : String -> String -> Unit` - Append string to a file
+- ✅ `readFile : String -> String` - Read an entire UTF-8 text file
+- ✅ `writeFile : String -> String -> Unit` - Write UTF-8 text to a file (overwrite)
+- ✅ `appendFile : String -> String -> Unit` - Append UTF-8 text to a file
 - ✅ `fileExists : String -> Bool` - Check whether a file exists
 - ✅ `listDirectory : String -> [String]` - List directory entries
 - ✅ `createDirectory : String -> Unit` - Create a directory
@@ -319,7 +319,7 @@ Development focuses on practical scripting tools, useful standard-library additi
 - Exact constructor-pattern arity and duplicate-pattern validation
 - Arithmetic spacing, nested block comments, and multiline top-level expressions
 - Repeated prefix operators with checked integer negation
-- Source decoding errors reported by the CLI and REPL
+- UTF-8 scripts, modules, and text-file I/O, with decoding errors reported by the CLI and REPL
 - Script expectation checks with stdin fixtures and nested module coverage
 - Runner installation, explicit executable selection, and active build lookup
 

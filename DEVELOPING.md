@@ -62,6 +62,11 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - **Recursion.hs**: Source-order initialization with guarded recursive references
 - **Evaluator.hs**: Public interface with eval, evalWithEnv, evalPure, evalPureWithEnv
 
+#### Text Files (`src/UTF8.hs`, `src/SourceIO.hs`)
+- Source files and `readFile`/`writeFile`/`appendFile` use UTF-8 independently of the host locale.
+- Reads force decoding before closing the handle so decoding failures reach the caller's IO error handler.
+- `UTF8Spec.hs` covers source loading, imports, REPL loads, exact file bytes, invalid sequences, and file operations under a legacy locale.
+
 #### CLI (`src/CLI.hs`, `src/Main.hs`)
 - Command-line interface with expression evaluation, file execution, and REPL entry
 - Debug mode, clean output by default, argument passing support, and package-derived `--version`/`-V` output
@@ -114,7 +119,7 @@ Notes:
 
 ## Build and Test
 
-Prereqs: Stack, GHC, Cabal, Python 3, Bash, Make, curl, tar, zip, and unzip. Cabal creates source archives during the packaging tests.
+Prereqs: Stack, GHC, Cabal, Python 3, Bash, Make, curl, tar, zip, and unzip. Cabal creates source archives during the packaging tests. macOS ZIP helpers can use Python when `ditto`, `zip`, or `unzip` is unavailable, preserving the archive's executable permissions.
 
 - Build: `stack build`
 - Tests: `stack test --fast` (unit, script, property, CLI, REPL, and stress tests)

@@ -1,10 +1,8 @@
 module SourceIO (readSourceFile) where
 
-import Control.Exception (IOException, evaluate, try)
+import Control.Exception (IOException, try)
+import qualified UTF8
 
 -- Force lazy decoding while the exception handler is still installed.
 readSourceFile :: FilePath -> IO (Either IOException String)
-readSourceFile path = try $ do
-  content <- readFile path
-  _ <- evaluate (length content)
-  return content
+readSourceFile = try . UTF8.readFile

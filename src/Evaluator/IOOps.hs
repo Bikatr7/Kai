@@ -13,6 +13,7 @@ import qualified System.Process as Process
 import Control.Exception (IOException, try)
 import qualified Data.Map as Map
 import Data.IORef (readIORef)
+import qualified UTF8
 
 type EvalFunc = Env -> Expr -> Either RuntimeError Value
 type EvalIOFunc = Env -> Expr -> IO (Either RuntimeError Value)
@@ -78,19 +79,17 @@ evalIOWithEnv eval env (ReadFile path) = do
     case pathResult of
         Left err -> return $ Left err
         Right (VStr p) -> do
-            result <- try (IO.readFile p >>= forceContents) :: IO (Either IOException String)
+            result <- try (UTF8.readFile p) :: IO (Either IOException String)
             case result of
                 Right contents -> return $ Right $ VStr contents
                 Left _ -> return $ Left $ TypeError $ "readFile: could not read file '" ++ p ++ "'"
         Right _ -> return $ Left $ TypeError "readFile: path must be a string"
-  where
-    forceContents contents = length contents `seq` return contents
 evalIOWithEnv eval env (WriteFile path content) = do
     bindResult (eval env path) $ \pathValue ->
       bindResult (eval env content) $ \contentValue ->
         case (pathValue, contentValue) of
           (VStr p, VStr c) -> do
-            result <- try (IO.writeFile p c) :: IO (Either IOException ())
+            result <- try (UTF8.writeFile p c) :: IO (Either IOException ())
             case result of
               Right _ -> return $ Right VUnit
               Left _ -> return $ Left $ TypeError $ "writeFile: could not write to file '" ++ p ++ "'"
@@ -101,7 +100,7 @@ evalIOWithEnv eval env (AppendFile path content) =
       bindResult (eval env content) $ \contentValue ->
         case (pathValue, contentValue) of
           (VStr p, VStr c) -> do
-            result <- try (IO.appendFile p c) :: IO (Either IOException ())
+            result <- try (UTF8.appendFile p c) :: IO (Either IOException ())
             case result of
               Right _ -> return $ Right VUnit
               Left _ -> return $ Left $ TypeError $ "appendFile: could not append to file '" ++ p ++ "'"

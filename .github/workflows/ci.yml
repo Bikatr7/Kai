@@ -93,6 +93,7 @@ jobs:
         with:
           path: |
             ~/.stack
+            ${{ env.STACK_ROOT }}
             .stack-work
           key: native-check-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('stack.yaml.lock', 'package.yaml') }}
       - uses: actions/download-artifact@v8.0.1
@@ -154,7 +155,7 @@ jobs:
           root = Path.cwd()
           binary = root / "dist/native-extracted/kai.exe"
           environment = os.environ.copy()
-          windows = Path(environment["SystemRoot"])
+          windows = Path(os.environ["SystemRoot"])
           environment["PATH"] = os.pathsep.join(map(str, [windows / "System32", windows]))
           subprocess.run(
               [sys.executable, str(root / "scripts/check-script-corpus.py"), str(binary), str(root / "tests")],

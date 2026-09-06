@@ -17,7 +17,7 @@ Features:
 - **Arithmetic**: `+`, `-`, `*`, `/` (integer division, division-by-zero and 32-bit overflow errors)
 - **Booleans**: `and`, `or`, `not`
 - **Comparisons**: `==`, `<`, `>`
-- **Strings**: string literals (`"hello"`), concatenation (`++`), escapes (`\"`, `\\`, `\n`)
+- **Strings**: string literals (`"hello"`), concatenation (`++`), escapes (`\"`, `\\`, `\n`); UTF-8 source files and text-file I/O
 - **String functions**: `split`, `join`, `trim`, `replace`, `strLength` for text processing
 - **Lists**: `[1, 2, 3]`, concatenation (`++`), equality (`==`), cons (`::`), operations (`head`, `tail`, `null`)
 - **List functions**: `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip` for functional programming
@@ -400,6 +400,7 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 │   ├── CLI.hs                    ## CLI runner and exit-code handling
 │   ├── ScriptCheck.hs            ## Script result and type assertions
 │   ├── SourceIO.hs               ## Source-file decoding and read errors
+│   ├── UTF8.hs                   ## UTF-8 text-file reads and writes
 │   └── Main.hs                   ## Thin executable entry for `kai`
 ├── benchmarks/                    ## Performance benchmarking suite
 │   ├── Bench.hs                  ## Main benchmark orchestrator

@@ -7,6 +7,7 @@ import qualified RunnerSpec
 import qualified DocumentationSpec
 import qualified SourceDistributionSpec
 import qualified OutputFailureSpec
+import qualified UTF8Spec
 import qualified AuditRegressionSpec
 import qualified ArithmeticSpec
 import qualified BooleanSpec
@@ -48,6 +49,7 @@ main = hspec $ do
   DocumentationSpec.spec
   SourceDistributionSpec.spec
   OutputFailureSpec.spec
+  UTF8Spec.spec
   SelfReviewSpec.spec
   AuditRegressionSpec.spec
   ArithmeticSpec.spec

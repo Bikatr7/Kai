@@ -31,7 +31,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - **Paradigm**: Expression-oriented with immutable data by default
 - **Data Modeling**: Built-in lists/records/tuples/Maybe/Either plus user-defined algebraic data types
 - **Interactive Workflow**: CLI file/expression execution plus a REPL with multiline input and `:type`, `:load`, `:reload`, `:quit`
-- **File Format**: Single-file scripts with `.kai` extension, or multi-file modules with imports; top-level newlines split expressions only outside nested forms
+- **File Format**: UTF-8 scripts with `.kai` extension, or UTF-8 modules with imports; top-level newlines split expressions only outside nested forms
 
 ## Lexical Structure
 
@@ -440,6 +440,7 @@ args : [String]             // List of command-line arguments passed to script o
 ## I/O Operations
 
 ### Standard Input
+- Console input/output use the host stream encoding.
 - `input` reads a complete line from stdin
 - Returns string value including any whitespace
 - No prompt is displayed
@@ -452,6 +453,7 @@ args : [String]             // List of command-line arguments passed to script o
 - CLI output failures return a nonzero exit status. Diagnostics fall back to stderr when stdout is unavailable; failure status is preserved even if neither stream is writable.
 
 ### File I/O
+- `readFile`, `writeFile`, and `appendFile` use UTF-8 with native newline handling, independent of the host locale. Invalid UTF-8 input returns a runtime `TypeError`.
 - `readFile path` reads entire file as string
   - Returns file contents as a string
   - Runtime error if file cannot be read
@@ -488,7 +490,7 @@ do {
 - `kai --version` and `kai -V` print the package-derived version and exit successfully
 - A version-looking token after a script filename remains a script argument (`kai script.kai --version`)
 - `kai --check FILE.kai` verifies `// expect:` against the evaluated result and also checks an optional `// expect-type:`; failure exits nonzero. It reads stdin normally. See DEVELOPING.md for fixture conventions.
-- Script, import, and REPL source reads catch decoding and IO errors. Failed REPL loads report an error and leave the prior session available.
+- Script, import, and REPL source reads use UTF-8 and catch decoding and IO errors. Failed REPL loads report an error and leave the prior session available.
 - `kai --help` and `kai -h` print command usage; a leading `--debug` enables diagnostic output for the selected command
 - The optional shell runner honors `KAI_BIN` first, then searches `PATH` while skipping runner copies, then uses the checkout's active Stack build. Without Stack, it uses the newest local build. Arguments and exit status pass through unchanged.
 
