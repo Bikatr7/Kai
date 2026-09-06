@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import time
 from urllib.request import urlopen
+from script_fixtures import string_fixture, validate_fixture
 
 
 def fences(text):
@@ -128,18 +129,32 @@ def check_examples(binary, root, html):
             if expected is not None:
                 source += "\n// expect: " + expected + "\n"
             source_file.write_text(source, encoding="utf-8")
-            fixture = re.search(r"^// stdin:\s*(.+)$", source, re.M)
-            stdin = json.loads(fixture.group(1)) if fixture else "Ada\n42\n"
             checked = expected is not None or re.search(r"^// expect:", source, re.M)
             command = [binary, "--check", str(source_file)] if checked else [binary, str(source_file), *arguments]
+            expected_stdout = None
             try:
+                validate_fixture(source, require_expect=bool(checked))
+                stdin = string_fixture(source, "stdin", default="Ada\n42\n")
+                expected_stdout = string_fixture(source, "stdout", default="" if checked else None)
                 run = subprocess.run(command, cwd=work, input=stdin, capture_output=True,
                                      text=True, encoding="utf-8", timeout=10)
-                passed = (run.returncode == 1 and run.stdout.strip() == error) if error else run.returncode == 0
+                passed = (run.returncode == 1 and run.stdout == error + "\n") if error else run.returncode == 0
                 detail = run.stdout + run.stderr
+                passed = passed and not run.stderr
+                if expected_stdout is not None:
+                    if checked and not error:
+                        expected_stdout += "Script checks passed\n"
+                    if run.stdout != expected_stdout:
+                        passed = False
+                        detail += f"\nExpected stdout {expected_stdout!r}, got {run.stdout!r}"
+            except (ValueError, OSError) as failure:
+                passed, detail = False, str(failure)
             except subprocess.TimeoutExpired:
                 passed, detail = False, "Timed out after 10 seconds"
-            results.append({"name": name, "passed": passed, "detail": detail})
+            results.append({"name": name, "passed": passed, "detail": detail,
+                            "source": source, "checks_result": bool(checked),
+                            "expected_error": error,
+                            "checks_stdout": expected_stdout is not None})
 
     for filename in ["README.md", "SPEC.md", "DEVELOPING.md", "FEATURES.md"]:
         for index, (language, source) in enumerate(fences((root / filename).read_text(encoding="utf-8")), 1):

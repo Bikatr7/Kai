@@ -3,7 +3,7 @@
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
 **Version**: 0.0.4.6
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 **Note**: Kai uses a modular architecture with focused Parser, TypeChecker, Evaluator, REPL, and module-loading components. Performance benchmarks are available via `stack bench`.
 
@@ -13,13 +13,17 @@ This document provides a comprehensive technical specification of the Kai progra
 - [Lexical Structure](#lexical-structure)
 - [Types](#types)
 - [Expressions](#expressions)
+- [Top-Level Programs](#top-level-programs)
 - [Functions](#functions)
 - [Type System](#type-system)
-- [Top-Level Programs](#top-level-programs)
 - [Built-in Functions](#built-in-functions)
 - [I/O Operations](#io-operations)
 - [Error Handling](#error-handling)
 - [Evaluation Model](#evaluation-model)
+- [Operator Precedence](#operator-precedence)
+- [Language Limitations](#language-limitations-current)
+- [Grammar Summary](#grammar-summary)
+- [Implementation Notes](#implementation-notes)
 
 ## Overview
 
@@ -66,7 +70,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - `()` represents the unit value with type `Unit`
 
 ### Identifiers
-- Start with letter, followed by letters, digits, or underscores
+- Start with a letter, followed by letters, digits, or underscores; Unicode letters are supported
 - Cannot be reserved keywords
 - Special identifier: `_` (wildcard) can be used in let bindings to discard values
 
@@ -109,7 +113,8 @@ let add : Int -> Int -> Int = \x -> \y -> x + y
 
 ## Expressions
 
-All constructs in Kai are expressions that evaluate to values.
+Expressions evaluate to values. Program files can also contain top-level
+definitions, data declarations, imports, and exports.
 
 Type variables are scoped to one annotation. Repeated occurrences inside that
 annotation refer to the same type; variables in separate annotations are independent.
@@ -127,6 +132,7 @@ Function types in lambda parameter annotations need parentheses, for example
 ### Boolean Expressions
 - `and`, `or` (right-associative)
 - `not` (prefix)
+- Both operands of `and` and `or` evaluate from left to right; neither operator short-circuits. Use `if` to avoid evaluating an unselected branch.
 
 ### Comparison Expressions
 - `==`, `<`, `>` (non-associative)
@@ -162,6 +168,10 @@ Function types in lambda parameter annotations need parentheses, for example
 - `record.field` - field access
 - `==` - structural equality
 
+Record literals evaluate fields in source order. If a literal repeats a field,
+the last value is retained. Record patterns and type annotations reject duplicate
+field names instead.
+
 ### Tuple Operations
 - `(val1, val2, ...)` - tuple literals (2 or more elements)
 - `fst tuple` - first element of a 2-tuple
@@ -189,6 +199,7 @@ case expression of pattern -> expr | pattern -> expr
 - `Right x` - matches Either right values
 - `Constructor p1 ... pn` - matches user-defined constructors
 - `[]` - matches empty list
+- `[p1, p2, ...]` - matches a list of exactly that length
 - `x :: xs` - matches non-empty list (head and tail)
 - `{field1 = pattern1, field2 = pattern2, ...}` - matches records
 - `(pattern1, pattern2, ...)` - matches tuples
@@ -199,6 +210,10 @@ type checking reports `ConstructorPatternArity name expected actual`. Function-v
 constructor fields each count as one field. Repeated `_` is allowed. Duplicate
 record pattern fields are rejected. These
 fail with `DuplicatePatternBinding` or `DuplicateRecordField` during type checking.
+Branches are tried in order. Matching a nested constructor with fields requires
+parentheses, for example `Just (Box value)`. A case with no matching branch returns
+`TypeError "No matching pattern in case expression"`; exhaustiveness is not checked
+statically.
 
 **Example**:
 ```kai
@@ -294,7 +309,21 @@ import ModuleName
 export value, helper, Constructor
 ```
 
-Module resolution supports both `ModuleName.kai` and `ModuleName/ModuleName.kai`.
+For `import ModuleName`, paths are tried in this order relative to the importing
+file's directory:
+
+1. `ModuleName.kai`
+2. `ModuleName/ModuleName.kai`
+3. `examples/ModuleName.kai`
+4. `examples/ModuleName/ModuleName.kai`
+
+Interactive imports use the directory captured at REPL startup or the directory
+of the most recently loaded file.
+
+Without an export statement, the module exposes all of its definitions. Explicit
+exports restrict imported values and constructor visibility. Imports merge values
+into the importing scope; later local definitions can shadow imported values.
+Circular imports fail with an error that includes the module loading stack.
 
 ## Functions
 
@@ -332,7 +361,7 @@ Kai uses unification-based type inference:
 - Function signatures can contain inferred type variables
 - Let, letrec, top-level, and imported definitions are generalized over free type variables
 - Recursive bindings can recurse polymorphically when they have explicit type annotations
-- Unannotated recursive bindings remain monomorphic
+- Recursive calls within an unannotated group share one monomorphic type. After inference, the completed definitions are generalized for later uses.
 
 ### Unification
 - Occurs check prevents infinite types
@@ -345,9 +374,11 @@ Kai uses unification-based type inference:
 - `InfiniteType x T`: Occurs check failure
 - `RecordFieldMismatch field`: Required record field is missing
 - `DuplicatePatternBinding name`: A pattern binds the same name more than once
-- `DuplicateRecordField field`: A record or record annotation repeats a field
+- `DuplicateRecordField field`: A record pattern or type annotation repeats a field
 - `InvalidDataDeclaration message`: Invalid or conflicting data declaration
 - `ConstructorPatternArity name expected actual`: Constructor pattern has the wrong number of fields
+- `InvalidWildcard message`: Invalid use of `_`, such as a recursive binding
+- `GeneralTypeError message`: Other program or module constraints, including duplicate names in a recursive block
 
 ## Built-in Functions
 
@@ -375,7 +406,7 @@ fix : (a -> a) -> a             // Typed fixed-point combinator
 ```text
 // Basic operations
 head : [a] -> a            // First element (runtime error if empty)
-tail : [a] -> [a]          // List without first element
+tail : [a] -> [a]          // List without first element (runtime error if empty)
 null : [a] -> Bool         // Check if list is empty
 length : [a] -> Int        // Number of elements in list
 
@@ -442,7 +473,7 @@ args : [String]             // List of command-line arguments passed to script o
 ### Standard Input
 - Console input/output use the host stream encoding.
 - `input` reads a complete line from stdin
-- Returns string value including any whitespace
+- Returns the line without its terminating newline, preserving other whitespace
 - No prompt is displayed
 - EOF returns a runtime `TypeError`; `evalPure input` returns `TypeError "input not available in pure evaluation"`
 
@@ -488,8 +519,9 @@ do {
 - Arguments passed after script filename or after `kai repl`
 - Empty list if no arguments provided
 - `kai --version` and `kai -V` print the package-derived version and exit successfully
+- File and `-e` execution do not print the final value automatically; use `print`. The REPL displays expression results, and `--debug` displays evaluation details.
 - A version-looking token after a script filename remains a script argument (`kai script.kai --version`)
-- `kai --check FILE.kai` verifies `// expect:` against the evaluated result and also checks an optional `// expect-type:`; failure exits nonzero. It reads stdin normally. See DEVELOPING.md for fixture conventions.
+- `kai --check FILE.kai` verifies `// expect:` against the evaluated result and also checks an optional `// expect-type:`; failure exits nonzero. Expected values are pure Kai expressions, expected runtime errors use `error` followed by the exact error rendering, and expected types use the internal rendering such as `TInt` or `TList TString`. It reads stdin normally. `// stdin:` and `// stdout:` are test-harness directives; the CLI does not supply or compare those fixtures itself. See DEVELOPING.md for fixture conventions.
 - Script, import, and REPL source reads use UTF-8 and catch decoding and IO errors. Failed REPL loads report an error and leave the prior session available.
 - `kai --help` and `kai -h` print command usage; a leading `--debug` enables diagnostic output for the selected command
 - The optional shell runner honors `KAI_BIN` first, then searches `PATH` while skipping runner copies, then uses the checkout's active Stack build. Without Stack, it uses the newest local build. Arguments and exit status pass through unchanged.
@@ -502,8 +534,15 @@ $ kai script.kai foo bar baz
 ```kai
 let firstArg = head args in  // "foo"
 let numArgs = length args in  // 3
-print (show args)  // [foo, bar, baz]
+do { print firstArg; print numArgs; print (show args) }
+// Prints foo, then 3, then [foo, bar, baz], each on its own line
 ```
+
+The REPL also accepts `:help` and `:q` (an alias for `:quit`). `:load FILE`
+resets definitions on a successful load; `:reload` rereads that file. Failed loads
+retain the prior session definitions, although effects already performed before
+a runtime failure are not rolled back. A trailing `|` keeps a multiline data
+declaration or case expression open for another alternative.
 
 ### Interactive Programs
 Programs can combine input/output for interaction:
@@ -526,10 +565,16 @@ print ("Hello, " ++ name)
 ### Runtime Errors
 - Division by zero: `DivByZero`
 - Signed 32-bit arithmetic overflow: `IntegerOverflow`
+- A recursive initializer reads a binding before it is ready: `UninitializedRecursion "name"`
 - Unbound variable references: `UnboundVariable "var_name"`
 - Missing record fields: `RecordFieldNotFound "field_name"`
 - Type errors in runtime contexts: `TypeError "message"`
+- No case branch matches: `TypeError "No matching pattern in case expression"`
 - Host I/O failures, including stdin EOF and invalid file/environment operations, are converted to `TypeError` values rather than escaping as Haskell exceptions
+
+`exit code` is represented internally as `ExitRequested code`. The CLI and REPL
+turn it into an exit status (`0` is success); it stops the program rather than
+returning an ordinary value.
 
 ### Error Handling with Types
 - **Maybe types**: `Just value | Nothing` for optional values
@@ -563,27 +608,35 @@ print ("Hello, " ++ name)
 
 From highest to lowest precedence:
 
-1. **Function Application** (left-associative)
-2. **Field Access**: `.field` (left-associative)
-3. **Prefix Operators**: `not`, unary `-`
-4. **Multiplicative**: `*`, `/` (left-associative)
-5. **Additive**: `+`, `-` (left-associative)
-6. **Cons**: `::` (right-associative)
-7. **Concatenation**: `++` (right-associative)
-8. **Comparison**: `==`, `<`, `>` (non-associative)
-9. **Logical AND**: `and` (right-associative)
-10. **Logical OR**: `or` (right-associative)
-11. **Sequencing**: `;` (right-associative, lowest precedence)
+1. **Function Application and Field Access**: application and `.field` form one left-associated chain
+2. **Prefix Operators**: `not`, unary `-`
+3. **Multiplicative**: `*`, `/` (left-associative)
+4. **Additive**: `+`, `-` (left-associative)
+5. **Cons**: `::` (right-associative)
+6. **Concatenation**: `++` (right-associative)
+7. **Comparison**: `==`, `<`, `>` (non-associative)
+8. **Logical AND**: `and` (right-associative)
+9. **Logical OR**: `or` (right-associative)
+10. **Sequencing**: `;` (right-associative, lowest precedence)
+
+`f x.field` means `(f x).field`, and `record.fn x` means `(record.fn) x`.
+Use `f (x.field)` to pass a field value as an argument.
+
+```kai
+let f = \r -> {a = r.a + 1} in f {a = 1}.a  // => 2
+let record = {fn = \n -> n + 1} in record.fn 3  // => 4
+```
 
 Prefix operators may repeat and apply from right to left: `not not true` is `true`,
 and `- - 5` is `5`. Each negation checks signed 32-bit overflow.
 
 ## Language Limitations (Current)
 
-- **Script failures**: A parse/type error stops a script; the REPL accepts subsequent input
+- **Script failures**: A parse, type, runtime, or output error stops a script; the REPL accepts subsequent input after language errors
 - **Minimal REPL ergonomics**: No history, completion, or editor integration yet
 - **Limited standard library depth**: Core file/process/env helpers exist, but line-oriented I/O, JSON/HTTP, and packaging are still missing
-- **Polymorphic recursion requires explicit annotations**: Unannotated recursive bindings remain monomorphic
+- **Polymorphic recursion requires explicit annotations**: Recursive calls in an unannotated group share one type; definitions may be generalized for later uses
+- **Pattern matching**: No exhaustiveness checking, guards, or as-patterns
 
 ## Grammar Summary
 
@@ -640,21 +693,18 @@ ListLit ::= '[' (Expr (',' Expr)*)? ']'
 RecordLit ::= '{' (Ident '=' Expr (',' Ident '=' Expr)*)? '}'
 TupleLit ::= '(' Expr ',' Expr (',' Expr)* ')'
 
-Pattern ::= Integer | Boolean | String | '()' | Ident
-          | 'Just' Pattern | 'Nothing'
-          | 'Left' Pattern | 'Right' Pattern
-          | ConstructorIdent PatternAtom*
-          | '[' ']' | Pattern '::' Pattern
-          | '{' (Ident '=' Pattern (',' Ident '=' Pattern)*)? '}'
-          | '(' Pattern (',' Pattern)+ ')'
+Pattern ::= PatternTerm ('::' Pattern)?
+PatternTerm ::= ConstructorIdent PatternAtom* | PatternAtom
 
 PatternAtom ::= Integer | Boolean | String | '()' | Ident | ConstructorIdent
+              | 'Just' PatternAtom | 'Nothing'
+              | 'Left' PatternAtom | 'Right' PatternAtom
               | '[' (Pattern (',' Pattern)*)? ']'
               | '{' (Ident '=' Pattern (',' Ident '=' Pattern)*)? '}'
-              | '(' Pattern ')'
+              | '(' Pattern (',' Pattern)* ')'
 
 Type ::= TypeApplication ('->' Type)?
-TypeApplication ::= TypeAtom TypeAtom*
+TypeApplication ::= ConstructorIdent TypeAtom* | TypeAtom
 TypeAtom ::= 'Int' | 'Bool' | 'String' | 'Unit' | Ident | ConstructorIdent
            | '[' Type ']' | '{' (Ident ':' Type (',' Ident ':' Type)*)? '}'
            | 'Maybe' TypeAtom | 'Either' TypeAtom TypeAtom | '(' Type ')'
@@ -667,6 +717,14 @@ Boolean ::= 'true' | 'false'
 String ::= '"' StringChar* '"'
 ```
 
+The grammar summarizes common forms. Identifiers also accept Unicode letters;
+type-variable names begin with a lowercase letter and constructor names with an
+uppercase letter. General type application is limited to custom names; `Maybe`
+and `Either` have the fixed arities shown above. Parenthesize applied custom types
+used as constructor fields, such as `data Holder a = Hold (Tree a)`.
+Function application does not consume an unparenthesized signed argument: use
+`f (-1)` or `f (+1)`.
+
 ## Implementation Notes
 
 - **Architecture**: Modular parser, type-checker, evaluator, module, CLI, and REPL components
@@ -674,6 +732,6 @@ String ::= '"' StringChar* '"'
 - **Type Checker**: Algorithm W with unification, split across specialized inference modules
 - **Evaluator**: Direct AST interpretation with closure environments, dual pure/IO evaluation paths
 - **Performance**: Optimized for deeply nested expressions (1000+ levels), comprehensive benchmarking suite available
-- **Benchmarks**: Criterion (speed) and Weigh (memory) profiling with regression detection
+- **Benchmarks**: Criterion timings and Weigh allocation measurements; CI runs one iteration, while regression comparisons require separate before/after measurements
 
 This specification defines Kai v0.0.4.6.

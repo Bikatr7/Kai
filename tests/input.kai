@@ -1,4 +1,5 @@
 // expect: ()
+// stdout: "Hello, World!\n"
 // stdin: "World\n"
 // To test this file manually, run:
 // stack exec kai tests/input.kai

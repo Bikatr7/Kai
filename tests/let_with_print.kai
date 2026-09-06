@@ -1,4 +1,5 @@
 // expect: 15
+// stdout: "15\n"
 let x = 5 in
   let y = 10 in
     let u = print (x + y) in x + y

@@ -2,6 +2,7 @@
 module IntegerOverflowSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Test.QuickCheck
 import Syntax
 import Parser
@@ -27,24 +28,24 @@ spec = describe "Integer Overflow Protection" $ do
     it "rejects an integer larger than the 32-bit maximum" $ do
       let tooBig = show (kaiIntMax + 1)
       case parseExpr tooBig of
-        Left _ -> True `shouldBe` True
+        Left err -> TestSupport.isIntegerOverflowParseError (read tooBig) err `shouldBe` True
         Right _ -> expectationFailure $ "Should reject integer larger than maxBound: " ++ tooBig
 
     it "rejects an integer smaller than the 32-bit minimum" $ do
       let tooSmall = show (kaiIntMin - 1)
       case parseExpr tooSmall of
-        Left _ -> True `shouldBe` True
+        Left err -> TestSupport.isIntegerOverflowParseError (read tooSmall) err `shouldBe` True
         Right _ -> expectationFailure $ "Should reject integer smaller than minBound: " ++ tooSmall
     
     it "rejects extremely large integers" $ do
       case parseExpr "99999999999999999999999999999" of
-        Left _ -> True `shouldBe` True
+        Left err -> TestSupport.isIntegerOverflowParseError 99999999999999999999999999999 err `shouldBe` True
         Right _ -> expectationFailure "Should reject extremely large integer"
     
     it "handles edge case: exactly 32-bit maxBound + 1" $ do
       let exactlyTooBig = show (kaiIntMax + 1)
       case parseExpr exactlyTooBig of
-        Left _ -> True `shouldBe` True
+        Left err -> TestSupport.isIntegerOverflowParseError (read exactlyTooBig) err `shouldBe` True
         Right _ -> expectationFailure $ "Should reject exactly maxBound + 1: " ++ exactlyTooBig
 
   describe "Arithmetic Overflow Protection" $ do
@@ -73,7 +74,7 @@ spec = describe "Integer Overflow Protection" $ do
         let intVal = n + kaiIntMax
             testStr = show intVal
         in case parseExpr testStr of
-             Left _ -> True
+             Left err -> TestSupport.isIntegerOverflowParseError intVal err
              Right _ -> False
 
   describe "Boundary Value Testing" $ do
@@ -96,11 +97,7 @@ spec = describe "Integer Overflow Protection" $ do
       parseEvaluate ("parseInt \"" ++ show (kaiIntMin - 1) ++ "\"") `shouldBe` Right VNothing
 
 parseEvaluate :: String -> Either RuntimeError Value
-parseEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> case typeCheck expr of
-    Left _ -> Left (TypeError "Type error")
-    Right _ -> evalPure expr
+parseEvaluate = TestSupport.evaluateCheckedSource
 
 -- Helper function for testing arithmetic with proper error handling
 testParseTypeCheckEval :: String -> Either String Value

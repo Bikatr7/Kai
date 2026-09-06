@@ -40,6 +40,10 @@ desktop.ini
 # Logs
 *.log
 
+# Python test artifacts
+__pycache__/
+*.py[cod]
+
 goals.txt
 dist-site/
 Main

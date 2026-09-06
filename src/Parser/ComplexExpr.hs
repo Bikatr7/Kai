@@ -1,7 +1,6 @@
 module Parser.ComplexExpr where
 
 import Text.Megaparsec
-import Control.Monad.Combinators (sepEndBy)
 import Syntax
 import Parser.Lexer
 import Parser.Literals
@@ -12,12 +11,12 @@ type ExprParser = Parser Expr
 
 lambdaExpr :: ExprParser -> Parser Expr
 lambdaExpr expr = do
-  symbol "\\"
+  _ <- symbol "\\"
   param <- identifier
   maybeType <- optional $ do
-    symbol ":"
+    _ <- symbol ":"
     syntaxTypeApplication
-  symbol "->"
+  _ <- symbol "->"
   Lambda param maybeType <$> expr
 
 ifExpr :: ExprParser -> Parser Expr
@@ -34,9 +33,9 @@ letExpr expr = do
   keyword "let"
   var <- identifier
   maybeType <- optional $ do
-    symbol ":"
+    _ <- symbol ":"
     syntaxType
-  symbol "="
+  _ <- symbol "="
   val <- expr
   keyword "in"
   Let var maybeType val <$> expr
@@ -46,9 +45,9 @@ letRecExpr expr = do
   keyword "letrec"
   var <- identifier
   maybeType <- optional $ do
-    symbol ":"
+    _ <- symbol ":"
     syntaxType
-  symbol "="
+  _ <- symbol "="
   val <- expr
   keyword "in"
   LetRec var maybeType val <$> expr
@@ -64,7 +63,7 @@ caseExpr expr = do
 casePattern :: ExprParser -> Parser (Pattern, Expr)
 casePattern expr = do
   pat <- patternParser
-  symbol "->"
+  _ <- symbol "->"
   e <- expr
   return (pat, e)
 

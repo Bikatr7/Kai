@@ -7,8 +7,6 @@ import TypeChecker.Types
 import TypeChecker.Substitution
 import TypeChecker.Unification
 
-type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
-
 inferFunctions :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferFunctions infer env (Lambda param maybeType body) = do
   paramType <- case maybeType of

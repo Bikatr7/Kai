@@ -1,1 +1,1 @@
-See AGENTS.md, do not skip reading it in it's entirety.
+Read [AGENTS.md](AGENTS.md) in its entirety and follow its contributor instructions for Kai 0.0.4.6.

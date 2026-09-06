@@ -117,7 +117,9 @@ jobs:
         run: stack test --fast
 
       - name: Validate benchmark programs
-        run: stack bench --benchmark-arguments="--iters 1"
+        run: |
+          stack bench --benchmark-arguments="--iters 1"
+          python3 test/benchmark_runner_test.py "$(stack path --dist-dir)/build/kai-bench/kai-bench"
 
   build:
     name: Build ${{ matrix.os }}
@@ -143,6 +145,7 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       - name: Setup Haskell (Stack)
+        id: haskell
         uses: haskell-actions/setup@v2
         with:
           ghc-version: '9.4.8'
@@ -154,7 +157,7 @@ jobs:
         with:
           path: |
             ~/.stack
-            ${{ env.STACK_ROOT }}
+            ${{ steps.haskell.outputs.stack-root }}
             .stack-work
           key: ${{ matrix.os }}-${{ runner.arch }}-macos-${{ matrix.macos-target }}-stack-${{ hashFiles('stack.yaml.lock') }}
 

@@ -1,6 +1,7 @@
 module ArithmeticSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Syntax
 import TypeChecker
 import Evaluator
@@ -31,6 +32,7 @@ spec = describe "Arithmetic Operations" $ do
 
     it "supports unary minus on variable and expression" $ do
       parseEvaluate "-(1 + 2)" `shouldBe` Right (VInt (-3))
+      parseEvaluate "let x = 3 in -x" `shouldBe` Right (VInt (-3))
   
   describe "Basic Multiplication" $ do
     it "evaluates 3 * 4 to 12" $ do
@@ -79,6 +81,4 @@ spec = describe "Arithmetic Operations" $ do
       parseEvaluate "(\"a\" ++ \"b\") ++ \"c\"" `shouldBe` Right (VStr "abc")
 -- Helper function
 parseEvaluate :: String -> Either RuntimeError Value
-parseEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> evalPure expr
+parseEvaluate = TestSupport.evaluateSource

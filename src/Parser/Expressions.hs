@@ -100,7 +100,7 @@ complexExprWithBlock exprParser = choice
 
 recordAccess :: Parser (Expr -> Expr)
 recordAccess = do
-  symbol "."
+  _ <- symbol "."
   field <- identifier
   return (`RecordAccess` field)
 
@@ -112,9 +112,9 @@ application atomParser = do
 
 parensOrTuple :: Parser Expr -> Parser Expr
 parensOrTuple exprParser = do
-  symbol "("
+  _ <- symbol "("
   exprs <- sepBy exprParser (symbol ",")
-  symbol ")"
+  _ <- symbol ")"
   case exprs of
     [e] -> return e
     _   -> return (TupleLit exprs)
@@ -128,17 +128,17 @@ recordLitExpr exprParser = RecordLit <$> braces (sepBy (recordField exprParser) 
 recordField :: Parser Expr -> Parser (String, Expr)
 recordField exprParser = do
   name <- identifier
-  symbol "="
+  _ <- symbol "="
   e <- exprParser
   return (name, e)
 
 typeAnnotationExpr :: Parser Expr -> Parser Expr
 typeAnnotationExpr exprParser = do
-  symbol "("
+  _ <- symbol "("
   e <- exprParser
-  symbol ":"
+  _ <- symbol ":"
   t <- syntaxType
-  symbol ")"
+  _ <- symbol ")"
   return $ TypeAnnotation e t
 
 operatorTable :: Bool -> [[Operator Parser Expr]]

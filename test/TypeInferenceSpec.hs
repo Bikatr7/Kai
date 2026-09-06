@@ -1,7 +1,9 @@
 module TypeInferenceSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Test.QuickCheck
+import Control.Monad (forM_)
 import Syntax
 import Parser
 import TypeChecker
@@ -12,22 +14,17 @@ spec = describe "Advanced Type Inference" $ do
   
   describe "Polymorphic Function Inference" $ do
     it "infers identity function type: \\x -> x" $ do
-      case parseAndInferType "\\x -> x" of
-        Right (TFun (TVar _) (TVar _)) -> True `shouldBe` True
-        Right ty -> expectationFailure $ "Expected polymorphic function type, got: " ++ show ty
-        Left err -> expectationFailure $ "Should infer identity type: " ++ show err
+      TestSupport.shouldInfer "\\x -> x" (TFun (TVar "a") (TVar "a"))
     
     it "infers const function type: \\x -> \\y -> x" $ do
-      case parseAndInferType "\\x -> \\y -> x" of
-        Right (TFun (TVar a) (TFun (TVar _) (TVar b))) -> a `shouldBe` b
-        Right ty -> expectationFailure $ "Expected const function type, got: " ++ show ty
-        Left err -> expectationFailure $ "Should infer const type: " ++ show err
+      TestSupport.shouldInfer "\\x -> \\y -> x" (TFun (TVar "a") (TFun (TVar "b") (TVar "a")))
     
     it "infers function composition type" $ do
-      case parseAndInferType "\\f -> \\g -> \\x -> f (g x)" of
-        Right (TFun (TFun (TVar _) (TVar _)) (TFun (TFun (TVar _) (TVar _)) (TFun (TVar _) (TVar _)))) -> True `shouldBe` True
-        Right ty -> expectationFailure $ "Expected composition type, got: " ++ show ty
-        Left err -> expectationFailure $ "Should infer composition type: " ++ show err
+      let a = TVar "a"
+          b = TVar "b"
+          c = TVar "c"
+      TestSupport.shouldInfer "\\f -> \\g -> \\x -> f (g x)"
+        (TFun (TFun b c) (TFun (TFun a b) (TFun a c)))
     
     it "infers twice function type: \\f -> \\x -> f (f x)" $ do
       case parseAndInferType "\\f -> \\x -> f (f x)" of
@@ -130,10 +127,13 @@ spec = describe "Advanced Type Inference" $ do
   describe "Complex Type Expressions" $ do
     it "handles deeply nested lambdas" $ do
       let deepLambda = "\\a -> \\b -> \\c -> \\d -> \\e -> a (b (c (d e)))"
-      case parseAndInferType deepLambda of
-        Right (TFun _ (TFun _ (TFun _ (TFun _ (TFun _ _))))) -> True `shouldBe` True
-        Right ty -> expectationFailure $ "Expected deeply nested function type, got: " ++ show ty
-        Left err -> expectationFailure $ "Should handle deep nesting: " ++ show err
+      let a = TVar "a"
+          b = TVar "b"
+          c = TVar "c"
+          d = TVar "d"
+          e = TVar "e"
+      TestSupport.shouldInfer deepLambda
+        (TFun (TFun d e) (TFun (TFun c d) (TFun (TFun b c) (TFun (TFun a b) (TFun a e)))))
     
     it "handles curried arithmetic operations" $ do
       case parseAndInferType "\\x -> \\y -> \\z -> x + y * z" of
@@ -157,9 +157,8 @@ spec = describe "Advanced Type Inference" $ do
 
   describe "Property-Based Type Checking" $ do
     it "identity function preserves type" $ do
-      property $ \x -> case parseAndTypeCheck ("(\\y -> y) (" ++ show (x :: Int) ++ ")") of
-        Right TInt -> True
-        _ -> False
+      property $ forAll (choose (fromInteger kaiIntMin, fromInteger kaiIntMax)) $ \x ->
+        parseAndTypeCheck ("(\\y -> y) (" ++ show (x :: Int) ++ ")") === Right TInt
     
     it "composition associates properly" $ do
       let f = "\\x -> x + 1"
@@ -168,14 +167,17 @@ spec = describe "Advanced Type Inference" $ do
       let composed1 = "(\\f -> \\g -> \\x -> f (g x)) (" ++ f ++ ") ((\\f -> \\g -> \\x -> f (g x)) (" ++ g ++ ") (" ++ h ++ "))"
       let composed2 = "(\\f -> \\g -> \\x -> f (g x)) ((\\f -> \\g -> \\x -> f (g x)) (" ++ f ++ ") (" ++ g ++ ")) (" ++ h ++ ")"
       case (parseAndInferType composed1, parseAndInferType composed2) of
-        (Right ty1, Right ty2) -> ty1 `shouldBe` ty2
+        (Right ty1, Right ty2) -> (ty1, ty2) `shouldBe` (TFun TInt TInt, TFun TInt TInt)
         (Left err, _) -> expectationFailure $ "First composition failed: " ++ show err
         (_, Left err) -> expectationFailure $ "Second composition failed: " ++ show err
+      forM_ [-10, 0, 10 :: Int] $ \value -> do
+        let expected = Right (VInt ((value - 3) * 2 + 1))
+            apply function = TestSupport.evaluateCheckedSource ("(" ++ function ++ ") (" ++ show value ++ ")")
+        apply composed1 `shouldBe` expected
+        apply composed2 `shouldBe` expected
 
 parseAndInferType :: String -> Either TypeError Type
-parseAndInferType input = case parseExpr input of
-  Left _ -> Left (UnificationError TInt TBool)  
-  Right expr -> typeCheck expr
+parseAndInferType = TestSupport.inferSource
 
 parseAndTypeCheck :: String -> Either TypeError Type  
 parseAndTypeCheck = parseAndInferType

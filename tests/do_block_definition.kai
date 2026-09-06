@@ -1,4 +1,5 @@
 // expect: 42
+// stdout: "inside\n"
 let result = do {
   // block comments should not break top-level parsing
   print "inside";

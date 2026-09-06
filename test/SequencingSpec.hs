@@ -2,6 +2,7 @@
 module SequencingSpec where
 
 import Test.Hspec
+import TestIO (captureOutput)
 import Test.QuickCheck
 
 import Parser
@@ -88,7 +89,8 @@ spec = do
         let expr = "(print \"first\"); (print \"second\"); 42"
         case parseExpr expr of
           Right ast -> do
-            result <- evalWithEnv Map.empty ast
+            (result, output) <- captureOutput $ evalWithEnv Map.empty ast
+            output `shouldBe` "first\nsecond\n"
             case result of
               Right val -> val `shouldBe` VInt 42
               Left err -> expectationFailure $ "Eval error: " ++ show err
@@ -105,7 +107,8 @@ spec = do
         let expr = "do { print \"first\"; print \"second\"; 42 }"
         case parseExpr expr of
           Right ast -> do
-            result <- evalWithEnv Map.empty ast
+            (result, output) <- captureOutput $ evalWithEnv Map.empty ast
+            output `shouldBe` "first\nsecond\n"
             case result of
               Right val -> val `shouldBe` VInt 42
               Left err -> expectationFailure $ "Eval error: " ++ show err
@@ -124,7 +127,8 @@ spec = do
         case parseExpr expr of
           Right ast -> do
             typeCheck ast `shouldBe` Right TInt
-            result <- evalWithEnv Map.empty ast
+            (result, output) <- captureOutput $ evalWithEnv Map.empty ast
+            output `shouldBe` "outer\ninner\n"
             case result of
               Right val -> val `shouldBe` VInt 9
               Left err -> expectationFailure $ "Eval error: " ++ show err
@@ -135,7 +139,8 @@ spec = do
         case parseExpr expr of
           Right ast -> do
             typeCheck ast `shouldBe` Right TInt
-            result <- evalWithEnv Map.empty ast
+            (result, output) <- captureOutput $ evalWithEnv Map.empty ast
+            output `shouldBe` "branch\n"
             case result of
               Right val -> val `shouldBe` VInt 1
               Left err -> expectationFailure $ "Eval error: " ++ show err
@@ -149,17 +154,23 @@ spec = do
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "sequences function applications" $ do
-        let expr = "(\\x -> x + 1) 5; (\\x -> x * 2) 3"
+        let expr = "(\\x -> x + 1) 5; (\\x -> x * 2) 4"
         case parseExpr expr of
-          Right ast -> evalPure ast `shouldBe` Right (VInt 6)
+          Right ast -> evalPure ast `shouldBe` Right (VInt 8)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
-      it "sequences conditionals" $ do
+      it "distinguishes sequencing conditionals from a sequence inside an else branch" $ do
         let expr = "if true then 1 else 2; if false then 3 else 4"
         case parseExpr expr of
           -- This parses as: if true then 1 else (2; if false then 3 else 4)
           -- Since true, it evaluates to 1
           Right ast -> evalPure ast `shouldBe` Right (VInt 1)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+        case parseExpr "(if true then 1 else 2); (if false then 3 else 4)" of
+          Right ast -> do
+            ast `shouldBe` Seq (If (BoolLit True) (IntLit 1) (IntLit 2))
+                              (If (BoolLit False) (IntLit 3) (IntLit 4))
+            evalPure ast `shouldBe` Right (VInt 4)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Sequencing Evaluation Order" $ do
@@ -167,25 +178,27 @@ spec = do
         let expr = "let x = 1 in print (toString x); 42"
         case parseExpr expr of
           Right ast -> do
-            result <- evalWithEnv Map.empty ast
+            (result, output) <- captureOutput $ evalWithEnv Map.empty ast
+            output `shouldBe` "1\n"
             case result of
               Right val -> val `shouldBe` VInt 42
               Left err -> expectationFailure $ "Eval error: " ++ show err
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Sequencing Property Tests" $ do
-      it "sequencing is right-associative" $ property $ \(x :: Int) (y :: Int) (z :: Int) ->
+      it "sequencing is right-associative" $ property $
+        forAll kaiInt $ \x -> forAll kaiInt $ \y -> forAll kaiInt $ \z ->
         let expr1 = show x ++ "; " ++ show y ++ "; " ++ show z
             expr2 = show x ++ "; (" ++ show y ++ "; " ++ show z ++ ")"
+            expected = Seq (IntLit x) (Seq (IntLit y) (IntLit z))
         in case (parseExpr expr1, parseExpr expr2) of
-             (Right ast1, Right ast2) -> ast1 == ast2
+             (Right ast1, Right ast2) -> ast1 == expected && ast2 == expected
              _ -> False
 
-      it "sequence always returns type of second expression" $ property $ \(x :: Int) (y :: Int) ->
-        x /= y ==> -- Different values to ensure they have different potential types
-          let expr = "42; " ++ show (abs y)
-          in case parseExpr expr of
-               Right ast -> case typeCheck ast of
-                 Right TInt -> property True
-                 _ -> property False
-               _ -> property False
+      it "sequence always returns type of second expression" $ property $
+        forAll (elements [(IntLit 42,TInt), (BoolLit True,TBool), (StrLit "Kai",TString), (UnitLit,TUnit)]) $ \(first, _) ->
+        forAll (elements [(IntLit 7,TInt), (BoolLit False,TBool), (StrLit "result",TString), (UnitLit,TUnit)]) $ \(second, expected) ->
+          typeCheck (Seq first second) === Right expected
+
+kaiInt :: Gen Int
+kaiInt = choose (fromInteger kaiIntMin, fromInteger kaiIntMax)

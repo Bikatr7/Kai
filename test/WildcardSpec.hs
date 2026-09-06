@@ -1,11 +1,13 @@
 module WildcardSpec where
 
 import Test.Hspec
+import TestIO (captureOutput)
 import Test.QuickCheck
 
 import Parser
 import Evaluator (evalPure, evalWithEnv, Value(..))
 import qualified Evaluator as E
+import TestSupport (evaluateSource)
 import TypeChecker
 import Syntax
 import qualified Data.Map as Map
@@ -26,11 +28,12 @@ spec = do
           Right ast -> evalPure ast `shouldBe` Right (VInt 5)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
-      it "wildcard with print statement returns unit" $ do
+      it "wildcard print binding preserves output and returns the body value" $ do
         let expr = "let _ = print \"hello\" in 42"
         case parseExpr expr of
           Right ast -> do
-            result <- evalWithEnv Map.empty ast
+            (result, output) <- captureOutput $ evalWithEnv Map.empty ast
+            output `shouldBe` "hello\n"
             case result of
               Right val -> val `shouldBe` VInt 42
               Left err -> expectationFailure $ "Eval error: " ++ show err
@@ -72,12 +75,14 @@ spec = do
         case parseExpr expr of
           Right ast -> evalPure ast `shouldBe` Right (VInt 42)
           Left err -> expectationFailure $ "Parse error: " ++ show err
+        evaluateSource "let f = \\x -> x / 0 in let _ = f 5 in 42" `shouldBe` Left E.DivByZero
 
       it "wildcard with conditional" $ do
         let expr = "let _ = if true then 1 else 2 in 99"
         case parseExpr expr of
           Right ast -> evalPure ast `shouldBe` Right (VInt 99)
           Left err -> expectationFailure $ "Parse error: " ++ show err
+        evaluateSource "let _ = if true then 1 / 0 else 2 in 99" `shouldBe` Left E.DivByZero
 
       it "wildcard does not shadow regular variables" $ do
         let expr = "let x = 10 in let _ = 20 in let y = 30 in x + y"
@@ -90,7 +95,8 @@ spec = do
         let expr = "let _ = print \"first\" in let _ = print \"second\" in 42"
         case parseExpr expr of
           Right ast -> do
-            result <- evalWithEnv Map.empty ast
+            (result, output) <- captureOutput $ evalWithEnv Map.empty ast
+            output `shouldBe` "first\nsecond\n"
             case result of
               Right val -> val `shouldBe` VInt 42
               Left err -> expectationFailure $ "Eval error: " ++ show err

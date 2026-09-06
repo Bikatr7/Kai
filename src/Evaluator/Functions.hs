@@ -1,30 +1,28 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Evaluator.Functions where
 
 import Evaluator.Types
-import Evaluator.Helpers (bindResult)
+import Evaluator.Helpers (evalInIO)
+import Control.Monad.Except (MonadError, throwError, liftEither, ExceptT(..), runExceptT)
 import Syntax
 import qualified Data.Map as Map
 import Data.IORef (readIORef)
 
-type EvalFunc = Env -> Expr -> Either RuntimeError Value
-type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
 
-evalFunctions :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
-evalFunctions _ env (Lambda param _maybeType body) =
-  Right $ VFun param body env
-evalFunctions eval env (App fun arg) = do
+evalFunctionsWith :: MonadError RuntimeError m => (Value -> m Value) -> Eval m -> Eval m
+evalFunctionsWith _ _ env (Lambda param _maybeType body) =
+  pure $ VFun param body env
+evalFunctionsWith resolve eval env (App fun arg) = do
   funVal <- eval env fun
   argVal <- eval env arg
-  applyCallable eval funVal argVal
-evalFunctions _ _ _ = error "evalFunctions called on non-function expression"
+  applyCallableWith resolve eval funVal argVal
+evalFunctionsWith _ _ _ _ = error "evalFunctions called on non-function expression"
+
+evalFunctions :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
+evalFunctions = evalFunctionsWith pure
 
 evalFunctionsIO :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
-evalFunctionsIO _ env (Lambda param _maybeType body) =
-  return $ Right $ VFun param body env
-evalFunctionsIO eval env (App fun arg) =
-  bindResult (eval env fun) $ \funVal ->
-    bindResult (eval env arg) $ \argVal -> applyCallableIO eval funVal argVal
-evalFunctionsIO _ _ _ = error "evalFunctionsIO called on non-function expression"
+evalFunctionsIO = evalInIO (evalFunctionsWith (ExceptT . resolveCallableIO))
 
 isCallableValue :: Value -> Bool
 isCallableValue VFun {} = True
@@ -32,21 +30,22 @@ isCallableValue VConstructor {} = True
 isCallableValue _ = False
 
 applyCallable :: EvalFunc -> Value -> Value -> Either RuntimeError Value
-applyCallable eval callable argument = case callable of
-  VFun param body closureEnv ->
-    eval (Map.insert param argument closureEnv) body
-  VConstructor name arity collectedArgs ->
-    finishConstructorApplication name arity (collectedArgs ++ [argument])
-  _ -> Left $ nonCallableError callable
+applyCallable = applyCallableWith pure
 
-applyCallableIO :: EvalFuncIO -> Value -> Value -> IO (Either RuntimeError Value)
-applyCallableIO eval callable argument =
-  bindResult (resolveCallableIO callable) $ \resolved -> case resolved of
+applyCallableWith :: MonadError RuntimeError m => (Value -> m Value) -> Eval m -> Value -> Value -> m Value
+applyCallableWith resolve eval callable argument = do
+  resolved <- resolve callable
+  case resolved of
     VFun param body closureEnv ->
       eval (Map.insert param argument closureEnv) body
     VConstructor name arity collectedArgs ->
-      return $ finishConstructorApplication name arity (collectedArgs ++ [argument])
-    _ -> return $ Left $ nonCallableError resolved
+      liftEither $ finishConstructorApplication name arity (collectedArgs ++ [argument])
+    _ -> throwError $ nonCallableError resolved
+
+applyCallableIO :: EvalFuncIO -> Value -> Value -> IO (Either RuntimeError Value)
+applyCallableIO eval callable argument = runExceptT $
+  applyCallableWith (ExceptT . resolveCallableIO)
+    (\env expr -> ExceptT $ eval env expr) callable argument
 
 resolveCallableIO :: Value -> IO (Either RuntimeError Value)
 resolveCallableIO = go []

@@ -1,6 +1,7 @@
 module RuntimeErrorSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Syntax
 import Evaluator
 import Parser
@@ -34,6 +35,4 @@ spec = describe "Runtime Errors" $ do
         _ -> expectationFailure "Should be unbound variable error"
 
 parseAndEvaluate :: String -> Either RuntimeError Value
-parseAndEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> evalPure expr
+parseAndEvaluate = TestSupport.evaluateSource

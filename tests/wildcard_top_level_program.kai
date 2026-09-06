@@ -1,4 +1,5 @@
 // expect: "done"
-let _ = case Just 42 of _ -> "matched" | Nothing -> "none"
-let _ = case (1, "hello") of _ -> "tuple"
+// stdout: "matched\ntuple\n"
+let _ = print (case Just 42 of _ -> "matched" | Nothing -> "none")
+let _ = print (case (1, "hello") of _ -> "tuple")
 case Nothing of _ -> "done" | Just x -> "bad"

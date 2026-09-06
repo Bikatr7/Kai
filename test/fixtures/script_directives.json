@@ -1,0 +1,167 @@
+[
+  [
+    "value expectation",
+    "// expect: 42\n42",
+    true
+  ],
+  [
+    "missing value expectation",
+    "42",
+    false
+  ],
+  [
+    "only type expectation",
+    "// expect-type: TInt\n42",
+    false
+  ],
+  [
+    "empty value expectation",
+    "// expect:  \n42",
+    false
+  ],
+  [
+    "duplicate value expectations",
+    "// expect: 42\n// expect: 42\n42",
+    false
+  ],
+  [
+    "optional type assertion",
+    "// expect: 42\n// expect-type: TInt\n42",
+    true
+  ],
+  [
+    "empty type assertion",
+    "// expect: 42\n// expect-type: \n42",
+    false
+  ],
+  [
+    "duplicate type assertions",
+    "// expect: 42\n// expect-type: TInt\n// expect-type: TInt\n42",
+    false
+  ],
+  [
+    "explicit silent stdout",
+    "// expect: 42\n// stdout: \"\"\n42",
+    true
+  ],
+  [
+    "escaped Unicode fixtures",
+    "// expect: 42\n// stdin: \"\\u00e9\\u96ea\\n\"\n// stdout: \"\\u00e9\\u96ea\\n\"\n42",
+    true
+  ],
+  [
+    "literal Unicode fixtures",
+    "// expect: 42\n// stdin: \"é雪\\n\"\n// stdout: \"é雪\\n\"\n42",
+    true
+  ],
+  [
+    "escaped whitespace and quotes",
+    "// expect: 42\n// stdin: \"  \\t\\n\\\"hi\\\"\"\n42",
+    true
+  ],
+  [
+    "Windows source line endings",
+    "// expect: 42\r\n// stdout: \"\"\r\n42\r\n",
+    true
+  ],
+  [
+    "stdin rejects '42'",
+    "// expect: 42\n// stdin: 42\n42",
+    false
+  ],
+  [
+    "stdin rejects 'true'",
+    "// expect: 42\n// stdin: true\n42",
+    false
+  ],
+  [
+    "stdin rejects 'null'",
+    "// expect: 42\n// stdin: null\n42",
+    false
+  ],
+  [
+    "stdin rejects '[]'",
+    "// expect: 42\n// stdin: []\n42",
+    false
+  ],
+  [
+    "stdin rejects '{}'",
+    "// expect: 42\n// stdin: {}\n42",
+    false
+  ],
+  [
+    "stdin rejects ''",
+    "// expect: 42\n// stdin: \n42",
+    false
+  ],
+  [
+    "stdin rejects 'not-json'",
+    "// expect: 42\n// stdin: not-json\n42",
+    false
+  ],
+  [
+    "stdin rejects '\"unterminated'",
+    "// expect: 42\n// stdin: \"unterminated\n42",
+    false
+  ],
+  [
+    "stdin rejects '\"\\\\ud800\"'",
+    "// expect: 42\n// stdin: \"\\ud800\"\n42",
+    false
+  ],
+  [
+    "stdin rejects duplicate fixtures",
+    "// expect: 42\n// stdin: \"\"\n// stdin: \"\"\n42",
+    false
+  ],
+  [
+    "stdout rejects '42'",
+    "// expect: 42\n// stdout: 42\n42",
+    false
+  ],
+  [
+    "stdout rejects 'true'",
+    "// expect: 42\n// stdout: true\n42",
+    false
+  ],
+  [
+    "stdout rejects 'null'",
+    "// expect: 42\n// stdout: null\n42",
+    false
+  ],
+  [
+    "stdout rejects '[]'",
+    "// expect: 42\n// stdout: []\n42",
+    false
+  ],
+  [
+    "stdout rejects '{}'",
+    "// expect: 42\n// stdout: {}\n42",
+    false
+  ],
+  [
+    "stdout rejects ''",
+    "// expect: 42\n// stdout: \n42",
+    false
+  ],
+  [
+    "stdout rejects 'not-json'",
+    "// expect: 42\n// stdout: not-json\n42",
+    false
+  ],
+  [
+    "stdout rejects '\"unterminated'",
+    "// expect: 42\n// stdout: \"unterminated\n42",
+    false
+  ],
+  [
+    "stdout rejects '\"\\\\ud800\"'",
+    "// expect: 42\n// stdout: \"\\ud800\"\n42",
+    false
+  ],
+  [
+    "stdout rejects duplicate fixtures",
+    "// expect: 42\n// stdout: \"\"\n// stdout: \"\"\n42",
+    false
+  ]
+]

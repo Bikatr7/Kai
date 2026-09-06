@@ -1,9 +1,7 @@
 module TypeChecker.Inference where
 
-import qualified Data.Map as Map
 import Syntax (Expr(..))
 import TypeChecker.Types
-import TypeChecker.Substitution
 import TypeChecker.Literals
 import TypeChecker.Arithmetic
 import TypeChecker.ControlFlow
@@ -21,7 +19,7 @@ infer env expr = case expr of
   Input -> inferLiteral env expr
   Args -> inferLiteral env expr
   GetCurrentDirectory -> inferLiteral env expr
-  Var x -> inferVariable env expr
+  Var _ -> inferVariable env expr
 
   Add _ _ -> inferArithmetic infer env expr
   Sub _ _ -> inferArithmetic infer env expr

@@ -10,6 +10,7 @@ import System.Directory
   , findExecutablesInDirectories
   , createDirectory
   , createDirectoryIfMissing
+  , copyFile
   , executable
   , getCurrentDirectory
   , getPermissions
@@ -22,7 +23,7 @@ import System.Directory
 import System.Environment (getEnvironment)
 import System.Process (proc, readCreateProcessWithExitCode, CreateProcess(..), readProcessWithExitCode)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), getSearchPath, normalise)
+import System.FilePath ((</>), getSearchPath, normalise, takeFileName)
 import System.IO (hClose, openTempFile)
 import qualified System.Info as System
 import Test.Hspec
@@ -103,6 +104,22 @@ spec = describe "Release workflow asset naming" $ do
   it "preserves macOS ZIP contents and permissions using Python when archive tools are absent" $
     assertPackageRoundTripWith runBashWithoutZip "macOS" "ARM64" "kai-macos-arm64.zip" "kai" True
 
+  forM_ [("Linux", "X64", "kai-linux-amd64.tar.gz", "kai", True),
+         ("macOS", "ARM64", "kai-macos-arm64.zip", "kai", True),
+         ("Windows", "X64", "kai-windows-amd64.zip", "kai.exe", False)] $
+    \(os, arch, packageName, binaryName, executableMode) ->
+      it ("packages " ++ os ++ " with non-executable source-archive helpers") $
+        withTempDirectory $ \helperDirectory -> do
+          forM_ ["package-release-binary.sh", "release-package-name.sh",
+                 "release-asset-name.sh", "extract-release-package.sh"] $ \name -> do
+            let destination = helperDirectory </> name
+            copyFile ("scripts" </> name) destination
+            permissions <- getPermissions destination
+            setPermissions destination permissions { executable = False }
+          let execute (script : arguments) = runBash ((helperDirectory </> takeFileName script) : arguments)
+              execute [] = expectationFailure "Missing helper script" >> pure (ExitFailure 1, "", "")
+          assertPackageRoundTripWith execute os arch packageName binaryName executableMode
+
   it "rejects a tar archive mislabeled as a Windows ZIP" $
     withTempDirectory $ \tempDir -> do
       let binary = tempDir </> "kai.exe"
@@ -132,7 +149,7 @@ spec = describe "Release workflow asset naming" $ do
     workflow `shouldSatisfy` isInfixOf "scripts/release-asset-name.sh"
     workflow `shouldSatisfy` not . isInfixOf "mv dist/kai dist/kai-macos-amd64"
 
-  it "starts for package changes on master and supports manual retries" $ do
+  it "declares package-change and manual release triggers on master" $ do
     workflow <- readFile ".github/workflows/release.yml"
     let triggerSection = unlines $ takeWhile (/= "permissions:") $ dropWhile (/= "on:") $ lines workflow
     triggerSection `shouldSatisfy` isInfixOf "push:"
@@ -143,7 +160,7 @@ spec = describe "Release workflow asset naming" $ do
     triggerSection `shouldSatisfy` isInfixOf "workflow_dispatch:"
     workflow `shouldSatisfy` isInfixOf "if: github.ref == 'refs/heads/master'"
 
-  it "gates release builds on tests and benchmark validation" $ do
+  it "declares test and benchmark commands and release job dependencies" $ do
     workflow <- readFile ".github/workflows/release.yml"
     workflow `shouldSatisfy` isInfixOf "stack test --fast"
     workflow `shouldSatisfy` isInfixOf "stack bench --benchmark-arguments=\"--iters 1\""
@@ -156,7 +173,7 @@ spec = describe "Release workflow asset naming" $ do
     workflow `shouldSatisfy` isInfixOf "overwrite_files: true"
     workflow `shouldSatisfy` isInfixOf "git rev-list -n 1"
 
-  it "pins release runners and verifies exact downloaded packages before publication" $ do
+  it "declares pinned runners and draft-package verification before publication" $ do
     workflow <- readFile ".github/workflows/release.yml"
     workflow `shouldSatisfy` isInfixOf "ubuntu-22.04"
     workflow `shouldSatisfy` isInfixOf "macos-15"
@@ -179,7 +196,7 @@ spec = describe "Release workflow asset naming" $ do
     verifySection `shouldSatisfy` isInfixOf "persist-credentials: false"
     verifySection `shouldSatisfy` isInfixOf "Download draft release package"
 
-  it "supports fail-closed macOS and Windows signing when explicitly enabled" $ do
+  it "includes opt-in macOS and Windows signing commands" $ do
     workflow <- readFile ".github/workflows/release.yml"
     workflow `shouldSatisfy` isInfixOf "vars.APPLE_SIGNING_ENABLED == 'true'"
     workflow `shouldSatisfy` isInfixOf "codesign"

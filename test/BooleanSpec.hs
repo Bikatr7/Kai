@@ -1,6 +1,7 @@
 module BooleanSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Test.QuickCheck
 import Syntax
 import TypeChecker
@@ -32,8 +33,9 @@ spec = describe "Boolean Logic Operations" $ do
     
     it "is associative: (a and b) and c = a and (b and c)" $ property $
       \a b c -> let boolStr x = if x then "true" else "false"
-                in parseEvaluate (boolStr a ++ " and (" ++ boolStr b ++ " and " ++ boolStr c ++ ")")
-                == parseEvaluate ("(" ++ boolStr a ++ " and " ++ boolStr b ++ ") and " ++ boolStr c)
+                in bothEvaluateTo (a && b && c)
+                     (boolStr a ++ " and (" ++ boolStr b ++ " and " ++ boolStr c ++ ")")
+                     ("(" ++ boolStr a ++ " and " ++ boolStr b ++ ") and " ++ boolStr c)
   
   describe "Logical OR" $ do
     it "true or true = true" $ do
@@ -50,8 +52,9 @@ spec = describe "Boolean Logic Operations" $ do
     
     it "is commutative: a or b = b or a" $ property $
       \a b -> let boolStr x = if x then "true" else "false"
-              in parseEvaluate (boolStr a ++ " or " ++ boolStr b)
-              == parseEvaluate (boolStr b ++ " or " ++ boolStr a)
+              in bothEvaluateTo (a || b)
+                   (boolStr a ++ " or " ++ boolStr b)
+                   (boolStr b ++ " or " ++ boolStr a)
   
   describe "Logical NOT" $ do
     it "not true = false" $ do
@@ -62,28 +65,29 @@ spec = describe "Boolean Logic Operations" $ do
     
     it "double negation: not (not x) = x" $ property $
       \a -> let boolStr x = if x then "true" else "false"
-            in parseEvaluate ("not (not " ++ boolStr a ++ ")")
-            == parseEvaluate (boolStr a)
+            in parseEvaluate ("not (not " ++ boolStr a ++ ")") === Right (VBool a)
 
     it "negation toggles equality" $ property $
-      forAll (arbitrary :: Gen Int) $ \x ->
-      forAll (arbitrary :: Gen Int) $ \y ->
+      forAll (choose (fromInteger kaiIntMin, fromInteger kaiIntMax)) $ \x ->
+      forAll (choose (fromInteger kaiIntMin, fromInteger kaiIntMax)) $ \y ->
         let e1 = Eq (IntLit x) (IntLit y)
             e2 = Not e1
         in case (evalPure e1, evalPure e2) of
-             (Right (VBool b1), Right (VBool b2)) -> b1 /= b2
+             (Right (VBool b1), Right (VBool b2)) -> b1 == (x == y) && b2 == (x /= y)
              _ -> False
   
   describe "Complex Boolean Expressions" $ do
     it "De Morgan's Law: not (a and b) = (not a) or (not b)" $ property $
       \a b -> let boolStr x = if x then "true" else "false"
-              in parseEvaluate ("not (" ++ boolStr a ++ " and " ++ boolStr b ++ ")")
-              == parseEvaluate ("(not " ++ boolStr a ++ ") or (not " ++ boolStr b ++ ")")
+              in bothEvaluateTo (not (a && b))
+                   ("not (" ++ boolStr a ++ " and " ++ boolStr b ++ ")")
+                   ("(not " ++ boolStr a ++ ") or (not " ++ boolStr b ++ ")")
     
     it "De Morgan's Law: not (a or b) = (not a) and (not b)" $ property $
       \a b -> let boolStr x = if x then "true" else "false"
-              in parseEvaluate ("not (" ++ boolStr a ++ " or " ++ boolStr b ++ ")")
-              == parseEvaluate ("(not " ++ boolStr a ++ ") and (not " ++ boolStr b ++ ")")
+              in bothEvaluateTo (not (a || b))
+                   ("not (" ++ boolStr a ++ " or " ++ boolStr b ++ ")")
+                   ("(not " ++ boolStr a ++ ") and (not " ++ boolStr b ++ ")")
     
     it "evaluates complex nested expressions" $ do
       parseEvaluate "(true or false) and (not false)" `shouldBe` Right (VBool True)
@@ -96,6 +100,8 @@ spec = describe "Boolean Logic Operations" $ do
 
 -- Helper function
 parseEvaluate :: String -> Either RuntimeError Value
-parseEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> evalPure expr
+parseEvaluate = TestSupport.evaluateSource
+
+bothEvaluateTo :: Bool -> String -> String -> Property
+bothEvaluateTo expected left right = conjoin
+  [parseEvaluate left === Right (VBool expected), parseEvaluate right === Right (VBool expected)]

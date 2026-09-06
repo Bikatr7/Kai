@@ -1,6 +1,7 @@
 module EdgeCaseSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Syntax
 import TypeChecker
 import Evaluator
@@ -29,6 +30,4 @@ spec = describe "Edge Cases and Integration Tests" $ do
       parseEvaluate "  1   +   2  " `shouldBe` Right (VInt 3)
 
 parseEvaluate :: String -> Either RuntimeError Value
-parseEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> evalPure expr
+parseEvaluate = TestSupport.evaluateSource

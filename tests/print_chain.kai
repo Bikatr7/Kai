@@ -1,2 +1,3 @@
 // expect: "Hi!"
+// stdout: "Hi!\n()\n"
 let u = print ((\x -> print (x ++ "!")) "Hi") in "Hi!"

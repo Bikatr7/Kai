@@ -1,9 +1,10 @@
 module ExampleSpec where
 
 import Test.Hspec
-import Control.Exception (bracket, evaluate)
-import Control.Monad (forM_)
-import System.Directory (createDirectory, doesFileExist, getTemporaryDirectory, removeDirectoryRecursive, removeFile)
+import Control.Exception (IOException, bracket, bracket_, evaluate, try)
+import Control.Monad (forM_, when)
+import System.Directory (createDirectory, doesFileExist, getCurrentDirectory, setCurrentDirectory, getTemporaryDirectory, removeDirectoryRecursive, removeFile)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
 import System.IO (hClose, hGetContents, hPutStr, openTempFile)
@@ -42,45 +43,75 @@ withTempTextFile dir content =
 
 spec :: Spec
 spec = describe "Examples" $ do
+  forM_ [False, True] $ \fails ->
+    it ("restores directory and environment after example failure = " ++ show fails) $
+      withTempDir $ \dir -> do
+        originalDir <- getCurrentDirectory
+        originalMode <- lookupEnv "KAI_EXAMPLE_MODE"
+        result <- try (withRestoredExampleState $ do
+          setCurrentDirectory dir
+          setEnv "KAI_EXAMPLE_MODE" "temporary-test-value"
+          when fails $ ioError (userError "example fixture failure")) :: IO (Either IOException ())
+        case result of
+          Left err -> do
+            fails `shouldBe` True
+            show err `shouldContain` "example fixture failure"
+          Right () -> fails `shouldBe` False
+        getCurrentDirectory `shouldReturn` originalDir
+        lookupEnv "KAI_EXAMPLE_MODE" `shouldReturn` originalMode
+
   it "runs the calculator example interactively" $ do
     (exitCode, output) <- captureOutput $ withStdin "1\n7\n8\n5\n" $ runCLI ["examples/calculator.kai"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "add => 15"
-    output `shouldContain` "Goodbye."
+    output `shouldBe` unlines
+      [ "=== Kai Calculator ==="
+      , "1) add  2) subtract  3) multiply  4) divide  5) exit"
+      , "Choose an option:"
+      , "First number:"
+      , "Second number:"
+      , "add => 15"
+      , "=== Kai Calculator ==="
+      , "1) add  2) subtract  3) multiply  4) divide  5) exit"
+      , "Choose an option:"
+      , "Goodbye."
+      ]
 
   it "runs the discard demo example" $ do
     (exitCode, output) <- captureOutput $ runCLI ["examples/discard_demo.kai"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "[log] starting example"
-    output `shouldContain` "Final report:"
+    output `shouldBe` unlines
+      [ "[log] starting example"
+      , "[log] pipeline: read, type-check, run"
+      , "Final report: {steps: [read, type-check, run], user: Kai}"
+      ]
 
   it "runs the custom data types example" $ do
     (exitCode, output) <- captureOutput $ runCLI ["examples/custom_data_types.kai"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "AST: Mul(Add(Lit(5), Lit(3)), Neg(Lit(2)))"
-    output `shouldContain` "Simplified: ((5 + 3) * -2)"
-    output `shouldContain` "Value: -16"
+    output `shouldBe` customDataOutput
 
   it "runs the file counter example with a real file" $ do
     withTempDir $ \dir ->
       withTempTextFile dir "Kai examples should stay practical and typed.\n" $ \path -> do
         (exitCode, output) <- captureOutput $ runCLI ["examples/file_counter.kai", path]
         exitCode `shouldBe` ExitSuccess
-        output `shouldContain` path
-        output `shouldContain` "7 words"
+        output `shouldBe` path ++ ": 7 words, longest word length 9\n"
 
   it "runs the file IO example and writes the expected contents" $ do
-    withTempDir $ \dir -> do
+    withTempDir $ \dir -> withRestoredExampleState $ do
+      originalDir <- getCurrentDirectory
       let workspacePath = dir </> "workspace"
       let outputPath = workspacePath </> "report.txt"
       (exitCode, output) <- captureOutput $ runCLI ["examples/file_io.kai", workspacePath]
       exitCode `shouldBe` ExitSuccess
-      output `shouldContain` ("Workspace: " ++ workspacePath)
-      output `shouldContain` "Mode: workspace-demo"
-      output `shouldContain` "Entries here:"
-      output `shouldContain` "report.txt"
-      output `shouldContain` "Exists after write: True"
-      output `shouldContain` "Read back:"
+      output `shouldBe` unlines
+        [ "Workspace: " ++ workspacePath
+        , "Current dir: " ++ originalDir
+        , "Mode: workspace-demo"
+        , "Entries here: [report.txt]"
+        , "Exists after write: True"
+        , "Read back: Kai writes files | Kai can hop between directories | Kai keeps scripts typed"
+        ]
       exists <- doesFileExist outputPath
       exists `shouldBe` True
       contents <- readFile outputPath
@@ -89,46 +120,58 @@ spec = describe "Examples" $ do
   it "runs the fizzbuzz example with a configured upper bound" $ do
     (exitCode, output) <- captureOutput $ runCLI ["examples/fizzbuzz.kai", "15"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "FizzBuzz"
-    output `shouldContain` "done"
+    output `shouldBe` unlines
+      ["1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz", "11", "Fizz", "13", "14", "FizzBuzz", "done"]
 
   it "runs the greet example with command-line names" $ do
     (exitCode, output) <- captureOutput $ runCLI ["examples/greet.kai", "Alice", "Bob"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "Hello, Alice!"
-    output `shouldContain` "All greetings sent."
+    output `shouldBe` "Hello, Alice!\nHello, Bob!\nAll greetings sent.\n"
 
   it "runs the guessing game example interactively" $ do
     (exitCode, output) <- captureOutput $ withStdin "5\n7\n" $ runCLI ["examples/guess_the_number.kai", "7"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "Too low."
-    output `shouldContain` "Correct in 2 tries!"
+    output `shouldBe` unlines
+      [ "Guess a number between 1 and 100."
+      , "Attempt 1: enter a guess"
+      , "Too low."
+      , "Attempt 2: enter a guess"
+      , "Correct in 2 tries!"
+      ]
 
   it "runs the list processing example" $ do
     (exitCode, output) <- captureOutput $ runCLI ["examples/list_processing.kai"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "Report:"
-    output `shouldContain` "Tagged status:"
+    output `shouldBe` unlines
+      [ "Report: {count: 6, evenCount: 2, labels: [(5, steady), (8, steady), (13, steady), (21, high), (34, high), (55, high)], total: 136}"
+      , "Tagged total: {label: total, value: 136}"
+      , "Tagged status: {label: status, value: ready}"
+      ]
 
   it "runs the text analysis example with a real input file" $ do
     withTempDir $ \dir ->
       withTempTextFile dir "Kai examples stay practical, typed, and honest.\n" $ \path -> do
         (exitCode, output) <- captureOutput $ runCLI ["examples/text_analysis.kai", path]
         exitCode `shouldBe` ExitSuccess
-        output `shouldContain` "Preview:"
-        output `shouldContain` "First long word:"
+        output `shouldBe` unlines
+          [ "Preview: Kai | examples | stay | practical, | typed,"
+          , "Words: 7"
+          , "Characters: 48"
+          , "Average word length: 5"
+          , "Longest word length: 10"
+          , "First long word: examples"
+          ]
 
   it "runs the text processing example" $ do
     (exitCode, output) <- captureOutput $ runCLI ["examples/text_processing.kai"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "Fields:"
-    output `shouldContain` "First non-empty: focus"
+    output `shouldBe` unlines
+      ["Fields: [apples, bananas, pears]", "Preview: Kai | examples | should | stay", "First non-empty: focus"]
 
   it "runs the wildcard patterns example" $ do
     (exitCode, output) <- captureOutput $ runCLI ["examples/wildcard_patterns.kai"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "status: success"
-    output `shouldContain` "list has values"
+    output `shouldBe` "status: success\ntuple for kai\nlist has values\n"
 
   it "parses and type checks example modules and custom data type examples" $ do
     let files =
@@ -171,8 +214,9 @@ spec = describe "Examples" $ do
           , "examples/modules/TextAnalysis/TextAnalysis.kai"
           ]
     forM_ files $ \path -> do
-      (exitCode, _) <- captureOutput $ runCLI [path]
+      (exitCode, output) <- captureOutput $ runCLI [path]
       exitCode `shouldBe` ExitSuccess
+      output `shouldBe` if path == "examples/custom_data_types.kai" then customDataOutput else ""
 
   it "keeps duplicate example module copies in sync" $ do
     let groups =
@@ -183,3 +227,19 @@ spec = describe "Examples" $ do
     forM_ groups $ \group -> do
       contents <- mapM readFile group
       contents `shouldSatisfy` all (== head contents)
+
+customDataOutput :: String
+customDataOutput = unlines
+  [ "AST: Mul(Add(Lit(5), Lit(3)), Neg(Lit(2)))"
+  , "Pretty: ((5 + 3) * (-2))"
+  , "Simplified: ((5 + 3) * -2)"
+  , "Value: -16"
+  ]
+
+withRestoredExampleState :: IO a -> IO a
+withRestoredExampleState action = do
+  originalDir <- getCurrentDirectory
+  originalMode <- lookupEnv "KAI_EXAMPLE_MODE"
+  bracket_ (pure ()) (do
+      setCurrentDirectory originalDir
+      maybe (unsetEnv "KAI_EXAMPLE_MODE") (setEnv "KAI_EXAMPLE_MODE") originalMode) action

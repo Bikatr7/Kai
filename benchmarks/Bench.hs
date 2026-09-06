@@ -9,6 +9,9 @@ import Parser (parseExpr)
 import Evaluator (evalPure, Value(..))
 import TypeChecker (typeCheck, Type(..))
 import System.IO (hFlush, stdout)
+import System.Environment (lookupEnv)
+import Control.Monad (unless)
+import Data.Maybe (isJust)
 import qualified Weigh as W
 
 fibExpr :: String
@@ -84,16 +87,21 @@ memoryBenchmarks = do
 
 main :: IO ()
 main = do
-  putStrLn "Kai Language Benchmark Suite"
-  putStrLn "============================"
-  putStrLn ""
-  putStrLn "Running comprehensive benchmarks for speed and memory usage..."
-  putStrLn ""
-  hFlush stdout
-  putStrLn "Memory Benchmarks (Weigh):"
-  hFlush stdout
+  -- Weigh re-executes this binary for each allocation case, then returns.
+  -- Read its child marker before mainWith, which also sets it in the parent.
+  memoryChild <- isJust <$> lookupEnv "WEIGH_CASE"
+  unless memoryChild $ do
+    putStrLn "Kai Language Benchmark Suite"
+    putStrLn "============================"
+    putStrLn ""
+    putStrLn "Running comprehensive benchmarks for speed and memory usage..."
+    putStrLn ""
+    hFlush stdout
+    putStrLn "Memory Benchmarks (Weigh):"
+    hFlush stdout
   W.mainWith memoryBenchmarks
-  hFlush stdout
-  putStrLn "Speed Benchmarks (Criterion):"
-  hFlush stdout
-  defaultMain [speedBenchmarks]
+  unless memoryChild $ do
+    hFlush stdout
+    putStrLn "Speed Benchmarks (Criterion):"
+    hFlush stdout
+    defaultMain [speedBenchmarks]

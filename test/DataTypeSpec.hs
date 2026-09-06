@@ -33,8 +33,8 @@ spec = describe "Custom Data Types" $ do
     let source = "data Option a = None | Some a\nSome 7"
     case parseProgram source of
       Left err -> expectationFailure $ "Parse error: " ++ show err
-      Right (Program [TLData "Option" ["a"] [DataConstructor "None" [], DataConstructor "Some" [STVar "a"]], _]) ->
-        return ()
+      Right (Program [TLData "Option" ["a"] [DataConstructor "None" [], DataConstructor "Some" [STVar "a"]], expression]) ->
+        expression `shouldBe` TLExpr (App (Var "Some") (IntLit 7))
       Right other -> expectationFailure $ "Unexpected AST: " ++ show other
 
   it "keeps adjacent custom constructor field types separate" $ do

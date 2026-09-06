@@ -7,7 +7,9 @@ import Syntax
 import Parser
 import TypeChecker
 import Evaluator (Value(..), evalPure, evalProgram)
-import Control.Monad (liftM, liftM2, liftM3)
+import qualified Evaluator as E
+import TestSupport (isIntegerOverflowParseError)
+import Control.Monad (liftM2, liftM3)
 import qualified Data.Map as Map
 
 -- Generator for valid Kai expressions
@@ -141,29 +143,28 @@ spec = describe "Property-Based Testing" $ do
     it "rejects all overflow integers" $ do
       property $ \(OverflowInt n) -> 
         case parseExpr (show n) of
-          Left _ -> True
+          Left err -> isIntegerOverflowParseError n err
           Right _ -> False
     
     it "pretty-print is stable after parse" $ do
       property $ \(ValidExpr expr) ->
         let s = prettyExpr expr in
         case parseExpr s of
-          Right e1 -> prettyExpr e1 == s
+          Right e1 -> e1 == expr && prettyExpr e1 == s
           Left _ -> False
     
-    it "parsing is deterministic" $ do
+    it "preserves the generated AST across whitespace and comments" $ do
       property $ \(ValidExpr expr) ->
-        let exprStr = prettyExpr expr
-            result1 = parseExpr exprStr
-            result2 = parseExpr exprStr
-        in result1 == result2
+        let source = prettyExpr expr
+        in conjoin [parseExpr source === Right expr,
+                    parseExpr (" /* leading /* nested */ comment */ \n" ++ source ++ " // trailing\n") === Right expr]
 
   describe "Type System Properties" $ do
-    it "type checking is deterministic" $ do
+    it "preserves inferred types and errors through source parsing" $ do
       property $ \(ValidExpr expr) ->
-        let result1 = typeCheck expr
-            result2 = typeCheck expr
-        in result1 == result2
+        case parseExpr (prettyExpr expr) of
+          Left err -> counterexample (show err) False
+          Right parsed -> conjoin [parsed === expr, typeCheck parsed === typeCheck expr]
     
     it "generated well-typed expressions type-check and evaluate" $ do
       property $ forAll (sized typedPureExpr) $ \expr ->
@@ -187,7 +188,7 @@ spec = describe "Property-Based Testing" $ do
         let expr1 = Add (IntLit x) (IntLit y)
             expr2 = Add (IntLit y) (IntLit x)
         in case (evalPure expr1, evalPure expr2) of
-             (Right v1, Right v2) -> v1 == v2
+             (Right v1, Right v2) -> v1 == VInt (x+y) && v2 == VInt (x+y)
              _ -> False  -- Generated operands cannot overflow signed 32-bit addition.
     
     it "addition is associative" $ do
@@ -195,7 +196,7 @@ spec = describe "Property-Based Testing" $ do
         let expr1 = Add (Add (IntLit x) (IntLit y)) (IntLit z)
             expr2 = Add (IntLit x) (Add (IntLit y) (IntLit z))
         in case (evalPure expr1, evalPure expr2) of
-             (Right v1, Right v2) -> v1 == v2
+             (Right v1, Right v2) -> v1 == VInt (x+y+z) && v2 == VInt (x+y+z)
              _ -> False  -- The three bounded operands also remain within range.
     
     it "multiplication by zero gives zero" $ do
@@ -209,21 +210,23 @@ spec = describe "Property-Based Testing" $ do
       property $ forAll genSmallKaiInt $ \x -> forAll genSmallKaiInt $ \y ->
         let lhs = Sub (IntLit 0) (Add (IntLit x) (IntLit y))
             rhs = Add (Sub (IntLit 0) (IntLit x)) (Sub (IntLit 0) (IntLit y))
-        in evalPure lhs == evalPure rhs
+        in conjoin [evalPure lhs === Right (VInt (negate (x+y))),
+                    evalPure rhs === Right (VInt (negate (x+y)))]
 
   describe "String Properties" $ do
     it "concatenation is associative" $ do
       property $ \(a :: String) (b :: String) (c :: String) ->
         let e1 = Concat (Concat (StrLit a) (StrLit b)) (StrLit c)
             e2 = Concat (StrLit a) (Concat (StrLit b) (StrLit c))
-        in evalPure e1 == evalPure e2
+        in conjoin [evalPure e1 === Right (VStr (a++b++c)),
+                    evalPure e2 === Right (VStr (a++b++c))]
   describe "Boolean Logic Properties" $ do
     it "boolean logic follows De Morgan's laws" $ do
       property $ \p q ->
         let notPAndNotQ = And (Not (BoolLit p)) (Not (BoolLit q))
             notPOrQ = Not (Or (BoolLit p) (BoolLit q))
         in case (evalPure notPAndNotQ, evalPure notPOrQ) of
-             (Right v1, Right v2) -> v1 == v2
+             (Right v1, Right v2) -> v1 == VBool (not (p || q)) && v2 == VBool (not (p || q))
              _ -> False
     
     it "AND is commutative" $ do
@@ -231,7 +234,7 @@ spec = describe "Property-Based Testing" $ do
         let expr1 = And (BoolLit p) (BoolLit q)
             expr2 = And (BoolLit q) (BoolLit p)
         in case (evalPure expr1, evalPure expr2) of
-             (Right v1, Right v2) -> v1 == v2
+             (Right v1, Right v2) -> v1 == VBool (p && q) && v2 == VBool (p && q)
              _ -> False
     
     it "double negation elimination" $ do
@@ -322,26 +325,52 @@ spec = describe "Property-Based Testing" $ do
       valueHasType expected (VData "Wrap" [VInt 1,VBool True]) `shouldBe` False
 
   describe "Error Handling Properties" $ do
-    it "type errors are consistent" $ do
-      property $ forAll (resize 2 arbitrary) $ \(ValidExpr expr) ->
-        case typeCheck expr of
-          Left err1 -> case typeCheck expr of
-            Left err2 -> err1 == err2
-          Right _ -> True
-    
-    it "evaluation errors are deterministic" $ do
-      property $ forAll (resize 2 arbitrary) $ \(ValidExpr expr) ->
-        let result1 = evalPure expr
-            result2 = evalPure expr
-        in case (result1, result2) of
-             (Left err1, Left err2) -> err1 == err2  -- Errors should be identical
-             (Right val1, Right val2) -> comparableValues val1 val2 -- Values should be identical if comparable
-             _ -> False  -- Different result types shouldn't happen
-      where
-        -- Check if two values can be meaningfully compared for equality
-        comparableValues (VFun {}) (VFun {}) = True  -- Functions are deterministic but not comparable
-        comparableValues (VRef _) (VRef _) = True        -- References are deterministic but not comparable
-        comparableValues v1 v2 = v1 == v2                -- Everything else should be equal
+    it "reports specific errors for generated ill-typed expressions" $ property $
+      forAll genKaiInt $ \n flag -> forAll (elements
+        [(Add (IntLit n) (BoolLit flag), UnificationError TBool TInt),
+         (If (IntLit n) (BoolLit flag) (BoolLit (not flag)), UnificationError TInt TBool),
+         (If (BoolLit flag) (IntLit n) (BoolLit flag), UnificationError TInt TBool),
+         (Var ("missing" ++ show (abs (toInteger n))), UnboundVariable ("missing" ++ show (abs (toInteger n))))]) $
+          \(expr, expected) -> typeCheck expr === Left expected
+
+    it "preserves specific runtime errors in pure and IO evaluation" $ property $
+      forAll genKaiInt $ \n -> forAll (elements
+        [(Div (IntLit n) (IntLit 0), E.DivByZero),
+         (Add (IntLit (fromInteger kaiIntMax)) (IntLit 1), E.IntegerOverflow),
+         (Sub (IntLit (fromInteger kaiIntMin)) (IntLit 1), E.IntegerOverflow),
+         (Var ("missing" ++ show (toInteger n)), E.UnboundVariable ("missing" ++ show (toInteger n))),
+         (RecordAccess (RecordLit [("present",IntLit n)]) "missing", E.RecordFieldNotFound "missing")]) $
+          \(expr, expected) -> ioProperty $ do
+            actual <- E.eval expr
+            pure $ conjoin [evalPure expr === Left expected, actual === Left expected]
+
+  describe "Type preservation oracle" $ do
+    it "checks scalar types and signed 32-bit integer bounds" $ do
+      valueHasType TInt (VInt 42) `shouldBe` True
+      valueHasType TInt (VBool True) `shouldBe` False
+      valueHasType TInt (VInt (fromInteger (kaiIntMax+1))) `shouldBe` False
+      valueHasType TInt (VInt (fromInteger (kaiIntMin-1))) `shouldBe` False
+    it "checks every tuple element and its arity" $ do
+      let check = valueHasType (TTuple [TInt,TBool])
+      check (VTuple [VInt 1,VBool True]) `shouldBe` True
+      map (check . VTuple) [[VInt 1], [VInt 1,VInt 2], [VInt 1,VBool True,VUnit]]
+        `shouldBe` replicate 3 False
+    it "checks record keys and field types" $ do
+      let check = valueHasType (TRecord (Map.singleton "x" TInt)) . VRecord . Map.fromList
+      check [("x",VInt 1)] `shouldBe` True
+      map check [[], [("y",VInt 1)], [("x",VBool True)], [("x",VInt 1),("y",VInt 2)]]
+        `shouldBe` replicate 4 False
+    it "checks contained values but accepts absent polymorphic payloads" $ do
+      valueHasType (TList TInt) (VList [VInt 1,VBool True]) `shouldBe` False
+      valueHasType (TMaybe TInt) (VJust (VBool True)) `shouldBe` False
+      valueHasType (TEither TInt TBool) (VLeft (VBool True)) `shouldBe` False
+      valueHasType (TEither TInt TBool) (VRight (VInt 1)) `shouldBe` False
+      valueHasType (TList (TVar "a")) (VList []) `shouldBe` True
+      valueHasType (TMaybe (TVar "a")) VNothing `shouldBe` True
+    it "does not claim to prove unresolved or callable value types" $ do
+      valueHasType (TVar "a") (VInt 42) `shouldBe` False
+      valueHasType (TFun TInt TInt) (VFun "x" (BoolLit True) Map.empty) `shouldBe` False
+      valueHasType (TFun TInt TInt) (VConstructor "Unknown" 1 []) `shouldBe` False
 
 -- Constructor schemas include the declared result and payload types. An
 -- unregistered constructor cannot establish preservation for a custom type.
@@ -351,12 +380,10 @@ valueHasType = valueHasTypeWith Map.empty
 valueHasTypeWith :: Map.Map String (Type, [Type]) -> Type -> Value -> Bool
 valueHasTypeWith constructors = matches
   where
-    matches TInt (VInt _) = True
+    matches TInt (VInt n) = toInteger n >= kaiIntMin && toInteger n <= kaiIntMax
     matches TBool (VBool _) = True
     matches TString (VStr _) = True
     matches TUnit VUnit = True
-    matches (TFun _ _) VFun {} = True
-    matches (TFun _ _) VConstructor {} = True
     matches (TMaybe _) VNothing = True
     matches (TMaybe ty) (VJust value) = matches ty value
     matches (TEither leftTy _) (VLeft value) = matches leftTy value
@@ -373,12 +400,7 @@ valueHasTypeWith constructors = matches
         Left _ -> False
         Right subst -> length payload == length values &&
           and (zipWith matches (map (applySubst subst) payload) values)
-    matches (TVar _) _ = True
     matches _ _ = False
-
--- Helper function to normalize expressions for comparison
-normalizeExpr :: Expr -> Expr
-normalizeExpr = id  -- For now, no normalization needed
 
 prettyExpr :: Expr -> String
 prettyExpr (IntLit n) = show n

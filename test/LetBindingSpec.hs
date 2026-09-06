@@ -136,9 +136,7 @@ spec = do
       it "catches type errors in let bindings" $ do
         let expr = "let x = 42 in let y = true in x + y"
         case parseExpr expr of
-          Right ast -> case typeCheck ast of
-            Left _ -> return ()
-            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
+          Right ast -> typeCheck ast `shouldBe` Left (UnificationError TBool TInt)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Complex Expressions" $ do
@@ -192,13 +190,12 @@ spec = do
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Edge Cases and Stress Tests" $ do
-      it "handles extremely nested expressions without stack overflow" $ do
-        let expr = foldr (\i acc -> "let x" ++ show i ++ " = " ++ show i ++ " in " ++ acc) "x1 + x2 + x3 + x4 + x5" [1..50]
+      it "handles 50 nested let bindings without stack overflow" $ do
+        let total = foldr1 (\a b -> a ++ " + " ++ b) ["x" ++ show i | i <- [1..50 :: Int]]
+            expr = foldr (\i acc -> "let x" ++ show i ++ " = " ++ show i ++ " in " ++ acc)
+              ("(x1 + x2 + x3 + x4 + x5, " ++ total ++ ")") [1..50 :: Int]
         case parseExpr expr of
-          Right ast -> case evalPure ast of
-            Right (VInt n) -> n `shouldBe` 15
-            Left err -> expectationFailure $ "Evaluation error: " ++ show err
-            Right other -> expectationFailure $ "Expected VInt, got: " ++ show other
+          Right ast -> evalPure ast `shouldBe` Right (VTuple [VInt 15, VInt 1275])
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "handles complex function composition chains" $ do
@@ -235,7 +232,5 @@ spec = do
       it "handles type errors in let bindings gracefully" $ do
         let expr = "let x = true in let y = 5 in x + y"
         case parseExpr expr of
-          Right ast -> case typeCheck ast of
-            Left _ -> return ()
-            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
+          Right ast -> typeCheck ast `shouldBe` Left (UnificationError TBool TInt)
           Left err -> expectationFailure $ "Parse error: " ++ show err

@@ -1,6 +1,7 @@
 module ProgramSpec where
 
 import Test.Hspec
+import TestIO (captureOutput)
 import Test.QuickCheck
 
 import Parser
@@ -71,9 +72,7 @@ spec = do
       it "catches type errors in definitions" $ do
         let program = "let x = true\nlet y = 5\nx + y"
         case parseProgram program of
-          Right ast -> case typeCheckProgram ast of
-            Left _ -> return ()
-            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
+          Right ast -> typeCheckProgram ast `shouldBe` Left (UnificationError TBool TInt)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Recursive Definitions" $ do
@@ -98,9 +97,9 @@ spec = do
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "handles recursive functions with conversions" $ do
-        let program = "letrec testParse = \\s -> case parseInt s of Just n -> n | Nothing -> testParse \"0\"\ntestParse \"42\""
+        let program = "letrec testParse = \\s -> case parseInt s of Just n -> n | Nothing -> testParse \"0\"\n(testParse \"42\", testParse \"invalid\")"
         case parseProgram program of
-          Right ast -> evalProgram ast `shouldReturn` Right (VInt 42)
+          Right ast -> evalProgram ast `shouldReturn` Right (VTuple [VInt 42, VInt 0])
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "handles recursive functions with string operations" $ do
@@ -132,9 +131,9 @@ spec = do
 
     describe "Complex Programs" $ do
       it "handles program with data structures" $ do
-        let program = "let nums = [1, 2, 3, 4, 5]\nlet doubled = map (\\x -> x * 2) nums\nlength doubled"
+        let program = "let nums = [1, 2, 3, 4, 5]\nlet doubled = map (\\x -> x * 2) nums\n(length doubled, doubled)"
         case parseProgram program of
-          Right ast -> evalProgram ast `shouldReturn` Right (VInt 5)
+          Right ast -> evalProgram ast `shouldReturn` Right (VTuple [VInt 5, VList [VInt 2, VInt 4, VInt 6, VInt 8, VInt 10]])
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "handles program with string operations" $ do
@@ -188,7 +187,7 @@ spec = do
       it "ignores a shebang line when parsing a program file" $ do
         let program = "#!/usr/bin/env kai\nprint \"hello\""
         case parseProgram program of
-          Right ast -> evalProgram ast `shouldReturn` Right VUnit
+          Right ast -> captureOutput (evalProgram ast) `shouldReturn` (Right VUnit, "hello\n")
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Error Cases" $ do
@@ -207,9 +206,7 @@ spec = do
       it "handles type mismatches in definitions" $ do
         let program = "let x : Bool = 42\nx"
         case parseProgram program of
-          Right ast -> case typeCheckProgram ast of
-            Left _ -> return ()
-            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
+          Right ast -> typeCheckProgram ast `shouldBe` Left (UnificationError TInt TBool)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "reports missing record fields in top-level programs" $ do
@@ -260,11 +257,11 @@ spec = do
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "works with wildcard top-level definitions feeding a final case expression" $ do
-        let program = "let _ = case Just 42 of _ -> \"matched\" | Nothing -> \"none\"\nlet _ = case (1, \"hello\") of _ -> \"tuple\"\ncase Nothing of _ -> \"done\" | Just x -> \"bad\""
+        let program = "let _ = print (case Just 42 of _ -> \"matched\" | Nothing -> \"none\")\nlet _ = print (case (1, \"hello\") of _ -> \"tuple\")\ncase Nothing of _ -> \"done\" | Just x -> \"bad\""
         case parseProgram program of
           Right ast -> do
             typeCheckProgram ast `shouldBe` Right TString
-            evalProgram ast `shouldReturn` Right (VStr "done")
+            captureOutput (evalProgram ast) `shouldReturn` (Right (VStr "done"), "matched\ntuple\n")
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "supports multiline do blocks in top-level definitions" $ do
@@ -272,13 +269,13 @@ spec = do
         case parseProgram program of
           Right ast -> do
             typeCheckProgram ast `shouldBe` Right TInt
-            evalProgram ast `shouldReturn` Right (VInt 42)
+            captureOutput (evalProgram ast) `shouldReturn` (Right (VInt 42), "start\n")
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "supports comments inside multiline do blocks" $ do
         let program = "let result = do {\n  // keep this comment inside the block\n  print \"start\";\n  42\n}\nresult"
         case parseProgram program of
-          Right ast -> evalProgram ast `shouldReturn` Right (VInt 42)
+          Right ast -> captureOutput (evalProgram ast) `shouldReturn` (Right (VInt 42), "start\n")
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "supports multiline top-level helper definitions that continue after =" $ do
@@ -336,7 +333,7 @@ spec = do
           Right ast -> evalProgram ast `shouldReturn` Right (VBool True)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
-      it "handles mutually recursive functions with different types" $ do
+      it "handles mutually recursive functions with string results" $ do
         let program = "letrec countDown = \\n -> if n == 0 then \"done\" else countUp (n - 1)\nletrec countUp = \\n -> if n == 0 then \"done\" else countDown (n - 1)\ncountDown 3"
         case parseProgram program of
           Right ast -> evalProgram ast `shouldReturn` Right (VStr "done")
@@ -348,17 +345,27 @@ spec = do
           Right ast -> evalProgram ast `shouldReturn` Right (VInt 0)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
-      it "mutual recursion executes correctly (implies type checking works)" $ do
+      it "type checks and executes mutual recursion" $ do
         let program = "letrec isEven = \\n -> if n == 0 then true else isOdd (n - 1)\nletrec isOdd = \\n -> if n == 0 then false else isEven (n - 1)\nisEven 4"
         case parseProgram program of
-          Right ast -> evalProgram ast `shouldReturn` Right (VBool True)
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right TBool
+            evalProgram ast `shouldReturn` Right (VBool True)
+          Left err -> expectationFailure $ "Parse error: " ++ show err
+
+      it "handles mutually recursive functions with different parameter types" $ do
+        let program = "letrec fromInt = \\n -> if n == 0 then \"zero\" else fromBool (n == 1)\nletrec fromBool = \\done -> if done then \"done\" else fromInt 1\n(fromInt 3, fromInt 0, fromBool true)"
+        case parseProgram program of
+          Right ast -> do
+            typeCheckProgram ast `shouldBe` Right (TTuple [TString, TString, TString])
+            evalProgram ast `shouldReturn` Right (VTuple [VStr "done", VStr "zero", VStr "done"])
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Top-Level Definitions with I/O" $ do
       it "handles top-level definitions that use print" $ do
         let program = "let _ = print \"Hello\"\nlet _ = print \"World\"\n42"
         case parseProgram program of
-          Right ast -> evalProgram ast `shouldReturn` Right (VInt 42)
+          Right ast -> captureOutput (evalProgram ast) `shouldReturn` (Right (VInt 42), "Hello\nWorld\n")
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
     describe "Additional Error Cases" $ do
@@ -371,9 +378,7 @@ spec = do
       it "reports mutual recursion type errors without crashing" $ do
         let program = "letrec f = \\n -> if n == 0 then 0 else g true\nletrec g = \\x -> x + 1\nf 1"
         case parseProgram program of
-          Right ast -> case typeCheckProgram ast of
-            Left _ -> return ()
-            Right ty -> expectationFailure $ "Expected type error, but got type: " ++ show ty
+          Right ast -> typeCheckProgram ast `shouldBe` Left (UnificationError TInt TBool)
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "evaluates successive top-level expressions and returns the last" $ do

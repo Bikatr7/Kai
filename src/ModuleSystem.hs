@@ -1,5 +1,6 @@
 module ModuleSystem (
     loadModule,
+    filterByExports,
     resolveModulePath,
     ModuleInfo(..),
     loadModuleTypeEnvIO,
@@ -27,22 +28,22 @@ data ModuleInfo = ModuleInfo
     } deriving (Show)
 
 resolveModulePath :: FilePath -> String -> IO (Either String FilePath)
-resolveModulePath currentDir moduleName = do
-    let baseName = moduleName ++ ".kai"
+resolveModulePath currentDir name = do
+    let baseName = name ++ ".kai"
     let paths =
             [ currentDir </> baseName
-            , currentDir </> moduleName </> baseName
+            , currentDir </> name </> baseName
             , currentDir </> "examples" </> baseName
-            , currentDir </> "examples" </> moduleName </> baseName
+            , currentDir </> "examples" </> name </> baseName
             ]
-    foldM tryPath (Left $ "Module not found: " ++ moduleName) paths
+    foldM tryPath (Left $ "Module not found: " ++ name) paths
   where
     tryPath (Right found) _ = return $ Right found
     tryPath _ path = do
         exists <- doesFileExist path
         if exists
             then return $ Right path
-            else return $ Left $ "Module not found: " ++ moduleName
+            else return $ Left $ "Module not found: " ++ name
 
 loadModule :: (Env -> Expr -> IO (Either RuntimeError Value)) -> FilePath -> String -> [String] -> IO (Either String ModuleInfo)
 loadModule evaluate currentDir name stack

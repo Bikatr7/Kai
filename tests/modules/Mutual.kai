@@ -1,3 +1,4 @@
-// expect: ()
+// expect: (true, false, true, false, false, true, false, true)
 letrec isEven = \n -> if n == 0 then true else isOdd (n - 1)
 letrec isOdd = \n -> if n == 0 then false else isEven (n - 1)
+(isEven 0, isEven 1, isEven 4, isEven 7, isOdd 0, isOdd 1, isOdd 4, isOdd 7)

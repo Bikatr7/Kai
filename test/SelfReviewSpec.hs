@@ -11,6 +11,7 @@ import Parser (parseExpr, parseProgram)
 import qualified TypeChecker as T
 import TestIO (captureOutput, withStdin)
 import ExampleSpec (withTempDir)
+import AuditRegressionSpec (loadedOutput)
 
 spec :: Spec
 spec = describe "Self-review regression tests" $ do
@@ -67,40 +68,42 @@ spec = describe "Self-review regression tests" $ do
       it ("accepts parameter renaming across modules through " ++ mode) $
         modules mode "data Box a = Box a\nlet first = Box 1\nexport first\n"
                      "data Box b = Box b\nlet second = Box true\nexport second\n"
-                     "import A\nimport B\nprint (first,second)" $ \code out -> do
+                     "import A\nimport B\nprint (first,second)" $ \path code out -> do
           code `shouldBe` ExitSuccess
-          out `shouldContain` "(Box(1), Box(True))"
-          out `shouldNotContain` "error:"
+          out `shouldBe` loadedOutput mode path "(Box(1), Box(True))\n" "()"
       it ("rejects reordered payload types through " ++ mode) $
         modules mode "data Pair a b = Pair a b\nlet first = Pair 1 true\nexport first\n"
                      "data Pair x y = Pair y x\nlet second = Pair 1 true\nexport second\n"
-                     "import A\nimport B\nprint first" $ \_ out ->
+                     "import A\nimport B\nprint first" $ \_ code out -> do
+          code `shouldBe` if mode == "repl" then ExitSuccess else ExitFailure 1
           out `shouldContain` "Conflicting imported type: Pair"
       it ("rejects reuse of a hidden constructor name through " ++ mode) $
         modules mode privateModule ""
-                     "import A\ndata U = Mk Bool\nprint (Mk true)" $ \_ out ->
+                     "import A\ndata U = Mk Bool\nprint (Mk true)" $ \_ code out -> do
+          code `shouldBe` if mode == "repl" then ExitSuccess else ExitFailure 1
           out `shouldContain` "Duplicate constructor: Mk"
       forM_ ["let Mk = \\x -> x", "let Mk = \\x -> old", "letrec Mk = \\x -> old"] $ \binding ->
         it ("keeps a hidden constructor private after " ++ binding ++ " through " ++ mode) $
           modules mode privateModule ""
-                  ("import A\n" ++ binding ++ "\nprint (case old of Mk x -> x)") $ \_ out ->
+                  ("import A\n" ++ binding ++ "\nprint (case old of Mk x -> x)") $ \_ code out -> do
+            code `shouldBe` if mode == "repl" then ExitSuccess else ExitFailure 1
             out `shouldContain` "Type error: UnboundVariable \"Mk\""
       it ("keeps a constructor private across re-exports through " ++ mode) $
         modules mode "data T = Mk Int\nlet old = Mk 1\nexport Mk,old\n"
                      "import A\nexport old\n"
-                     "import B\nlet Mk = \\x -> old\nprint (case old of Mk x -> x)" $ \_ out ->
+                     "import B\nlet Mk = \\x -> old\nprint (case old of Mk x -> x)" $ \_ code out -> do
+          code `shouldBe` if mode == "repl" then ExitSuccess else ExitFailure 1
           out `shouldContain` "Type error: UnboundVariable \"Mk\""
       it ("allows public constructor patterns after a second private import through " ++ mode) $
         modules mode "data T = Mk Int\nlet old = Mk 1\nexport Mk,old\n"
                      "import A\nexport old\n"
-                     "import A\nimport B\nprint (case old of Mk x -> x)" $ \code out -> do
+                     "import A\nimport B\nprint (case old of Mk x -> x)" $ \path code out -> do
           code `shouldBe` ExitSuccess
-          out `shouldContain` "1\n"
-          out `shouldNotContain` "error:"
+          out `shouldBe` loadedOutput mode path "1\n" "()"
     it "distinguishes constructor owners even when their payloads match" $
       modules "direct" "data T = Mk Int\nlet old = Mk 1\nexport old\n"
                        "data U = Mk Int\nlet new = Mk 2\nexport new\n"
-                       "import A\nimport B\nprint old" $ \code out -> do
+                       "import A\nimport B\nprint old" $ \_ code out -> do
         code `shouldBe` ExitFailure 1
         out `shouldContain` "Conflicting imported constructor: Mk"
 
@@ -136,4 +139,4 @@ modules mode first second mainSource assertion = withTempDir $ \dir -> do
   (code,out) <- captureOutput $ case mode of
     "repl" -> withStdin (":load " ++ mainFile ++ "\n:quit\n") $ runCLI ["repl"]
     _ -> runCLI [mainFile]
-  assertion code out
+  assertion mainFile code out

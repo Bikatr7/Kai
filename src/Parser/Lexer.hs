@@ -4,7 +4,6 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Data.Void
-import Data.Char (isAlphaNum)
 
 type Parser = Parsec Void String
 

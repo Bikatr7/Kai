@@ -48,7 +48,7 @@ syntaxTypeAtom = choice
 
     recordTypeField = do
       name <- identifier
-      symbol ":"
+      _ <- symbol ":"
       ty <- syntaxType
       return (name, ty)
 

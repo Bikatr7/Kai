@@ -20,10 +20,11 @@ import Text.Megaparsec (ParseError(..), ParseErrorBundle(..))
 import Text.Megaparsec.Error (ErrorItem(..))
 
 import DataDeclarations (constructorScheme, registerDataDeclaration, mergeTypeEnvironments, dataConstructorsValueEnv)
-import Evaluator (Env, RuntimeError(..), Value(..), evalWithEnv)
+import Evaluator (Env, RuntimeError(..), evalWithEnv)
 import Evaluator.Helpers (showValue)
-import ModuleSystem (ModuleInfo(..), loadModule, loadModuleTypeEnvIO)
+import ModuleSystem (filterByExports, ModuleInfo(..), loadModule, loadModuleTypeEnvIO)
 import Parser (parseExpr, parseProgram)
+import Evaluator.IOOps (cliArgsEnv)
 import Syntax
 import TypeChecker (Type(..), TypeEnv, typeCheckWithEnv, inferProgramWithEnvIO, inferDefinitionType, inferRecursiveDefinitions)
 import TypeChecker.Types (schemeType)
@@ -81,14 +82,6 @@ baseState currentDir scriptArgs =
     , replLoadedFile = Nothing
     , replArgs = scriptArgs
     }
-
-cliArgsEnv :: [String] -> Env
-cliArgsEnv scriptArgs =
-  let argValues = VList (map VStr scriptArgs)
-  in Map.fromList
-       [ ("__args__", argValues)
-       , ("args", argValues)
-       ]
 
 readReplInput :: IO (Maybe ReplInput)
 readReplInput = do
@@ -215,12 +208,12 @@ processTopLevels debug announce state (TLExpr expr : rest) = do
         Right value -> do
           when (null rest) $ putStrLn $ showValue value
           processTopLevels debug announce state rest
-processTopLevels debug announce state (TLImport moduleName : rest) = do
-  typeEnvResult <- loadModuleTypeEnvIO (replCurrentDir state) moduleName
+processTopLevels debug announce state (TLImport importedName : rest) = do
+  typeEnvResult <- loadModuleTypeEnvIO (replCurrentDir state) importedName
   case typeEnvResult >>= (`mergeTypeEnvironments` replTypeEnv state) of
     Left err -> return $ Left $ "Type error: " ++ show err
     Right importedTypeEnv -> do
-      moduleResult <- loadModule evalWithEnv (replCurrentDir state) moduleName []
+      moduleResult <- loadModule evalWithEnv (replCurrentDir state) importedName []
       case moduleResult of
         Left err -> return $ Left $ "Runtime error: " ++ err
         Right moduleInfo -> do
@@ -230,7 +223,7 @@ processTopLevels debug announce state (TLImport moduleName : rest) = do
                   { replEnv = Map.union importedEnv (replEnv state)
                   , replTypeEnv = importedTypeEnv
                   }
-          when announce $ putStrLn $ "imported " ++ moduleName
+          when announce $ putStrLn $ "imported " ++ importedName
           processTopLevels debug announce newState rest
 processTopLevels debug announce state (TLData typeName typeVars constructors : rest) =
   case registerDataDeclaration (replTypeEnv state) typeName typeVars constructors of
@@ -277,10 +270,6 @@ processTopLevels debug announce state (TLDef var maybeType expr : rest) =
                   then replEnv state
                   else Map.insert var value (replEnv state)
           processTopLevels debug announce state { replEnv = newEnv, replTypeEnv = newTypeEnv } rest
-
-filterByExports :: Map.Map String a -> [String] -> Map.Map String a
-filterByExports env [] = env
-filterByExports env exports = Map.filterWithKey (\name _ -> name `elem` exports) env
 
 renderConstructorBinding :: String -> [String] -> DataConstructor -> String
 renderConstructorBinding typeName typeVars constructorDecl@(DataConstructor constructorName _) =

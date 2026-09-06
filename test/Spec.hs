@@ -1,6 +1,9 @@
 module Main where
 
 import Test.Hspec
+import TestReport (runReportedSpec)
+import qualified TestReportSpec
+import qualified TestSupportSpec
 
 import qualified SelfReviewSpec
 import qualified RunnerSpec
@@ -16,6 +19,8 @@ import qualified ConditionalSpec
 import qualified CLISpec
 import qualified EdgeCaseSpec
 import qualified ExampleSpec
+import qualified ExampleAssertionsSpec
+import qualified EvaluatorConsistencySpec
 import qualified IntegerOverflowSpec
 import qualified InputSpec
 import qualified LambdaSpec
@@ -44,7 +49,9 @@ import qualified ModuleSpec
 import qualified ReplSpec
 
 main :: IO ()
-main = hspec $ do
+main = runReportedSpec $ do
+  TestReportSpec.spec
+  TestSupportSpec.spec
   RunnerSpec.spec
   DocumentationSpec.spec
   SourceDistributionSpec.spec
@@ -59,6 +66,8 @@ main = hspec $ do
   CLISpec.spec
   EdgeCaseSpec.spec
   ExampleSpec.spec
+  ExampleAssertionsSpec.spec
+  EvaluatorConsistencySpec.spec
   IntegerOverflowSpec.spec
   InputSpec.spec
   LambdaSpec.spec

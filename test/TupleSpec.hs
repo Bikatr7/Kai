@@ -134,9 +134,9 @@ spec = do
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "matches with mixed types" $ do
-        let expr = "case (42, \"hello\") of (n, s) -> n"
+        let expr = "case (42, \"hello\") of (n, s) -> (n, s ++ \"!\")"
         case parseExpr expr of
-          Right ast -> evalPure ast `shouldBe` Right (VInt 42)
+          Right ast -> evalPure ast `shouldBe` Right (VTuple [VInt 42, VStr "hello!"])
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "uses wildcard in tuple pattern" $ do
@@ -166,9 +166,9 @@ spec = do
 
     describe "Tuples with Functions" $ do
       it "stores functions in tuples" $ do
-        let expr = "let pair = (\\x -> x + 1, \\x -> x * 2) in (fst pair) 10"
+        let expr = "let pair = (\\x -> x + 1, \\x -> x * 2) in ((fst pair) 10, (snd pair) 10)"
         case parseExpr expr of
-          Right ast -> evalPure ast `shouldBe` Right (VInt 11)
+          Right ast -> evalPure ast `shouldBe` Right (VTuple [VInt 11, VInt 20])
           Left err -> expectationFailure $ "Parse error: " ++ show err
 
       it "returns tuple from function" $ do

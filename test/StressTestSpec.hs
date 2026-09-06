@@ -6,6 +6,8 @@ import Syntax
 import Parser
 import TypeChecker
 import Evaluator
+import qualified TestSupport
+import System.Timeout (timeout)
 
 -- Helper function to chain parse -> typecheck -> eval
 parseTypeCheckEval :: String -> Either String Value
@@ -26,7 +28,7 @@ parseTypeCheck input = case parseExpr input of
     Right ty -> Right ty
 
 spec :: Spec
-spec = describe "Stress Tests" $ do
+spec = around_ withinStressTimeout $ describe "Stress Tests" $ do
   
   describe "Deep Nesting Stress Tests" $ do
     it "handles deeply nested arithmetic through parse, type check, and evaluation (1000 levels)" $ do
@@ -39,7 +41,7 @@ spec = describe "Stress Tests" $ do
     it "handles deeply nested boolean logic (50 levels)" $ do  
       let deepBool = buildDeepBoolean 50
       case parseTypeCheckEval deepBool of
-        Right (VBool _) -> True `shouldBe` True
+        Right (VBool result) -> result `shouldBe` True
         Left err -> expectationFailure $ "Deep boolean should work: " ++ err  
         Right _ -> expectationFailure "Should return VBool"
     
@@ -52,9 +54,8 @@ spec = describe "Stress Tests" $ do
     
     it "handles deeply nested lambda inference (1000 levels)" $ do
       let deepLambda = buildDeepLambda 1000
-      case parseTypeCheck deepLambda of
-        Right _ -> True `shouldBe` True
-        Left err -> expectationFailure $ "Deep lambda should type-check: " ++ err
+          parameters = map (TVar . show) [1..1000 :: Int]
+      TestSupport.shouldInfer deepLambda (foldr TFun (last parameters) parameters)
     
     it "handles deeply nested conditional expressions (25 levels)" $ do
       let deepIf = buildDeepConditional 25
@@ -66,14 +67,12 @@ spec = describe "Stress Tests" $ do
   describe "Complex Expression Stress Tests" $ do
     it "handles expression with many variables" $ do
       let manyVars = buildManyVariables 15
-      case parseTypeCheck manyVars of
-        Right _ -> True `shouldBe` True  
-        Left err -> expectationFailure $ "Many variables should type-check: " ++ err
+      parseTypeCheck manyVars `shouldBe` Right (foldr TFun TInt (replicate 15 TInt))
     
     it "handles large arithmetic expressions" $ do
       let largeExpr = buildLargeArithmetic 50
       case parseTypeCheckEval largeExpr of
-        Right (VInt _) -> True `shouldBe` True
+        Right (VInt result) -> result `shouldBe` 1275
         Left err -> expectationFailure $ "Large arithmetic should work: " ++ err
         Right _ -> expectationFailure "Should return VInt"
     
@@ -87,15 +86,11 @@ spec = describe "Stress Tests" $ do
   describe "Memory and Performance Stress Tests" $ do
     it "doesn't stack overflow on deep right-associative operations" $ do
       let rightAssoc = buildRightAssociative 1000
-      case parseExpr rightAssoc of
-        Right _ -> True `shouldBe` True
-        Left _ -> expectationFailure "Should parse deeply right-associative expression"
+      parseTypeCheckEval rightAssoc `shouldBe` Right (VInt 1001)
     
     it "doesn't stack overflow on deep left-associative operations" $ do  
       let leftAssoc = buildLeftAssociative 1000
-      case parseExpr leftAssoc of
-        Right _ -> True `shouldBe` True
-        Left _ -> expectationFailure "Should parse deeply left-associative expression"
+      parseTypeCheckEval leftAssoc `shouldBe` Right (VInt 500500)
     
     it "handles very wide expressions (many siblings)" $ do
       let wideExpr = buildWideExpression 100
@@ -107,15 +102,13 @@ spec = describe "Stress Tests" $ do
   describe "Type System Stress Tests" $ do
     it "handles many type variables in complex inference" $ do
       let manyTypeVars = buildManyTypeVariables 20
-      case parseTypeCheck manyTypeVars of
-        Right _ -> True `shouldBe` True
-        Left err -> expectationFailure $ "Many type variables should infer: " ++ err
+          result = TVar "result"
+          parameters = map (TVar . show) [1..20 :: Int]
+      TestSupport.shouldInfer manyTypeVars (foldr TFun (TFun (TFun TInt result) result) parameters)
     
     it "handles complex unification scenarios" $ do
       let complexUnify = buildComplexUnification 15
-      case parseTypeCheck complexUnify of
-        Right _ -> True `shouldBe` True
-        Left err -> expectationFailure $ "Complex unification should work: " ++ err
+      parseTypeCheck complexUnify `shouldBe` Right (TFun (TFun TInt TInt) TInt)
 
   describe "Real-World-Like Expressions" $ do
     it "handles mathematical expression with precedence" $ do
@@ -138,6 +131,8 @@ spec = describe "Stress Tests" $ do
         Right (TFun TInt (TFun TInt TInt)) -> True `shouldBe` True
         Right ty -> expectationFailure $ "Expected TInt -> TInt -> TInt, got: " ++ show ty
         Left err -> expectationFailure $ "Realistic function should type-check: " ++ err
+      parseTypeCheckEval ("(" ++ realFunc ++ ") 5 3") `shouldBe` Right (VInt 16)
+      parseTypeCheckEval ("(" ++ realFunc ++ ") 2 5") `shouldBe` Right (VInt 12)
 
 -- Helper functions to build stress test expressions
 
@@ -154,10 +149,7 @@ buildDeepApplication 0 = "42"
 buildDeepApplication n = "(\\x -> x) (" ++ buildDeepApplication (n - 1) ++ ")"
 
 buildDeepLambda :: Int -> String
-buildDeepLambda n = buildLambda n ++ " " ++ unwords (replicate n "0")
-  where
-    buildLambda 0 = "\\x -> x"
-    buildLambda i = "\\x" ++ show i ++ " -> " ++ buildLambda (i - 1)
+buildDeepLambda n = foldr (\i body -> "\\x" ++ show i ++ " -> " ++ body) ("x" ++ show n) [1..n]
 
 buildDeepConditional :: Int -> String
 buildDeepConditional 0 = "42"
@@ -192,12 +184,7 @@ buildLeftAssociative :: Int -> String
 buildLeftAssociative n = foldl (\acc i -> "(" ++ acc ++ " + " ++ show i ++ ")") "1" [2..n]
 
 buildWideExpression :: Int -> String
-buildWideExpression n = intercalate " + " (map show [1..n])
-  where
-    intercalate :: String -> [String] -> String
-    intercalate _ [] = ""
-    intercalate _ [x] = x
-    intercalate sep (x:xs) = x ++ sep ++ intercalate sep xs
+buildWideExpression n = "foldl (\\total -> \\value -> total + value) 0 " ++ show [1..n]
 
 buildManyTypeVariables :: Int -> String
 buildManyTypeVariables n = buildNested n ++ " " ++ show n
@@ -210,3 +197,10 @@ buildComplexUnification n = "\\f -> " ++ buildApps n
   where
     buildApps 0 = "f 42"
     buildApps i = "f (" ++ buildApps (i - 1) ++ ")"
+
+withinStressTimeout :: IO () -> IO ()
+withinStressTimeout action = do
+  result <- timeout 30000000 action
+  case result of
+    Just () -> pure ()
+    Nothing -> expectationFailure "Stress test did not complete within 30 seconds"

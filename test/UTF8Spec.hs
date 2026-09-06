@@ -17,6 +17,7 @@ import Evaluator (Value(..), RuntimeError(..), evalWithEnv)
 import ExampleSpec (withTempDir)
 import Syntax
 import TestIO (captureOutput, withStdin)
+import ReplSpec (replTranscript)
 
 sample :: String
 sample = "é雪🚀"
@@ -45,7 +46,7 @@ spec = describe "UTF-8 files" $ around_ withLatin1 $ do
     BS.writeFile path (ascii "// expect: 3\nstrLength \"" <> sampleBytes <> ascii "\"\n")
     (code, output) <- captureOutput $ runCLI ["--check",path]
     code `shouldBe` ExitSuccess
-    output `shouldContain` "Script checks passed\n"
+    output `shouldBe` "Script checks passed\n"
 
   it "reads empty source files" $ withTempDir $ \dir -> do
     let path = dir </> "empty.kai"
@@ -76,7 +77,7 @@ spec = describe "UTF-8 files" $ around_ withLatin1 $ do
     BS.writeFile path (ascii "// expect: 3\nstrLength \"" <> sampleBytes <> ascii "\"\n")
     (code, output) <- captureOutput $ runCLI ["--check",path]
     code `shouldBe` ExitSuccess
-    output `shouldContain` "Script checks passed\n"
+    output `shouldBe` "Script checks passed\n"
 
   it "decodes imported modules as UTF-8" $ withTempDir $ \dir -> do
     let mainPath = dir </> "main.kai"
@@ -85,15 +86,14 @@ spec = describe "UTF-8 files" $ around_ withLatin1 $ do
     BS.writeFile mainPath (ascii "// expect: 3\nimport Unicode\ncount\n")
     (code, output) <- captureOutput $ runCLI ["--check",mainPath]
     code `shouldBe` ExitSuccess
-    output `shouldContain` "Script checks passed\n"
+    output `shouldBe` "Script checks passed\n"
 
   it "decodes REPL loads as UTF-8" $ withTempDir $ \dir -> do
     let path = dir </> "repl.kai"
     BS.writeFile path (ascii "// expect: 3\nstrLength \"" <> sampleBytes <> ascii "\"\n")
     (code, output) <- captureOutput $ withStdin (":load " ++ path ++ "\n:quit\n") $ runCLI []
     code `shouldBe` ExitSuccess
-    output `shouldContain` "3\n"
-    output `shouldNotContain` "error:"
+    output `shouldBe` replTranscript ("kai> 3\nLoaded " ++ path ++ "\nkai> ")
 
   it "reads UTF-8 text through the standard library" $ withTempDir $ \dir -> do
     let path = dir </> "text.txt"

@@ -28,9 +28,9 @@ patternTerm = choice
 
 parensOrTuplePattern :: Parser Pattern
 parensOrTuplePattern = do
-  symbol "("
+  _ <- symbol "("
   pats <- sepBy patternParser (symbol ",")
-  symbol ")"
+  _ <- symbol ")"
   case pats of
     [p] -> return p
     _   -> return (PTuple pats)
@@ -88,6 +88,6 @@ recordPattern = PRecord <$> braces (sepBy recordPatternField (symbol ","))
 recordPatternField :: Parser (String, Pattern)
 recordPatternField = do
   name <- identifier
-  symbol "="
+  _ <- symbol "="
   p <- patternParser
   return (name, p)

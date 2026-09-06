@@ -32,6 +32,7 @@ extra-source-files:
     .github/workflows/ci.yml
     .github/workflows/deploy.yml
     .github/workflows/release.yml
+    scripts/audit-script-tests.py
     scripts/check-doc-examples.py
     scripts/check-script-corpus.py
     scripts/export-site.sh
@@ -40,10 +41,15 @@ extra-source-files:
     scripts/package-release-binary.sh
     scripts/release-asset-name.sh
     scripts/release-package-name.sh
+    scripts/script_fixtures.py
     scripts/test-release-binary.sh
     benchmarks/README.md
+    test/benchmark_runner_test.py
     test/doc_examples_test.py
+    test/script_audit_test.py
+    test/script_corpus_test.py
     test/fixtures/legacy-kai-runner.sh
+    test/fixtures/script_directives.json
     tests/all_conversions.kai
     tests/application_chain.kai
     tests/args_test.kai
@@ -249,7 +255,6 @@ library
       Evaluator.Recursion
       Evaluator.StringOps
       Evaluator.Types
-      Main
       Parser.Builtins
       Parser.ComplexExpr
       Parser.Expressions
@@ -266,6 +271,7 @@ library
       TypeChecker.ControlFlow
       TypeChecker.DataStructures
       TypeChecker.Functions
+      TypeChecker.Helpers
       TypeChecker.Inference
       TypeChecker.Literals
       TypeChecker.Operations
@@ -295,57 +301,11 @@ library
 executable kai
   main-is: Main.hs
   other-modules:
-      CLI
-      DataDeclarations
-      Evaluator
-      Evaluator.Arithmetic
-      Evaluator.Bindings
-      Evaluator.BooleanOps
-      Evaluator.ControlFlow
-      Evaluator.Conversions
-      Evaluator.DataStructures
-      Evaluator.Functions
-      Evaluator.Helpers
-      Evaluator.IOOps
-      Evaluator.Literals
-      Evaluator.Patterns
-      Evaluator.Program
-      Evaluator.Recursion
-      Evaluator.StringOps
-      Evaluator.Types
-      ModuleSystem
-      Parser
-      Parser.Builtins
-      Parser.ComplexExpr
-      Parser.Expressions
-      Parser.Lexer
-      Parser.Literals
-      Parser.Patterns
-      Parser.Types
-      REPL
-      ScriptCheck
-      SourceIO
-      Syntax
-      TopLevelRecursion
-      TypeChecker
-      TypeChecker.Arithmetic
-      TypeChecker.Bindings
-      TypeChecker.ControlFlow
-      TypeChecker.DataStructures
-      TypeChecker.Functions
-      TypeChecker.Inference
-      TypeChecker.Literals
-      TypeChecker.Operations
-      TypeChecker.Patterns
-      TypeChecker.Substitution
-      TypeChecker.Types
-      TypeChecker.Unification
-      UTF8
       Paths_kai_lang
   autogen-modules:
       Paths_kai_lang
   hs-source-dirs:
-      src
+      app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -353,6 +313,7 @@ executable kai
     , deepseq
     , directory
     , filepath
+    , kai-lang
     , megaparsec
     , mtl
     , parser-combinators
@@ -408,6 +369,8 @@ test-suite kai-test
       DataTypeSpec
       DocumentationSpec
       EdgeCaseSpec
+      EvaluatorConsistencySpec
+      ExampleAssertionsSpec
       ExampleSpec
       InputSpec
       IntegerOverflowSpec
@@ -433,6 +396,10 @@ test-suite kai-test
       StringFunctionsSpec
       StringSpec
       TestIO
+      TestReport
+      TestReportSpec
+      TestSupport
+      TestSupportSpec
       TupleSpec
       TypeErrorSpec
       TypeInferenceSpec
@@ -457,12 +424,14 @@ test-suite kai-test
     , directory
     , filepath
     , hspec
+    , hspec-core
     , kai-lang
     , megaparsec
     , mtl
     , parser-combinators
     , process
     , split
+    , text
   default-language: Haskell2010
 
 benchmark kai-bench

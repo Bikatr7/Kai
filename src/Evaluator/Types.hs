@@ -29,7 +29,7 @@ instance Show Value where
   show (VBool b) = show b
   show (VStr s) = show s
   show VUnit = "()"
-  show (VFun param body env) = "<function " ++ param ++ ">"
+  show (VFun param _ _) = "<function " ++ param ++ ">"
   show (VConstructor name _ []) = "<constructor " ++ name ++ ">"
   show (VConstructor name _ args) = "<constructor " ++ name ++ " " ++ show args ++ ">"
   show (VData name []) = name
@@ -81,6 +81,10 @@ instance NFData Value where
   rnf (VFun _ _ _) = ()  -- Function can't be fully evaluated
 
 type Env = Map.Map String Value
+
+type Eval m = Env -> Expr -> m Value
+type EvalFunc = Eval (Either RuntimeError)
+type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
 
 data RuntimeError
   = DivByZero

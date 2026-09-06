@@ -3,16 +3,14 @@ module CLI (
     versionString
 ) where
 
+import Evaluator.IOOps (cliArgsEnv)
 import Syntax
 import TypeChecker (typeCheck, typeCheckProgramWithDirIO)
 import Evaluator
 import REPL (runREPL)
 import Parser
-import Evaluator.Types (Value(..))
 import System.Exit (ExitCode(..))
 import System.FilePath (takeDirectory)
-import Data.List (intercalate)
-import qualified Data.Map as Map
 import Paths_kai_lang (version)
 import Data.Version (showVersion)
 import Control.Monad (when, void)
@@ -41,14 +39,6 @@ usageText = unlines
   , "  kai --help                   # this message"
   ]
 
-cliArgsEnv :: [String] -> Map.Map String Value
-cliArgsEnv scriptArgs =
-  let argValues = VList (map VStr scriptArgs)
-  in Map.fromList
-       [ ("__args__", argValues)
-       , ("args", argValues)
-       ]
-
 reportFailure :: String -> IO ExitCode
 reportFailure message = do
   written <- try (putStrLn message >> hFlush stdout) :: IO (Either IOException ())
@@ -73,20 +63,7 @@ runExpression debug input = do
     Right program -> runProgram debug "." [] program
     Left _ -> case parseExpr input of
       Left parseErr -> reportFailure $ "Parse error: " ++ show parseErr
-      Right expr -> do
-        when debug $ putStrLn $ "AST: " ++ show expr
-        when debug $ putStr "Type: "
-        case typeCheck expr of
-          Left err -> reportFailure $ "Type error: " ++ show err
-          Right ty -> do
-            when debug $ print ty
-            when debug $ putStr "Evaluation: "
-            result <- eval expr
-            case result of
-              Left err -> runtimeToExitCode err
-              Right val -> do
-                when debug $ print val
-                return ExitSuccess
+      Right expr -> runSingleExpression debug [] expr
 
 runProgram :: Bool -> FilePath -> [String] -> Program -> IO ExitCode
 runProgram debug currentDir scriptArgs program = do

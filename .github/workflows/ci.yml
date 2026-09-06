@@ -37,7 +37,9 @@ jobs:
       run: stack test
 
     - name: Validate benchmark programs
-      run: stack bench --benchmark-arguments="--iters 1"
+      run: |
+        stack bench --benchmark-arguments="--iters 1"
+        python3 test/benchmark_runner_test.py "$(stack path --dist-dir)/build/kai-bench/kai-bench"
 
     - name: Build binary
       run: |
@@ -85,6 +87,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: haskell-actions/setup@v2
+        id: haskell
         with:
           ghc-version: '9.4.8'
           enable-stack: true
@@ -93,7 +96,7 @@ jobs:
         with:
           path: |
             ~/.stack
-            ${{ env.STACK_ROOT }}
+            ${{ steps.haskell.outputs.stack-root }}
             .stack-work
           key: native-check-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('stack.yaml.lock', 'package.yaml') }}
       - uses: actions/download-artifact@v8.0.1
@@ -125,7 +128,9 @@ jobs:
       - name: Validate benchmark programs
         if: success() || failure()
         shell: bash
-        run: stack --no-terminal bench --benchmark-arguments="--iters 1"
+        run: |
+          stack --no-terminal bench --benchmark-arguments="--iters 1"
+          python3 test/benchmark_runner_test.py "$(stack path --dist-dir)/build/kai-bench/kai-bench"
       - name: Build, package, extract, and execute the CLI
         if: success() || failure()
         shell: bash

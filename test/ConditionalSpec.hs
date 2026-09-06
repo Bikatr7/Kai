@@ -1,6 +1,7 @@
 module ConditionalSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Syntax
 import TypeChecker
 import Evaluator
@@ -29,6 +30,4 @@ spec = describe "Conditional Expressions (if-then-else)" $ do
       parseEvaluate expr `shouldBe` Right (VInt 2)
 
 parseEvaluate :: String -> Either RuntimeError Value
-parseEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> evalPure expr
+parseEvaluate = TestSupport.evaluateSource

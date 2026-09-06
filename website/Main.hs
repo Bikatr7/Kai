@@ -54,11 +54,11 @@ getHomeR = do
             <div .stat-number>Hspec
             <div .stat-label>Tests & Properties
           <div .stat-item>
-            <div .stat-number>8
-            <div .stat-label>Core Types
+            <div .stat-number>4
+            <div .stat-label>Base Types
           <div .stat-item>
             <div .stat-number>39
-            <div .stat-label>Built-in Functions
+            <div .stat-label>Built-in Operations
           <div .stat-item>
             <div .stat-number>v0.0.4.6
             <div .stat-label>Current Version
@@ -86,7 +86,7 @@ getHomeR = do
             <p>User input with `input`, UTF-8 text-file reads and writes, readable effect sequencing via `do` blocks, type conversions (`parseInt`, `toString`, `show`), and practical examples including text analysis, CLI tools, expression trees, and workspace-style file flows.
           <div .feature>
             <h3>Comprehensive Testing
-            <p>Unit, property, script, and integration tests cover language features, interactive input, modules, and deeply nested expressions.
+            <p>Unit, property, script, and integration tests check values, exact printed output, real input, modules, executable shebang scripts, and deeply nested expressions.
           <div .feature>
             <h3>Developer Experience
             <p>CLI plus a multiline REPL with `:type`, `:load`, and `:reload`, alongside file execution, --debug, --version/-V, and comprehensive documentation.
@@ -96,7 +96,7 @@ getHomeR = do
 
       <section #quickstart>
         <h2>Quick Start
-        <p>The CLI builds on Linux, macOS, and Windows. Build the website and use the POSIX runner/exporter on Linux or macOS.
+        <p>The CLI builds on Linux, macOS, and Windows. Build the website and use the POSIX runner/exporter on Linux or macOS; see DEVELOPING.md for the Windows test setup.
           <div .element-block>
           <h3>Install & Run
           <div .code-example>
@@ -120,6 +120,7 @@ getHomeR = do
 
         <div .element-block>
           <h3>Install CLI
+          <p>Files and -e expressions display explicit print output. The REPL displays expression results automatically.
           <p>Link the runner to this checkout and add it to PATH. It works from other directories; keep the checkout in place or use stack install for a standalone binary. Set KAI_BIN to select an executable explicitly.
           <div .code-example>
             <code>make install
@@ -144,6 +145,7 @@ getHomeR = do
 
         <div .element-block>
           <h3>Operators
+          <p>Application and field access form one left-associated chain: f x.field means (f x).field. Write f (x.field) to pass a field value. Both operands of and/or execute; use if to evaluate only one branch.
           <div .code-example>
             <code>+
             <code>-
@@ -266,6 +268,7 @@ getHomeR = do
             <code>let liftByFive = Add (Lit 5)
             <code>let program = Mul (liftByFive (Lit 3)) (Neg (Lit 2))
             <code>letrec eval = \expr -> case expr of Lit n -> n | Add l r -> eval l + eval r | Mul l r -> eval l * eval r | Neg inner -> 0 - eval inner
+            <code>print (eval program)
 
         <div .element-block>
           <h3>Wildcard Patterns
@@ -298,7 +301,7 @@ getHomeR = do
             <span>Integer-only arithmetic (no floating-point)
             <br>
             <span .limitation>×
-            <span>Polymorphic recursion requires explicit annotations; unannotated recursive bindings remain monomorphic
+            <span>Polymorphic recursive calls need explicit annotations; completed recursive definitions can still be generalized
             <br>
             <span .limitation>×
             <span>No JSON/HTTP/package-manager story yet; records require exact field sets, and show/print are display rather than serialization
@@ -370,7 +373,7 @@ getHomeR = do
             <div .timeline-marker .current data-step="13">
             <div .timeline-content>
               <h3>v0.0.4.6
-              <p>Partially applied builtins, typed lambdas and tuples, consistent recursion, private constructors, UTF-8 source and text files, and predictable type annotations across scripts, modules, and the REPL
+              <p>Partially applied builtins, typed lambdas and tuples, consistent recursion, private constructors, UTF-8 source and text files, checked output failures, exact script assertions, and reliable executable-script installation
           <div .timeline-item>
             <div .timeline-marker data-step="14">
             <div .timeline-content>

@@ -13,6 +13,29 @@ import SiteExportSpec (writeExecutable)
 
 spec :: Spec
 spec = describe "Kai runner and installation" $ do
+  forM_ [0,7] $ \exitStatus ->
+    it ("launches a shebang script directly with arguments and exit status " ++ show exitStatus) $ withTempDir $ \directory -> do
+      found <- findExecutable "kai"
+      binary <- case found of
+        Just path -> canonicalizePath path
+        Nothing -> expectationFailure "Built Kai executable missing from PATH" >> pure ""
+      let bin = directory </> "bin"
+          script = directory </> "executable script.kai"
+      createDirectory bin
+      createFileLink binary (bin </> "kai")
+      writeExecutable script $ unlines
+        [ "#!/usr/bin/env kai"
+        , "// expect: error ExitRequested " ++ show exitStatus
+        , "print (head args); print (head (tail args)); exit " ++ show exitStatus
+        , "print \"must not execute\""
+        ]
+      inherited <- getEnvironment
+      let environment = ("PATH", bin ++ ":" ++ systemPath) : filter ((/= "PATH") . fst) inherited
+          process = (proc script ["argument with spaces", "--version"]) {cwd = Just directory, env = Just environment}
+          expectedCode = if exitStatus == 0 then ExitSuccess else ExitFailure exitStatus
+      timeout 5000000 (readCreateProcessWithExitCode process "")
+        `shouldReturn` Just (expectedCode, "argument with spaces\n--version\n", "")
+
   it "honors KAI_BIN without kai on PATH, preserving arguments and exit status" $
     withRunner $ \root runner -> do
       let binary = root </> "explicit binary"

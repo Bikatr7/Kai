@@ -1,7 +1,7 @@
 # Kai Language Features
 
 **Version**: 0.0.4.6
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-06
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
@@ -50,7 +50,7 @@ This document provides a comprehensive overview of all implemented and planned f
 
 #### Data Structures
 - ✅ **Lists**: `[1, 2, 3]`, homogeneous, with operations
-- ✅ **Tuples**: `(1, "hello", true)`, heterogeneous, any number of elements
+- ✅ **Tuples**: `(1, "hello", true)`, heterogeneous, two or more elements; `()` is Unit and `(x)` is grouping
 - ✅ **Records**: `{a = 1, b = true}` with field access (`record.field`)
 - ✅ **Maybe type**: `Just value | Nothing` for optional values
 - ✅ **Either type**: `Left error | Right value` for error propagation
@@ -82,7 +82,10 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Maybe types**: `Maybe T`
 - ✅ **Either types**: `Either T U`
 
-### Built-in Functions
+### Built-in Operations
+
+The 39 operations below include zero-argument values such as `input` and `args`.
+The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately under data structures.
 
 #### Type Conversion (4)
 - ✅ `parseInt : String -> Maybe Int` - Safe string to int conversion
@@ -90,9 +93,12 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ `show : a -> String` - Any value to string representation
 - ✅ `discard : a -> Unit` - Evaluates and discards any value
 
+#### Recursion (1)
+- ✅ `fix : (a -> a) -> a` - Fixed point for a callable value
+
 #### List Operations (11)
 - ✅ `head : [a] -> a` - First element (runtime error if empty)
-- ✅ `tail : [a] -> [a]` - List without first element
+- ✅ `tail : [a] -> [a]` - List without first element (runtime error if empty)
 - ✅ `null : [a] -> Bool` - Check if list is empty
 - ✅ `length : [a] -> Int` - Number of elements
 - ✅ `map : (a -> b) -> [a] -> [b]` - Apply function to each element
@@ -130,9 +136,9 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ `getEnv : String -> Maybe String` - Read an environment variable
 - ✅ `setEnv : String -> String -> Unit` - Set an environment variable
 - ✅ `exit : Int -> a` - Exit the current program with an explicit code
-- ✅ `args : [String]` - Command-line arguments passed to script
+- ✅ `args : [String]` - Command-line arguments passed to script or REPL session
 
-**Total Built-in Functions**: 39
+**Total Built-in Operations**: 39
 
 ### Module System
 
@@ -152,7 +158,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Line comments**: `// comment`
 - ✅ **Block comments**: `/* comment */`
 - ✅ **Multi-statement files**: Top-level newlines split expressions while respecting nested `()`, `[]`, `{}`, strings, and comments
-- ✅ **Reserved keywords**: 45+ keywords properly recognized, including `do`
+- ✅ **Reserved keywords**: 66 reserved names, including `do` and the builtins
 - ✅ **Keyword boundary checking**: Prevents `trimmed` from parsing as `trim` + `med`
 - ✅ **String escapes**: `\"`, `\\`, `\n` with helpful error messages for unknown escapes
 - ✅ **Integer overflow detection**: Parse errors for values outside 32-bit range
@@ -161,6 +167,7 @@ This document provides a comprehensive overview of all implemented and planned f
 ### Evaluator
 
 - ✅ **Strict evaluation**: Call-by-value semantics
+- ✅ **Boolean evaluation**: Both operands of `and` and `or` execute; `if` executes only the selected branch
 - ✅ **Lexical scoping**: Static binding with closure support
 - ✅ **Environment-based evaluation**: Separate pure and IO evaluation modes
 - ✅ **Error handling**: Graceful runtime errors with descriptive messages
@@ -171,28 +178,30 @@ This document provides a comprehensive overview of all implemented and planned f
 
 - ✅ **Command-line interface**: `kai` executable
 - ✅ **Interactive REPL**: `kai`, `kai repl`, or `kai --repl`
-- ✅ **Expression evaluation**: `kai -e "expr"`
+- ✅ **Expression evaluation**: `kai -e "expr"`; use `print` for visible output outside the REPL
 - ✅ **File execution**: `kai script.kai [args...]`
 - ✅ **Shebang support**: `#!/usr/bin/env kai` for executable scripts
 - ✅ **Debug mode**: `kai --debug` for detailed output
 - ✅ **Help system**: `kai --help`
-- ✅ **REPL commands**: `:type`, `:load`, `:reload`, `:quit`
+- ✅ **REPL commands**: `:type`, `:load`, `:reload`, `:quit`/`:q`, `:help`
 - ✅ **Version display**: `kai --version` and `kai -V` print the package-derived version
 - ✅ **Script arguments**: Pass arguments to scripts
-- ✅ **Failure exit codes**: Parse, type, and runtime failures return non-zero exit codes
+- ✅ **Failure exit codes**: Parse, type, runtime, and output failures return non-zero exit codes
 - ✅ **Clean output**: No debug noise by default
 - ✅ **Install script**: `make install` links the checkout's runner into `~/.local/bin`; supports a custom `PREFIX`
 - ✅ **Runner script**: Explicit `KAI_BIN` selection, executable lookup on `PATH`, active Stack build selection, and invocation from other directories
 
 ### Testing Infrastructure
 
-- ✅ **Executable test suite**: Hspec, QuickCheck properties, asserted scripts, CLI, REPL, stress, and example smoke coverage
+- ✅ **Executable test suite**: Hspec, QuickCheck properties, asserted scripts, CLI, REPL, stress, exact example output, and module loading checks
 - ✅ **Property-based testing**: QuickCheck for algebraic laws
-- ✅ **Script tests**: `.kai` files with `// expect:` directives
+- ✅ **Script tests**: Required `// expect:` plus optional type assertions, JSON stdin fixtures, and exact stdout checks
+- ✅ **Assertion checks**: Incorrect script variants must fail the intended value/type/output assertion
+- ✅ **Per-test reports**: `KAI_TEST_REPORT` records individual Hspec outcomes, locations, and durations as JSONL
 - ✅ **Stress tests**: Deeply nested expressions (1000+ levels)
 - ✅ **Type checking tests**: Unification, polymorphism, annotations, declarations, and imports
 - ✅ **Parser tests**: Edge cases and error messages
-- ✅ **Clean codebase**: Well-structured Haskell with comprehensive test coverage
+- ✅ **Test helpers**: Malformed fixtures fail explicitly; type comparisons preserve polymorphic structure and IO fixtures restore process state
 
 ### Documentation
 
@@ -200,6 +209,8 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **SPEC.md**: Complete language specification
 - ✅ **DEVELOPING.md**: Architecture, semantics, development workflow
 - ✅ **AGENTS.md**: Testing guidelines for AI assistants
+- ✅ **CLAUDE.md and GEMINI.md**: Entry points to the shared agent instructions
+- ✅ **benchmarks/README.md**: Workloads, commands, measurement limits, and comparison process
 - ✅ **Website**: Yesod-based static site with examples
 - ✅ **Working examples**: 12 runnable scripts plus reusable module samples
 
@@ -210,7 +221,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Parser benchmarks**: Expression size, nesting depth, lambda chains, list operations
 - ✅ **Evaluator benchmarks**: Arithmetic, boolean logic, conditionals, functions, recursion, data structures
 - ✅ **Type checker benchmarks**: Basic types, arithmetic, functions, polymorphism, recursion
-- ✅ **Input validity gate**: Invalid benchmark programs abort instead of measuring parse/type/runtime failures
+- ✅ **Benchmark execution checks**: Checked parser/evaluator/type-checker helpers reject invalid inputs; CI catches failed runs
 - ✅ **CI integration**: Every benchmark runs for one iteration in automated testing
 
 #### Performance Optimizations
@@ -218,12 +229,14 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Record access optimization**: Inlined evaluation logic
 - ✅ **Boolean operation fixes**: Corrected syntax usage
 - ✅ **Pure recursion optimization**: Improved LetRec evaluation efficiency
-- ✅ **NFData instances**: Added for accurate benchmarking across all data types
-- ✅ **Memory profiling**: Comprehensive heap usage analysis
+- ✅ **NFData instances**: Force ASTs, inferred types, and data values during benchmarks
+- ✅ **Allocation measurements**: Weigh reports allocated bytes and garbage collections
 
 #### Performance Baselines
-The suite checks its Kai inputs before measuring them. Compare benchmark timings
-on the same machine and build profile when checking performance changes.
+Compare benchmark timings on the same machine and build profile. The one-iteration
+CI run has no timing threshold or exact-result assertions. Small-input and
+allocation parser cases measure `parseExpr` directly; see `benchmarks/README.md`
+for what each workload measures.
 
 ---
 
@@ -264,8 +277,8 @@ Development focuses on practical scripting tools, useful standard-library additi
 - ❌ **Minimal REPL ergonomics**: No history, completion, or editor integration yet
 - ❌ **Limited pattern matching**: No guards, no as-patterns
 - ❌ **Wildcard restrictions**: `_` not allowed in `letrec` bindings (cannot be meaningfully recursive)
-- ❌ **Polymorphic recursion still needs explicit annotations**: Unannotated recursive bindings remain monomorphic
-- ❌ **Script failures**: A parse/type error stops a script; the REPL accepts subsequent input
+- ❌ **Polymorphic recursion still needs explicit annotations**: Recursive calls within an unannotated group share one type; completed definitions may be generalized for later uses
+- ❌ **Script failures**: A parse, type, runtime, or output error stops a script; the REPL accepts subsequent input after language errors
 - ❌ **Integer-only arithmetic**: No floating-point numbers
 - ❌ **Limited escape sequences**: Only `\"`, `\\`, `\n` supported
 - ❌ **No regex support**: String operations are basic
@@ -297,12 +310,12 @@ Development focuses on practical scripting tools, useful standard-library additi
 
 - **Tests**: Hspec, QuickCheck, script expectations, CLI and REPL integration, and stress tests
 - **HLint Warnings**: 0
-- **Core Types**: 8 (Int, Bool, String, Unit, List, Tuple, Record, Function)
-- **Built-in Functions**: 39
+- **Base Types**: 4 (Int, Bool, String, Unit), plus lists, tuples, records, functions, Maybe, Either, and custom types
+- **Built-in Operations**: 39
 - **Reserved Keywords**: 66
-- **Operator Precedence Levels**: 11
+- **Operator Precedence Levels**: 10; application and field access share the highest level
 - **Example Scripts**: 12 runnable scripts plus reusable module samples
-- **Documentation**: 5 comprehensive markdown files
+- **Documentation**: 8 Markdown files covering the language, development, benchmarks, and agent guidance
 - **Benchmark Suites**: 3 (Parser, Evaluator, TypeChecker)
 - **Performance Optimizations**: Record access inlining, boolean syntax fixes
 - **Architecture**: Modular design with focused submodules across parser, type checker, evaluator, REPL, and module loading
@@ -321,7 +334,11 @@ Development focuses on practical scripting tools, useful standard-library additi
 - Repeated prefix operators with checked integer negation
 - UTF-8 scripts, modules, and text-file I/O, with decoding errors reported by the CLI and REPL
 - Script expectation checks with stdin fixtures and nested module coverage
+- Exact stdout assertions, specific failure checks, and per-test Hspec reports
 - Runner installation, explicit executable selection, and active build lookup
+- Direct OS shebang execution and source/package helper coverage
+- Output failures stop later effects and preserve nonzero CLI exit status
+- Criterion runs once in the parent; Weigh allocation children do not rerun the speed suite
 
 ### v0.0.4.5 (2026-07-11)
 - Added `kai --version` and `kai -V`, including clean debug-prefixed behavior
@@ -360,7 +377,7 @@ Development focuses on practical scripting tools, useful standard-library additi
 - **Performance optimizations**: Record access inlining and boolean syntax corrections
 - **Modular architecture**: Split Evaluator, Parser, and TypeChecker into focused submodules
 - **Comprehensive benchmarking**: Added Criterion speed benchmarks and Weigh memory profiling
-- **Benchmark automation**: Performance regression detection and CI integration
+- **Benchmark automation**: CI execution of the benchmark suite
 - **NFData instances**: Added for accurate benchmarking across all data types
 - Added tuples with pattern matching
 - Added 8 list functions (map, filter, foldl, length, reverse, take, drop, zip)

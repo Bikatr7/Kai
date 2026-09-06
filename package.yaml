@@ -21,6 +21,7 @@ extra-source-files:
   - benchmarks/README.md
   - test/*.py
   - test/fixtures/*.sh
+  - test/fixtures/*.json
   - tests/**/*.kai
   - examples/**/*.kai
   - website/static/*
@@ -75,7 +76,9 @@ executables:
 
   kai:
     main: Main.hs
-    source-dirs: src
+    source-dirs: app
+    dependencies:
+      - kai-lang
     ghc-options:
       - -threaded
       - -rtsopts
@@ -93,6 +96,7 @@ tests:
       - -with-rtsopts=-K64M
     dependencies:
       - hspec
+      - hspec-core
       - QuickCheck
       - kai-lang
       - directory
@@ -101,6 +105,7 @@ tests:
       - process
       - aeson
       - bytestring
+      - text
     build-tools:
       - hspec-discover
 

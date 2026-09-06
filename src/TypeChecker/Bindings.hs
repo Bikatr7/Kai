@@ -9,8 +9,6 @@ import TypeChecker.Types
 import TypeChecker.Substitution
 import TypeChecker.Unification
 
-type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
-
 inferBindings :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferBindings infer env (Let var maybeType val body) = do
   (s1, valType) <- infer env val

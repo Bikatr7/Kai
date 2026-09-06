@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
-BINARY = sys.argv.pop(1)
+sys.path.insert(0, str(ROOT / 'scripts'))
+BINARY = str(Path(sys.argv.pop(1)).resolve())
 spec = importlib.util.spec_from_file_location("doc_examples", ROOT / "scripts/check-doc-examples.py")
 checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
@@ -122,6 +123,22 @@ class ExecutionTests(unittest.TestCase):
         results = self.run_examples('```kai\n40+2 // => 0\n```')
         self.assertTrue(any(not row['passed'] and 'Expected 0' in row['detail'] for row in results))
 
+    def test_report_distinguishes_execution_from_result_and_output_assertions(self):
+        results = self.run_examples('```kai\n40+2 // => 42\n```\n'
+                                    '```kai\n1+true // Type error: UnificationError TBool TInt\n```')
+        smoke = next(row for row in results if row['name'] == 'Website: Example')
+        self.assertFalse(smoke['checks_result'])
+        self.assertFalse(smoke['checks_stdout'])
+        self.assertIsNone(smoke['expected_error'])
+        self.assertEqual(smoke['source'], '40 + 2')
+        value = next(row for row in results if ' result ' in row['name'])
+        self.assertTrue(value['checks_result'])
+        self.assertTrue(value['checks_stdout'])
+        self.assertIn('// expect: 42', value['source'])
+        error = next(row for row in results if ' expected error' in row['name'])
+        self.assertFalse(error['checks_result'])
+        self.assertEqual(error['expected_error'], 'Type error: UnificationError TBool TInt')
+
     def test_rejects_an_invalid_runnable_example(self):
         results = self.run_examples('```kai\n1+true\n```')
         self.assertTrue(any(not row['passed'] and 'UnificationError' in row['detail'] for row in results))
@@ -149,6 +166,35 @@ class ExecutionTests(unittest.TestCase):
     def test_accepts_comment_like_string_values(self):
         results = self.run_examples('```kai\n"a // => b"\n```')
         self.assertTrue(all(row['passed'] for row in results), results)
+
+    def test_asserts_stdout_alongside_the_return_value(self):
+        for expected, success in [('Hello, World!\\n', True), ('Hello, Ada!\\n', False), ('', False)]:
+            with self.subTest(expected=expected):
+                source = ('// expect: ()\n// stdin: "World\\n"\n'
+                          '// stdout: "' + expected + '"\nprint ("Hello, " ++ input ++ "!")')
+                results = self.run_examples('```kai\n' + source + '\n```')
+                self.assertEqual(all(row['passed'] for row in results), success, results)
+
+    def test_expectation_fixtures_require_silence_without_stdout(self):
+        results = self.run_examples('```kai\n// expect: ()\nprint "unexpected"\n```')
+        self.assertTrue(any(not row['passed'] and 'Expected stdout' in row['detail'] for row in results))
+
+    def test_rejects_extra_stdout(self):
+        results = self.run_examples('```kai\n// expect: ()\n// stdout: "hello\\n"\nprint "hello"; print "extra"\n```')
+        self.assertTrue(any(not row['passed'] and 'Expected stdout' in row['detail'] for row in results))
+
+    def test_validates_stdout_in_rendered_examples(self):
+        source = '// expect: ()\n// stdout: "expected\\n"\nprint "wrong"'
+        results = self.run_examples(html=HTML.replace('40 + 2', source))
+        self.assertTrue(any(not row['passed'] and row['name'].startswith('Website:') for row in results))
+
+    def test_rejects_invalid_or_duplicate_fixtures(self):
+        for field in ['stdin', 'stdout']:
+            for fixture in [f'// {field}: 42', f'// {field}: invalid',
+                            f'// {field}: ""\n// {field}: ""']:
+                with self.subTest(fixture=fixture):
+                    results = self.run_examples('```kai\n// expect: 42\n' + fixture + '\n42\n```')
+                    self.assertTrue(any(not row['passed'] for row in results), results)
 
 
 if __name__ == '__main__':

@@ -18,7 +18,7 @@ if [ ! -f "$binary" ]; then
 fi
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-package_name=$("${script_dir}/release-package-name.sh" "$os" "$arch")
+package_name=$(bash "${script_dir}/release-package-name.sh" "$os" "$arch")
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/kai-release-package.XXXXXX")
 
 cleanup() {

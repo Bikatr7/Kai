@@ -7,8 +7,6 @@ import qualified Data.Map as Map
 import Evaluator.Recursion (initializeRecursiveBindings)
 import Evaluator.Helpers (bindResult)
 
-type EvalFunc = Env -> Expr -> Either RuntimeError Value
-type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
 
 evalBindings :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
 evalBindings eval env (Let var _maybeType val body) = do

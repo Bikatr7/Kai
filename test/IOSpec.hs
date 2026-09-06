@@ -79,6 +79,7 @@ spec = describe "Extended IO Stdlib" $ do
       result <- evalSource $
         "writeFile " ++ show path ++ " \"hello\"; appendFile " ++ show path ++ " \" world\"; readFile " ++ show path
       result `shouldBe` Right (VStr "hello world")
+      readFile path `shouldReturn` "hello world"
 
   it "stops evaluating later effectful operands after the first runtime error" $ do
     withTempDir $ \dir -> do
@@ -146,7 +147,7 @@ spec = describe "Extended IO Stdlib" $ do
       result <- evalSource ("listDirectory " ++ show dir)
       case result of
         Right (VList values) ->
-          sort [name | VStr name <- values] `shouldBe` ["a.txt", "b.txt"]
+          values `shouldMatchList` [VStr "a.txt", VStr "b.txt"]
         Right other -> expectationFailure $ "Expected directory listing, got " ++ show other
         Left err -> expectationFailure $ "Runtime error: " ++ show err
 
@@ -168,6 +169,7 @@ spec = describe "Extended IO Stdlib" $ do
           Right (VStr actualDir) -> canonicalizePath actualDir `shouldReturn` expectedDir
           Right other -> expectationFailure $ "Expected current directory string, got " ++ show other
           Left err -> expectationFailure $ "Runtime error: " ++ show err
+        (getCurrentDirectory >>= canonicalizePath) `shouldReturn` expectedDir
 
   it "sets and reads environment variables" $ do
     let name = "KAI_TEST_ENV_STD_LIB"
@@ -180,6 +182,7 @@ spec = describe "Extended IO Stdlib" $ do
       $ do
           evalSource ("setEnv " ++ show name ++ " \"configured\"; getEnv " ++ show name)
             `shouldReturn` Right (VJust (VStr "configured"))
+          lookupEnv name `shouldReturn` Just "configured"
 
   it "converts invalid environment names into Kai runtime errors" $ do
     let invalidEnvName = "KAI_INVALID=NAME"

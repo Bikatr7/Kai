@@ -10,7 +10,7 @@ module Evaluator (
     evalProgramWithEnv
 ) where
 
-import ModuleSystem (loadModule, ModuleInfo(..))
+import ModuleSystem (filterByExports, loadModule, ModuleInfo(..))
 
 import Syntax
 import Evaluator.Program (evaluateTopLevels)
@@ -29,26 +29,10 @@ import Evaluator.StringOps
 import Evaluator.Conversions
 import Evaluator.IOOps
 import Evaluator.Patterns
-import qualified Evaluator.Arithmetic as ArithIO
-import qualified Evaluator.BooleanOps as BoolIO
-import qualified Evaluator.ControlFlow as CtrlIO
-import qualified Evaluator.Functions as FuncIO
-import qualified Evaluator.Bindings as BindIO
 import qualified Evaluator.DataStructures as DataIO
 import qualified Evaluator.StringOps as StrIO
 import qualified Evaluator.Conversions as ConvIO
 import qualified Evaluator.Patterns as PatIO
-
-filterByExports :: Map.Map String a -> [String] -> Map.Map String a
-filterByExports env [] = env
-filterByExports env exports = Map.filterWithKey (\k _ -> k `elem` exports) env
-
-evalLiteralPure :: Expr -> Value
-evalLiteralPure (IntLit n) = VInt n
-evalLiteralPure (BoolLit b) = VBool b
-evalLiteralPure (StrLit s) = VStr s
-evalLiteralPure UnitLit = VUnit
-evalLiteralPure _ = error "evalLiteralPure called on non-literal expression"
 
 eval :: Expr -> IO (Either RuntimeError Value)
 eval = evalWithEnv Map.empty
@@ -107,13 +91,7 @@ evalPureWithEnv env expr = case expr of
   Tail _ -> evalDataStructures evalPureWithEnv env expr
   Null _ -> evalDataStructures evalPureWithEnv env expr
   RecordLit _ -> evalDataStructures evalPureWithEnv env expr
-  RecordAccess r field ->
-    case evalPureWithEnv env r of
-      Right (VRecord m) -> case Map.lookup field m of
-        Just fv -> Right fv
-        Nothing -> Left $ RecordFieldNotFound field
-      Right _ -> Left $ TypeError "Record access expects a record"
-      Left err -> Left err
+  RecordAccess _ _ -> evalDataStructures evalPureWithEnv env expr
   TupleLit _ -> evalDataStructures evalPureWithEnv env expr
   Fst _ -> evalDataStructures evalPureWithEnv env expr
   Snd _ -> evalDataStructures evalPureWithEnv env expr

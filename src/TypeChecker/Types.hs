@@ -26,6 +26,8 @@ data Scheme = Forall [String] Type
 
 type TypeEnv = Map.Map String Scheme
 
+type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
+
 -- Substitution maps type variables to types
 type Substitution = Map.Map String Type
 

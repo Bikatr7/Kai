@@ -4,6 +4,13 @@ import Evaluator.Types
 import qualified Data.Map as Map
 import Data.List (intercalate)
 import Syntax (isKaiInt)
+import Control.Monad.Except (ExceptT(..), runExceptT)
+
+-- Lift the evaluator callback into the same error monad used by pure operations.
+-- ExceptT preserves left-to-right effects and stops immediately on a language error.
+evalInIO :: (Eval (ExceptT RuntimeError IO) -> Eval (ExceptT RuntimeError IO)) -> EvalFuncIO -> EvalFuncIO
+evalInIO operation evaluate env expression =
+  runExceptT $ operation (\scope value -> ExceptT $ evaluate scope value) env expression
 
 bindResult :: IO (Either e a) -> (a -> IO (Either e b)) -> IO (Either e b)
 bindResult action next = do
@@ -11,13 +18,6 @@ bindResult action next = do
   case result of
     Left err -> return $ Left err
     Right value -> next value
-
-traverseResults :: (a -> IO (Either e b)) -> [a] -> IO (Either e [b])
-traverseResults action = go []
-  where
-    go values [] = return $ Right $ reverse values
-    go values (item:items) =
-      bindResult (action item) $ \value -> go (value:values) items
 
 parseIntString :: String -> Maybe Int
 parseIntString s = case reads s of
