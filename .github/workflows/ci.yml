@@ -52,6 +52,9 @@ jobs:
       run: |
         VERSION=$(grep '^version:' package.yaml | cut -d' ' -f2)
         bash scripts/test-release-binary.sh ./dist/kai-ci "$VERSION"
+        PACKAGE=$(bash scripts/package-release-binary.sh "$RUNNER_OS" "$RUNNER_ARCH" ./dist/kai-ci dist/native-package)
+        EXTRACTED=$(bash scripts/extract-release-package.sh "$RUNNER_OS" "$PACKAGE" dist/native-extracted)
+        bash scripts/test-release-binary.sh "$EXTRACTED" "$VERSION"
 
     - name: Render documentation for native interpreters
       if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/validation/')
