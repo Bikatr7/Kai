@@ -4,8 +4,10 @@ import Control.Exception (bracket)
 import Control.Monad (when, forM_)
 import qualified Data.ByteString as BS
 import Data.List (isInfixOf)
+import Data.Maybe (listToMaybe)
 import System.Directory
   ( findExecutable
+  , findExecutablesInDirectories
   , createDirectory
   , createDirectoryIfMissing
   , executable
@@ -20,8 +22,9 @@ import System.Directory
 import System.Environment (getEnvironment)
 import System.Process (proc, readCreateProcessWithExitCode, CreateProcess(..), readProcessWithExitCode)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), normalise)
+import System.FilePath ((</>), getSearchPath, normalise)
 import System.IO (hClose, openTempFile)
+import qualified System.Info as System
 import Test.Hspec
 
 runAssetNameScript :: String -> String -> IO (ExitCode, String, String)
@@ -34,8 +37,9 @@ runPackageNameScript os arch =
 
 requireBash :: IO FilePath
 requireBash = do
-  found <- findExecutable "bash"
-  maybe (expectationFailure "Bash is missing from PATH" >> pure "") pure found
+  directories <- getSearchPath
+  found <- findExecutablesInDirectories directories "bash"
+  maybe (expectationFailure "Bash is missing from PATH" >> pure "") pure (listToMaybe found)
 
 runBash :: [String] -> IO (ExitCode, String, String)
 runBash arguments = do
@@ -246,6 +250,19 @@ spec = describe "Release workflow asset naming" $ do
           when (os /= "Linux") $ do
             header <- BS.take 4 <$> BS.readFile packagePath
             header `shouldBe` BS.pack [0x50, 0x4b, 0x03, 0x04]
+          when shouldBeExecutable $ do
+            let inspectMode = unlines $
+                  ["import sys, tarfile, zipfile"] ++
+                  (if os == "Linux" then
+                    ["with tarfile.open(sys.argv[1]) as archive:",
+                     "    mode = archive.getmember(sys.argv[2]).mode"]
+                   else
+                    ["with zipfile.ZipFile(sys.argv[1]) as archive:",
+                     "    mode = archive.getinfo(sys.argv[2]).external_attr >> 16"]) ++
+                  ["print(oct(mode & 0o7777))"]
+            (modeExit, modeOut, modeErr) <- readProcessWithExitCode
+              "python3" ["-c", inspectMode, packagePath, expectedBinary] ""
+            (modeExit, modeOut, modeErr) `shouldBe` (ExitSuccess, "0o755\n", "")
 
           (extractExit, extractStdout, extractStderr) <-
             runBash
@@ -255,7 +272,7 @@ spec = describe "Release workflow asset naming" $ do
           let extractedBinary = trimNewline extractStdout
           normalise extractedBinary `shouldBe` normalise (extractedDir </> expectedBinary)
           readFile extractedBinary `shouldReturn` contents
-          when shouldBeExecutable $ do
+          when (shouldBeExecutable && System.os /= "mingw32") $ do
             extractedPermissions <- getPermissions extractedBinary
             executable extractedPermissions `shouldBe` True
 
