@@ -14,7 +14,7 @@ jobs:
   test:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7.0.1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
     
@@ -26,7 +26,7 @@ jobs:
         stack-version: 'latest'
     
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v6.1.0
       with:
         path: |
           ~/.stack
@@ -57,7 +57,7 @@ jobs:
         KAI_SITE_EXPORT_OUT_DIR: dist/documentation-site
       run: bash scripts/export-site.sh
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7.0.1
       if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/validation/')
       with:
         name: validation-documentation
@@ -81,7 +81,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
       KAI_TEST_WEBSITE_HTML: dist/documentation-site/index.html
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
       - uses: haskell-actions/setup@v2
@@ -89,13 +89,13 @@ jobs:
           ghc-version: '9.4.8'
           enable-stack: true
           stack-version: 'latest'
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6.1.0
         with:
           path: |
             ~/.stack
             .stack-work
           key: native-check-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('stack.yaml.lock', 'package.yaml') }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: validation-documentation
           path: dist/documentation-site
@@ -128,6 +128,24 @@ jobs:
           PACKAGE=$(bash scripts/package-release-binary.sh "$RUNNER_OS" "$RUNNER_ARCH" "$BINARY" dist/native-package)
           EXTRACTED=$(bash scripts/extract-release-package.sh "$RUNNER_OS" "$PACKAGE" dist/native-extracted)
           bash scripts/test-release-binary.sh "$EXTRACTED" "$VERSION"
+      - name: Execute Windows package without compiler DLLs on PATH
+        if: runner.os == 'Windows'
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          root = Path.cwd()
+          binary = root / "dist/native-extracted/kai.exe"
+          environment = os.environ.copy()
+          windows = Path(environment["SystemRoot"])
+          environment["PATH"] = os.pathsep.join(map(str, [windows / "System32", windows]))
+          subprocess.run(
+              [sys.executable, str(root / "scripts/check-script-corpus.py"), str(binary), str(root / "tests")],
+              cwd=binary.parent, env=environment, check=True,
+          )
       - name: Check macOS deployment target
         if: runner.os == 'macOS'
         shell: bash
