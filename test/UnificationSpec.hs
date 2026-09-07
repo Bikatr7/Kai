@@ -1,6 +1,7 @@
 module UnificationSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Test.QuickCheck
 import Syntax
 import Parser
@@ -25,9 +26,8 @@ spec = describe "Unification Algorithm Edge Cases" $ do
         Right ty -> expectationFailure $ "Should fail with infinite type, got: " ++ show ty
     
     it "allows legitimate recursive-looking types" $ do
-      case parseAndInferType "\\f -> \\x -> f (f x)" of
-        Right _ -> True `shouldBe` True
-        Left err -> expectationFailure $ "Should allow valid recursion pattern: " ++ show err
+      let a = TVar "a"
+      TestSupport.shouldInfer "\\f -> \\x -> f (f x)" (TFun (TFun a a) (TFun a a))
 
     it "rejects a recursive binding whose result contains its own type" $ do
       case parseAndInferType "letrec f = \\x -> f in f" of
@@ -75,9 +75,9 @@ spec = describe "Unification Algorithm Edge Cases" $ do
         Left err -> expectationFailure $ "Should handle multiple constraints: " ++ show err
     
     it "unifies through conditional expressions" $ do
-      case parseAndInferType "\\p -> \\x -> \\y -> if p then (\\z -> x z) else (\\z -> y z)" of
-        Right _ -> True `shouldBe` True
-        Left err -> expectationFailure $ "Should unify conditional functions: " ++ show err
+      let function = TFun (TVar "a") (TVar "b")
+      TestSupport.shouldInfer "\\p -> \\x -> \\y -> if p then (\\z -> x z) else (\\z -> y z)"
+        (TFun TBool (TFun function (TFun function function)))
 
   describe "Substitution Chain Resolution" $ do
     it "resolves transitive type variable chains" $ do
@@ -87,9 +87,10 @@ spec = describe "Unification Algorithm Edge Cases" $ do
         Left err -> expectationFailure $ "Should resolve type chains: " ++ show err
     
     it "handles bidirectional unification" $ do
-      case parseAndInferType "\\f -> \\x -> \\y -> f (if x == y then x else y)" of
-        Right _ -> True `shouldBe` True
-        Left err -> expectationFailure $ "Should handle bidirectional unification: " ++ show err
+      let a = TVar "a"
+          b = TVar "b"
+      TestSupport.shouldInfer "\\f -> \\x -> \\y -> f (if x == y then x else y)"
+        (TFun (TFun a b) (TFun a (TFun a b)))
 
   describe "Function Type Unification" $ do  
     it "unifies function parameters correctly" $ do
@@ -125,6 +126,7 @@ spec = describe "Unification Algorithm Edge Cases" $ do
           a `shouldBe` d  -- x's type should match return type
           a `shouldNotBe` b  -- different parameters get different type vars
           b `shouldNotBe` c
+          a `shouldNotBe` c
         Right ty -> expectationFailure $ "Expected fresh type variables, got: " ++ show ty
         Left err -> expectationFailure $ "Should generate fresh variables: " ++ show err
 
@@ -138,11 +140,7 @@ spec = describe "Unification Algorithm Edge Cases" $ do
     
     it "unifies complex nested structures" $ do
       let complex = "\\a -> \\b -> \\c -> \\d -> (\\f -> f a b) (\\x -> \\y -> if c then x + d else y + d)"
-      case parseAndInferType complex of
-        Right _ -> True `shouldBe` True
-        Left err -> expectationFailure $ "Should handle complex nesting: " ++ show err
+      TestSupport.shouldInfer complex (TFun TInt (TFun TInt (TFun TBool (TFun TInt TInt))))
 
 parseAndInferType :: String -> Either TypeError Type
-parseAndInferType input = case parseExpr input of
-  Left _ -> Left (UnificationError TInt TBool)  
-  Right expr -> typeCheck expr
+parseAndInferType = TestSupport.inferSource

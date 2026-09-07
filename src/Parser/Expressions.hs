@@ -100,20 +100,21 @@ complexExprWithBlock exprParser = choice
 
 recordAccess :: Parser (Expr -> Expr)
 recordAccess = do
-  symbol "."
+  _ <- symbol "."
   field <- identifier
   return (`RecordAccess` field)
 
 application :: Parser Expr -> Parser (Expr -> Expr)
 application atomParser = do
+  notFollowedBy (char '+' <|> char '-')
   arg <- atomParser
   return (`App` arg)
 
 parensOrTuple :: Parser Expr -> Parser Expr
 parensOrTuple exprParser = do
-  symbol "("
+  _ <- symbol "("
   exprs <- sepBy exprParser (symbol ",")
-  symbol ")"
+  _ <- symbol ")"
   case exprs of
     [e] -> return e
     _   -> return (TupleLit exprs)
@@ -127,26 +128,22 @@ recordLitExpr exprParser = RecordLit <$> braces (sepBy (recordField exprParser) 
 recordField :: Parser Expr -> Parser (String, Expr)
 recordField exprParser = do
   name <- identifier
-  symbol "="
+  _ <- symbol "="
   e <- exprParser
   return (name, e)
 
 typeAnnotationExpr :: Parser Expr -> Parser Expr
 typeAnnotationExpr exprParser = do
-  symbol "("
+  _ <- symbol "("
   e <- exprParser
-  symbol ":"
+  _ <- symbol ":"
   t <- syntaxType
-  symbol ")"
+  _ <- symbol ")"
   return $ TypeAnnotation e t
 
 operatorTable :: Bool -> [[Operator Parser Expr]]
 operatorTable allowSeq =
-  [ [ Prefix (Not <$ keyword "not")
-    , Prefix ( Sub (IntLit 0)
-             <$ try (char '-' <* notFollowedBy digitChar <* sc)
-             )
-    ]
+  [ [Prefix (foldr (.) id <$> some prefixOperator)]
   , [ InfixL (Mul <$ symbol "*")
     , InfixL (Div <$ symbol "/")
     ]
@@ -162,3 +159,7 @@ operatorTable allowSeq =
   , [ InfixR (And <$ keyword "and") ]
   , [ InfixR (Or <$ keyword "or") ]
   ] ++ [[InfixR (Seq <$ symbol ";")] | allowSeq]
+
+prefixOperator :: Parser (Expr -> Expr)
+prefixOperator = (Not <$ keyword "not") <|>
+  (Sub (IntLit 0) <$ try (char '-' <* notFollowedBy digitChar <* sc))

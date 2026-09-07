@@ -1,0 +1,2 @@
+// expect: (true, -1, 5)
+(not not true, - - - 1, - - (\x -> x + 1) 4)

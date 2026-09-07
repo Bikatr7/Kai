@@ -1,4 +1,4 @@
-// expect: 4
+// expect: (4, 0, 1, 2, 3, 4, 6)
 // Test Church encoding using let bindings - complex functional programming
 let church_zero = \f -> \x -> x in
   let church_succ = \n -> \f -> \x -> f (n f x) in
@@ -10,4 +10,4 @@ let church_zero = \f -> \x -> x in
               let church_mult = \m -> \n -> \f -> m (n f) in
                 let church_to_int = \n -> n (\x -> x + 1) 0 in
                   let two_plus_two = church_add church_two church_two in
-                    church_to_int two_plus_two
+                    (church_to_int two_plus_two, church_to_int church_zero, church_to_int church_one, church_to_int church_two, church_to_int church_three, church_to_int church_four, church_to_int (church_mult church_two church_three))

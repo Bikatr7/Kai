@@ -1,3 +1,4 @@
 #!/usr/bin/env kai
 // expect: ()
+// stdout: "hello\n"
 print "hello"

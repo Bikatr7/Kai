@@ -1,0 +1,7 @@
+// expect: 42
+// stdout: "first\nsecond\n"
+// expect-type: TInt
+/* Outer comment /* Nested comment */ remains open until here. */
+print "first"
+print "second"
+42

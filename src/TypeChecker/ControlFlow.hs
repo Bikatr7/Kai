@@ -2,32 +2,21 @@ module TypeChecker.ControlFlow where
 
 import Control.Monad.Trans (lift)
 import Syntax (Expr(..))
+import TypeChecker.Helpers (inferBinary)
 import TypeChecker.Types
 import TypeChecker.Substitution (applySubst, applySubstEnv, composeSubst, composeSubstList)
 import TypeChecker.Unification
-
-type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 
 inferControlFlow :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferControlFlow infer env (Print e) = do
   (s, _) <- infer env e
   return (s, TUnit)
 
-inferControlFlow infer env (And e1 e2) = do
-  (s1, t1) <- infer env e1
-  (s2, t2) <- infer (applySubstEnv s1 env) e2
-  s3 <- lift $ unify (applySubst s2 t1) TBool
-  s4 <- lift $ unify (applySubst s3 t2) TBool
-  let finalSubst = composeSubstList [s1, s2, s3, s4]
-  return (finalSubst, TBool)
+inferControlFlow infer env (And e1 e2) =
+  inferBinary infer env e1 e2 TBool TBool TBool
 
-inferControlFlow infer env (Or e1 e2) = do
-  (s1, t1) <- infer env e1
-  (s2, t2) <- infer (applySubstEnv s1 env) e2
-  s3 <- lift $ unify (applySubst s2 t1) TBool
-  s4 <- lift $ unify (applySubst s3 t2) TBool
-  let finalSubst = composeSubstList [s1, s2, s3, s4]
-  return (finalSubst, TBool)
+inferControlFlow infer env (Or e1 e2) =
+  inferBinary infer env e1 e2 TBool TBool TBool
 
 inferControlFlow infer env (Seq e1 e2) = do
   (s1, _) <- infer env e1
@@ -47,21 +36,11 @@ inferControlFlow infer env (Eq e1 e2) = do
   let finalSubst = composeSubstList [s1, s2, s3]
   return (finalSubst, TBool)
 
-inferControlFlow infer env (Lt e1 e2) = do
-  (s1, t1) <- infer env e1
-  (s2, t2) <- infer (applySubstEnv s1 env) e2
-  s3 <- lift $ unify (applySubst s2 t1) TInt
-  s4 <- lift $ unify (applySubst s3 t2) TInt
-  let finalSubst = composeSubstList [s1, s2, s3, s4]
-  return (finalSubst, TBool)
+inferControlFlow infer env (Lt e1 e2) =
+  inferBinary infer env e1 e2 TInt TInt TBool
 
-inferControlFlow infer env (Gt e1 e2) = do
-  (s1, t1) <- infer env e1
-  (s2, t2) <- infer (applySubstEnv s1 env) e2
-  s3 <- lift $ unify (applySubst s2 t1) TInt
-  s4 <- lift $ unify (applySubst s3 t2) TInt
-  let finalSubst = composeSubstList [s1, s2, s3, s4]
-  return (finalSubst, TBool)
+inferControlFlow infer env (Gt e1 e2) =
+  inferBinary infer env e1 e2 TInt TInt TBool
 
 inferControlFlow infer env (If c t e) = do
   (s1, tc) <- infer env c

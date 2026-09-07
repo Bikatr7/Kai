@@ -1,3 +1,4 @@
 // Test command-line arguments
 // expect: ()
+// stdout: "Number of arguments: 0\nNo arguments provided\nDone!\n"
 let arguments = args in let count = length arguments in let _ = print ("Number of arguments: " ++ toString count) in let _ = if count > 0 then print ("Arguments: " ++ show arguments) else print "No arguments provided" in print "Done!"

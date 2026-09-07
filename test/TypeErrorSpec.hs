@@ -1,6 +1,7 @@
 module TypeErrorSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Syntax
 import TypeChecker
 import Parser
@@ -65,8 +66,7 @@ spec = describe "Type Errors" $ do
   describe "Function Type Errors" $ do
     it "rejects applying non-function" $ do
       case parseAndTypeCheck "5 10" of
-        Left (UnificationError TInt (TFun TInt _)) -> True `shouldBe` True
-        Left (UnificationError TInt _) -> True `shouldBe` True
+        Left (UnificationError TInt (TFun TInt (TVar _))) -> True `shouldBe` True
         _ -> expectationFailure "Should be unification error: expected function"
     
     it "rejects wrong argument type" $ do
@@ -89,6 +89,4 @@ spec = describe "Type Errors" $ do
         Right ty -> expectationFailure $ "Should fail, but got type: " ++ show ty
 
 parseAndTypeCheck :: String -> Either TypeError Type
-parseAndTypeCheck input = case parseExpr input of
-  Left _ -> Left (TypeMismatch TInt TBool)  -- dummy error for parse failures, will be replaced with a more specific error eventually
-  Right expr -> typeCheck expr
+parseAndTypeCheck = TestSupport.inferSource

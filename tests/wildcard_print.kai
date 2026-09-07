@@ -1,2 +1,3 @@
 // expect: 100
+// stdout: "testing wildcard\n"
 let _ = print "testing wildcard" in 100

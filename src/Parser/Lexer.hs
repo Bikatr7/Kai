@@ -4,7 +4,6 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 import Data.Void
-import Data.Char (isAlphaNum)
 
 type Parser = Parsec Void String
 
@@ -12,7 +11,7 @@ sc :: Parser ()
 sc = L.space
   space1
   (L.skipLineComment "//")
-  (L.skipBlockComment "/*" "*/")
+  (L.skipBlockCommentNested "/*" "*/")
 
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc

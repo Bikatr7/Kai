@@ -1,4 +1,5 @@
 // expect: 42
+// stdout: "first\n"
 do {
   print "first";
   42

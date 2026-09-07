@@ -4,17 +4,20 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Current Release (v0.0.4.5)
+## Kai v0.0.4.6
 
-Kai `v0.0.4.5`, released on 2026-07-11, adds explicit `--version`/`-V` CLI flags and hardens distribution with permission-preserving archives, SHA-256 manifests, pinned platform runners, a macOS 11.3 deployment target, and native verification of the exact downloaded release packages before publication.
+Kai combines type inference, first-class functions, algebraic data types, and
+practical scripting tools. Builtins support partial application, recursive
+bindings initialize in source order, and scripts and modules use the same
+language rules as the interactive REPL.
 
-Features available today:
+Features:
 
 - **Expressions**: integers, booleans, strings, parentheses, unary minus
 - **Arithmetic**: `+`, `-`, `*`, `/` (integer division, division-by-zero and 32-bit overflow errors)
 - **Booleans**: `and`, `or`, `not`
 - **Comparisons**: `==`, `<`, `>`
-- **Strings**: string literals (`"hello"`), concatenation (`++`), escapes (`\"`, `\\`, `\n`)
+- **Strings**: string literals (`"hello"`), concatenation (`++`), escapes (`\"`, `\\`, `\n`); UTF-8 source files and text-file I/O
 - **String functions**: `split`, `join`, `trim`, `replace`, `strLength` for text processing
 - **Lists**: `[1, 2, 3]`, concatenation (`++`), equality (`==`), cons (`::`), operations (`head`, `tail`, `null`)
 - **List functions**: `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip` for functional programming
@@ -25,8 +28,8 @@ Features available today:
 - **Process & environment access**: `system`, `getEnv`, `setEnv`, and `exit`
 - **Command-line arguments**: `args : [String]` returns list of command-line arguments passed to scripts and REPL sessions
 - **Conditionals**: `if cond then e1 else e2`
-- **Functions**: lambdas (`\x -> expr`), application (`f x`), closures, and `fix : (a -> a) -> a`
-- **Static typing & inference**: `TInt`, `TBool`, `TString`, `TUnit`, `TList`, `TRecord`, `TTuple`, `TFun`, and user-defined custom types with unification, occurs check, generalized let-polymorphism, and explicitly annotated polymorphic recursion
+- **Functions**: lambdas (`\x -> expr`), application (`f x`), closures, partially applied builtins, and `fix : (a -> a) -> a`
+- **Static typing & inference**: `Int`, `Bool`, `String`, `Unit`, lists, records, tuples, functions, `Maybe`, `Either`, and custom types with unification, occurs check, generalized let-polymorphism, and explicitly annotated polymorphic recursion
 - **Type annotations**: Optional type annotations (`let x : Int = 42`, `\x : String -> expr`)
 - **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
 - **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`, `discard : a -> Unit`
@@ -40,19 +43,23 @@ Features available today:
 - **Let bindings**: `let` and `letrec` for variable bindings and recursive functions
 - **Top-level definitions**: `let` and `letrec` at module level for defining functions and values
 - **Module system**: `import ModuleName` to import modules, module resolution supports `ModuleName.kai` and `ModuleName/ModuleName.kai`, full cross-module type checking, explicit exports with `export name1, name2`
-- **Tests**: Hspec + QuickCheck (722 examples), asserted script results, CLI/REPL coverage, and 1000-level full-pipeline stress cases
+- **Tests**: Hspec + QuickCheck, exact script results and stdout with real stdin fixtures, CLI/REPL and direct shebang coverage, and 1000-level full-pipeline stress cases
 - **Working examples**: Module-based text analysis, validated CLI tools, interactive calculator and guessing game, an expression-tree ADT pipeline, list/record processing, text cleanup, directory/env-aware file workflows, wildcard matching, and discard/logging demos
 
 Current limitations:
 
 - REPL is functional but still minimal: no history, completion, or pretty diagnostics
 - Standard library is broader now, but still missing line-oriented file helpers, JSON/HTTP, and a package story
-- No error recovery (one parse/type error stops execution)
-- Polymorphic recursion requires explicit annotations; unannotated recursive bindings remain monomorphic
+- A failed script stops at the first error; the REPL reports errors and accepts the next input
+- Record functions require exact field sets; row polymorphism is not implemented
+- `show` and `print` are human-readable display, not round-trip serialization
+- Polymorphic recursive calls require explicit annotations; completed recursive definitions can still be generalized for later uses
 
 ## Quickstart
 
 Prerequisites: GHC/Stack via GHCup or your platform’s package manager.
+The test suite also uses Cabal, Python 3, Bash, Make, curl, tar, zip, and unzip.
+The CLI builds natively on Linux, macOS, and Windows. The website generator and POSIX runner/exporter use Linux or macOS; see `DEVELOPING.md` for the Windows test command.
 
 Build, test, and run:
 
@@ -64,7 +71,7 @@ stack test
 stack exec kai --                # start the REPL
 stack exec kai -- --help
 stack exec kai -- --version
-stack exec kai -- -e "\"hi\" ++ \"!\""
+stack exec kai -- -e 'print ("hi" ++ "!")'
 stack exec kai -- -e "print (42 + 1)"
 stack exec kai -- --debug -e "42 + 1"
 
@@ -80,9 +87,13 @@ stack exec kai-website  # visit http://localhost:3000
 PORT=4000 stack exec kai-website  # optional website port override
 ```
 
+File execution and `-e` print only explicit output. Use `print` to display a
+value; the REPL displays expression results automatically.
+
 Install the CLI (no explicit `stack` needed):
 
-- Lightweight runner script: installs a `kai` command that prefers a compiled binary and otherwise falls back to `stack exec kai` transparently.
+- `make install` links the runner to this checkout, so it works from other directories. Keep the checkout in place, or use `stack install` for a standalone binary. Add the install directory to your shell's `PATH` as shown below.
+- Set `KAI_BIN` to select an executable explicitly. Otherwise the runner searches `PATH`, then the active Stack build. Without Stack, it selects the newest local build.
 
 ```bash
 make install              # installs to ~/.local/bin/kai by default
@@ -94,11 +105,11 @@ kai path/to/script.kai
 
 Prebuilt packages (CI Releases):
 
-- After updating the version and synchronizing docs/tests, push the `package.yaml` version bump to `master`. That change starts **Build and Release Binaries** automatically; manual dispatch remains available for retries. The workflow validates the release candidate, creates a draft, then downloads and tests each exact package on its native runner before publishing it.
-- Starting with v0.0.4.5, download `kai-linux-amd64.tar.gz`, `kai-macos-arm64.zip`, or `kai-windows-amd64.zip` from Releases and verify it against `SHA256SUMS`.
+- To publish a release after synchronizing the version, documentation, and tests, push the `package.yaml` version bump to `master`. That change starts **Build and Release Binaries** automatically; manual dispatch on `master` remains available for retries. The workflow validates the release candidate, creates a draft, then downloads and tests each exact package on its native runner before publishing it.
+- Release packages are named `kai-linux-amd64.tar.gz`, `kai-macos-arm64.zip`, and `kai-windows-amd64.zip`. Verify downloaded packages against `SHA256SUMS`.
 - Extract the package and place `kai` (or `kai.exe`) on your `PATH`. Linux and macOS archives preserve the executable bit.
 - Release CI executes the exact packages on Ubuntu 22.04 x64, Apple Silicon macOS 15, and Windows Server 2022 x64. Linux is built and tested on Ubuntu 22.04 (glibc 2.35), and the macOS binary declares an 11.3 deployment target; compatibility with other matching systems is expected but not directly exercised by this workflow.
-- macOS Developer ID/notarization and Windows Authenticode support are built into the workflow but remain disabled until their repository variables and certificate secrets are configured.
+- macOS Developer ID/notarization and Windows Authenticode signing are opt-in workflow paths that require their repository variables and certificate secrets; see `DEVELOPING.md` for configuration.
 - From source, `stack install` also produces a native binary in your local Stack install path.
 
 Export a static site bundle:
@@ -113,7 +124,7 @@ bash scripts/export-site.sh
 Script samples in tests:
 
 - `stack test` also discovers `.kai` files under `tests/` and `test/`, evaluates them, and shows each file’s result in the test output under two sections.
-- Add your own `.kai` script to those folders to have it run automatically.
+- Add your own `.kai` script with `// expect:` to those folders to have it run automatically. Printing tests also need an exact `// stdout:` assertion; input fixtures use `// stdin:`. See [Testing notes](#testing-notes).
 
 ## Examples
 
@@ -122,6 +133,7 @@ Arithmetic, booleans, conditionals:
 ```kai
 42 * (10 - 3)
 true and not false
+not not true  // => true
 if 10 > 5 then 84 else 0
 ```
 
@@ -142,8 +154,7 @@ do {
   42
 }  // Result: prints setup messages, returns 42
 
-(print "First"); (print "Second"); print "Done"
-// Parenthesize print when sequencing it
+print "First"; print "Second"; print "Done"
 
 let x = 10 in do {
   print ("x is " ++ (toString x));
@@ -284,8 +295,8 @@ print ("First argument: " ++ firstArg)
 Type safety (checked before evaluation):
 
 ```kai
-1 + true         // Type error: TypeMismatch TInt TBool
-if 5 then 1 else 2  // Type error: ExpectedBool TInt
+1 + true         // Type error: UnificationError TBool TInt
+if 5 then 1 else 2  // Type error: UnificationError TInt TBool
 ```
 
 ## Performance Benchmarks
@@ -298,7 +309,7 @@ Kai includes comprehensive benchmarks for speed and memory usage:
 # Run all benchmarks
 stack bench
 
-# Validate every benchmark input with one iteration (also runs in CI)
+# Run every benchmark once (also runs in CI)
 stack bench --benchmark-arguments="--iters 1"
 
 # Run specific benchmark categories
@@ -311,9 +322,11 @@ stack bench --benchmark-arguments="--csv=results.csv"
 
 ### Performance Baselines
 
-Benchmark inputs are required to parse and evaluate or type-check successfully;
-invalid inputs abort the run. Timings are machine- and build-specific, so establish
-a fresh local baseline instead of relying on historical numbers.
+Compare timings on the same machine and build profile. Most speed cases use
+`nf work input`; the small-input latency cases use `whnf`. The one-iteration CI
+run catches execution failures but does not assert exact results or a performance
+threshold. Evaluator and type-checker cases include parsing. Full benchmark runs
+produce timing measurements; Weigh reports allocations and garbage collections.
 
 See `benchmarks/README.md` for detailed benchmark documentation and regression testing guidelines.
 
@@ -323,13 +336,19 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 - Wildcard variable `_` can be used in let bindings and pattern matching to discard values: `let _ = expression in body`, `case x of _ -> "any" | Just val -> "some"`.
 - `do { ... }` is the idiomatic way to sequence effects. Entries are separated by semicolons, and `do {}` evaluates to `()`.
 - Expression sequencing with `;` has lowest precedence and is right-associative: `a; b; c` = `a; (b; c)`.
-- Unary minus is a proper prefix operator (e.g., `-5`, `10 - (-3)`).
+- Unary minus is a prefix operator (e.g., `-5`, `10 - (-3)`). Use parentheses for signed function arguments: `f (-1)`; `7 -2` is subtraction.
+- Prefix operators may repeat: `not not true` and `- - 5`. They apply from right to left, with integer overflow checked at each negation.
+- Builtins can be stored or partially applied: `let f = take 2 in f [1,2,3]`. Parenthesize a builtin passed to another builtin, as in `map (length) [[1],[2,3]]`.
+- Recursive bindings allow constants and closures. Reading a recursive binding before initialization returns `UninitializedRecursion`.
+- Type variables are local to each annotation; their spelling does not connect separate annotations. Constructor patterns require every declared field.
+- Imported data declarations compare parameter positions and payload types, independent of parameter spelling. Private constructors remain private.
 - Integer literals, `parseInt`, and arithmetic results are constrained to signed 32-bit values. Arithmetic overflow raises `IntegerOverflow`.
 - Equality is structural for primitive and composite data. Different constructors compare as `false`; callable values and recursive runtime references are not comparable and raise a runtime `TypeError`, even when nested.
 - Concatenation (`++`) works for both strings and lists, right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`, `[1, 2] ++ [3, 4]` parses as `[1, 2] ++ [3, 4]`.
 - Supported string escapes: `\"`, `\\`, `\n`. Unknown escapes are errors.
-- `print` evaluates its argument, prints it, and returns unit `()`.
-- Application binds tighter than infix operators (`f x + y` parses as `(f x) + y`).
+- `print` evaluates its argument, prints and flushes it, and returns unit `()`. An output failure returns a runtime `TypeError` and stops subsequent effects.
+- Application and field access form one left-associated chain, tighter than prefix and infix operators. `f x.field` means `(f x).field`; use `f (x.field)` to pass a field value.
+- `and` and `or` evaluate both operands. Use `if` when a branch must avoid an effect or runtime error.
 - Multi-statement files are supported: top-level newlines split expressions, while nested `()`, `[]`, `{}`, strings, and comments stay intact.
 
 ## Project Structure
@@ -358,10 +377,11 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 │   │   ├── Bindings.hs           ## Let/letrec binding type checking
 │   │   ├── DataStructures.hs     ## Data structure type checking
 │   │   ├── Operations.hs         ## Built-in operation type checking
+│   │   ├── Helpers.hs            ## Shared operand inference and constraints
 │   │   ├── Patterns.hs           ## Pattern type checking
 │   │   └── Inference.hs          ## Main type inference dispatcher
 │   ├── TypeChecker.hs            ## Public type checker interface
-│   ├── Evaluator/                ## Modular evaluator with pure/IO duality
+│   ├── Evaluator/                ## Shared operations for pure and I/O evaluation
 │   │   ├── Types.hs              ## Runtime value definitions with NFData
 │   │   ├── Helpers.hs            ## Utility functions for evaluation
 │   │   ├── Literals.hs           ## Literal evaluation
@@ -374,6 +394,8 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 │   │   ├── StringOps.hs          ## String operation evaluation (pure & IO)
 │   │   ├── Conversions.hs        ## Type conversion evaluation (pure & IO)
 │   │   ├── IOOps.hs              ## I/O operation evaluation
+│   │   ├── Program.hs            ## Script and module execution
+│   │   ├── Recursion.hs          ## Recursive binding initialization
 │   │   └── Patterns.hs           ## Pattern matching evaluation (pure & IO)
 │   ├── Evaluator.hs              ## Public evaluator interface
 │   ├── DataDeclarations.hs       ## User-defined data type environments
@@ -381,7 +403,11 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 │   ├── ModuleSystem.hs           ## Module loading and import resolution
 │   ├── REPL.hs                   ## Interactive session implementation
 │   ├── CLI.hs                    ## CLI runner and exit-code handling
-│   └── Main.hs                   ## Thin executable entry for `kai`
+│   ├── ScriptCheck.hs            ## Script result and type assertions
+│   ├── SourceIO.hs               ## Source-file decoding and read errors
+│   └── UTF8.hs                   ## UTF-8 text-file reads and writes
+├── app/
+│   └── Main.hs                   ## Thin `kai` entry point linking the library
 ├── benchmarks/                    ## Performance benchmarking suite
 │   ├── Bench.hs                  ## Main benchmark orchestrator
 │   ├── ParserBench.hs            ## Parser performance benchmarks
@@ -394,7 +420,7 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 │   └── static/                   ## Website assets (favicon, css)
 ├── scripts/                      ## Helper scripts (runner, export-site)
 ├── dist-site/                    ## Static site export (generated by `make site`)
-├── Makefile                      ## install/test/site/build targets
+├── Makefile                      ## install/build-install/uninstall/test/site targets
 ├── package.yaml                  ## Project config (library + exes + tests + benches)
 ├── kai-lang.cabal                ## Generated from package.yaml (hpack)
 ├── stack.yaml                    ## Stack configuration
@@ -413,9 +439,9 @@ Design philosophy:
 
 Roadmap:
 
-`v0.0.4.5` is the current published release. It completes the CLI and distribution hardening pass; feature work should continue to sharpen the existing experience instead of widening the surface area immediately.
+The roadmap focuses on scripting tools and the interactive development experience.
 
-**Next focus after v0.0.4.5**
+**Next focus**
 - Better REPL ergonomics: history, completion, and friendlier diagnostics
 - More stdlib depth: line-oriented file helpers, JSON/HTTP, and a few missing script-heavy helpers
 - Tooling: formatter/linter polish, editor support, and eventually package management
@@ -426,7 +452,7 @@ Example current Kai script style:
 ```kai
 #!/usr/bin/env kai
 
-let processLines = \text -> filter (\line -> not (trim line == "")) (map trim (split "\n" text))
+let processLines = \text -> filter (\line -> not (trim line == "")) (map (trim) (split "\n" text))
 let greet = \name -> if name == "" then "Hello, world!" else "Hello, " ++ name
 
 let inputText = readFile "input.txt"
@@ -478,7 +504,7 @@ bash scripts/export-site.sh  # writes dist-site/
 open dist-site/index.html
 ```
 
-Runner script without stack:
+Use the runner without typing `stack`:
 
 ```bash
 make install
@@ -489,7 +515,24 @@ kai tests/arithmetic.kai
 ## Testing notes
 
 - Unit tests: parsing, evaluation, type checking.
-- Property tests: determinism, pretty‑print/parse stability, integer bounds, algebraic laws.
-- Script tests: all `.kai` files under `tests/` and `test/` are parsed and evaluated in the suite output.
+- Property tests: AST preservation through parsing, type preservation, integer bounds, algebraic laws, and specific errors.
+- Script tests: all `.kai` files under `tests/` and `test/` are parsed, type-checked, evaluated, and checked against value/error and output assertions.
 
-To add your own scripts, drop a `.kai` file into `tests/` and run `stack test`.
+For a printing/input test:
+
+```kai
+// expect: ()
+// expect-type: TUnit
+// stdin: "Ada\n"
+// stdout: "Hello, Ada!\n"
+print ("Hello, " ++ input ++ "!")
+```
+
+`()` checks the return value; `// stdout:` checks the printed greeting, including
+its newline. These comments are test directives. The harness supplies stdin and
+compares exact stdout; without stdout the script must be silent, and without
+stdin it receives EOF. `kai --check FILE.kai` checks values and types directly;
+the harness adds input/output assertions. Run `stack test` to execute both.
+
+See [DEVELOPING.md](DEVELOPING.md#test-suite-structure) for per-test JSON reports,
+script assertion checks, and tests for the harness itself.

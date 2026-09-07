@@ -1,6 +1,7 @@
 module ComparisonSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Control.Monad (forM_)
 import Data.IORef (newIORef)
 import qualified Data.Map as Map
@@ -71,9 +72,7 @@ spec = describe "Comparison Operations" $ do
       parseEvaluate "3 > 5" `shouldBe` Right (VBool False)
 
 parseEvaluate :: String -> Either RuntimeError Value
-parseEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> evalPure expr
+parseEvaluate = TestSupport.evaluateSource
 
 assertEqualityBoth :: String -> Either RuntimeError Value -> Expectation
 assertEqualityBoth source expected = case parseExpr source of

@@ -1,3 +1,5 @@
+// expect: "Final(Step2(Step1(Ada)))"
+// stdin: "Ada\n"
 // Test input in deeply nested structure
 // expect-type: TString
 

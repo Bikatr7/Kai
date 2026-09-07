@@ -1,3 +1,4 @@
+// expect: ()
 // expect-type: TUnit
 // Count words in a file with module reuse and explicit CLI validation.
 import TextAnalysis

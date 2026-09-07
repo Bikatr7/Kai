@@ -1,7 +1,6 @@
-{-# LANGUAGE LambdaCase #-}
-
 module ModuleSystem (
     loadModule,
+    filterByExports,
     resolveModulePath,
     ModuleInfo(..),
     loadModuleTypeEnvIO,
@@ -10,22 +9,16 @@ module ModuleSystem (
 
 import Syntax
 import Parser
-import DataDeclarations (dataConstructorsTypeEnv, dataConstructorsValueEnv)
-import TypeChecker (typeCheckProgramWithDirIO, TypeEnv, Substitution, TypeError(..), syntaxTypeToType)
-import TypeChecker.Types (Type(..), Scheme, monoScheme)
-import TypeChecker.Substitution (applySubst, applySubstEnv, composeSubst, generalize, schemeIsInstanceOf)
-import TypeChecker.Unification (unify)
-import TypeChecker.Inference (infer)
+import DataDeclarations (filterTypeExports)
+import TypeChecker (inferProgramWithEnvIO, TypeEnv, TypeError(..))
 import Evaluator.Types
+import Evaluator.Program (evaluateTopLevels)
 import qualified Data.Map as Map
 import System.FilePath (takeDirectory, (</>))
 import System.Directory (doesFileExist)
 import Control.Monad (foldM)
-import Data.IORef (newIORef, writeIORef)
-import Data.Either (lefts, rights)
-import Data.List (foldr, intercalate)
-import System.IO.Error (catchIOError)
-import Control.Monad.State (evalStateT)
+import Data.List (intercalate)
+import SourceIO (readSourceFile)
 
 data ModuleInfo = ModuleInfo
     { moduleName :: String
@@ -35,334 +28,83 @@ data ModuleInfo = ModuleInfo
     } deriving (Show)
 
 resolveModulePath :: FilePath -> String -> IO (Either String FilePath)
-resolveModulePath currentDir moduleName = do
-    let baseName = moduleName ++ ".kai"
+resolveModulePath currentDir name = do
+    let baseName = name ++ ".kai"
     let paths =
             [ currentDir </> baseName
-            , currentDir </> moduleName </> baseName
+            , currentDir </> name </> baseName
             , currentDir </> "examples" </> baseName
-            , currentDir </> "examples" </> moduleName </> baseName
+            , currentDir </> "examples" </> name </> baseName
             ]
-    foldM tryPath (Left $ "Module not found: " ++ moduleName) paths
+    foldM tryPath (Left $ "Module not found: " ++ name) paths
   where
     tryPath (Right found) _ = return $ Right found
     tryPath _ path = do
         exists <- doesFileExist path
         if exists
             then return $ Right path
-            else return $ Left $ "Module not found: " ++ moduleName
+            else return $ Left $ "Module not found: " ++ name
 
 loadModule :: (Env -> Expr -> IO (Either RuntimeError Value)) -> FilePath -> String -> [String] -> IO (Either String ModuleInfo)
-loadModule evalFunc currentDir moduleName loadingStack = do
-    if moduleName `elem` loadingStack
-        then return $ Left $ "Circular import detected: " ++ moduleName ++ " is already being loaded. Loading stack: " ++ intercalate " -> " (loadingStack ++ [moduleName])
-        else do
-            pathResult <- resolveModulePath currentDir moduleName
-            case pathResult of
-                Left err -> return $ Left err
-                Right path -> do
-                    content <- readFile path
-                    case parseProgram content of
-                        Left parseErr -> return $ Left $ "Parse error in module " ++ moduleName ++ ": " ++ show parseErr
-                        Right program -> do
-                            let exports = extractExports program
-                            let moduleDir = takeDirectory path
-                            typeResult <- typeCheckProgramWithDirIO loadModuleTypeEnvIO moduleDir program
-                            case typeResult of
-                              Left typeErr -> return $ Left $ "Type error in module " ++ moduleName ++ ": " ++ show typeErr
-                              Right _ -> do
-                                  let newLoadingStack = loadingStack ++ [moduleName]
-                                  envResult <- evalModuleWithEnv evalFunc Map.empty moduleDir program newLoadingStack
-                                  case envResult of
-                                    Left runtimeErr -> return $ Left $ "Runtime error in module " ++ moduleName ++ ": " ++ show runtimeErr
-                                    Right env -> return $ Right $ ModuleInfo
-                                        { moduleName = moduleName
-                                        , moduleProgram = program
-                                        , moduleEnv = env
-                                        , moduleExports = exports
-                                        }
+loadModule evaluate currentDir name stack
+  | name `elem` stack = return $ Left $ "Circular import detected: " ++ intercalate " -> " (stack ++ [name])
+  | otherwise = do
+      resolved <- resolveModulePath currentDir name
+      case resolved of
+        Left err -> return $ Left err
+        Right path -> do
+          source <- readSourceFile path
+          case source of
+            Left err -> return $ Left $ "IO error reading module " ++ name ++ ": " ++ show err
+            Right content -> case parseProgram content of
+              Left err -> return $ Left $ "Parse error in module " ++ name ++ ": " ++ show err
+              Right program -> do
+                let dir = takeDirectory path
+                    nextStack = stack ++ [name]
+                checked <- extractTypeEnvIOWithStack dir program nextStack
+                case checked of
+                  Left err -> return $ Left $ "Type error in module " ++ name ++ ": " ++ show err
+                  Right _ -> do
+                    result <- evaluateTopLevels evaluate (loadImport dir nextStack) Map.empty program
+                    return $ case result of
+                      Left err -> Left $ "Runtime error in module " ++ name ++ ": " ++ show err
+                      Right (env, _) -> Right $ ModuleInfo name program env (extractExports program)
+  where
+    loadImport dir loading name' = do
+      result <- loadModule evaluate dir name' loading
+      return $ case result of
+        Left err -> Left $ TypeError err
+        Right info -> Right $ filterByExports (moduleEnv info) (moduleExports info)
 
 extractExports :: Program -> [String]
-extractExports (Program topLevels) = concatMap extractExport topLevels
-  where
-    extractExport (TLExport names) = names
-    extractExport _ = []
+extractExports (Program levels) = concat [names | TLExport names <- levels]
 
 filterByExports :: Map.Map String a -> [String] -> Map.Map String a
 filterByExports env [] = env
-filterByExports env exports = Map.filterWithKey (\k _ -> k `elem` exports) env
-
-mergeMutualSubstitutions :: [Substitution] -> Either TypeError Substitution
-mergeMutualSubstitutions = foldM mergeSubstitution Map.empty
-  where
-    mergeSubstitution acc sub = foldM mergeBinding acc (Map.toList sub)
-
-    mergeBinding acc (name, ty) =
-      let ty' = applySubst acc ty
-      in case Map.lookup name acc of
-        Nothing -> Right $ Map.insert name ty' acc
-        Just existing -> do
-          unifySubst <- unify (applySubst acc existing) ty'
-          let acc' = composeSubst unifySubst acc
-          return $ Map.insert name (applySubst acc' ty') acc'
-
-evalModuleWithEnv :: (Env -> Expr -> IO (Either RuntimeError Value)) -> Env -> FilePath -> Program -> [String] -> IO (Either RuntimeError Env)
-evalModuleWithEnv evalFunc env currentDir (Program topLevels) loadingStack = do
-    importResult <- processImports evalFunc env currentDir topLevels [] loadingStack
-    case importResult of
-        Left err -> return $ Left err
-        Right (importedEnv, remaining) -> do
-            evalDefinitions evalFunc importedEnv remaining
-  where
-    processImports :: (Env -> Expr -> IO (Either RuntimeError Value)) -> Env -> FilePath -> [TopLevel] -> [TopLevel] -> [String] -> IO (Either RuntimeError (Env, [TopLevel]))
-    processImports _ env _ [] acc _ = return $ Right (env, reverse acc)
-    processImports evalFunc env currentDir (TLImport moduleName : rest) acc loadingStack = do
-        moduleResult <- loadModule evalFunc currentDir moduleName loadingStack
-        case moduleResult of
-            Left err -> return $ Left $ TypeError $ "Failed to load module " ++ moduleName ++ ": " ++ err
-            Right moduleInfo -> do
-                let exportedEnv = filterByExports (moduleEnv moduleInfo) (moduleExports moduleInfo)
-                let mergedEnv = Map.union exportedEnv env
-                processImports evalFunc mergedEnv currentDir rest acc loadingStack
-    processImports evalFunc env currentDir (TLExport _ : rest) acc loadingStack = do
-        processImports evalFunc env currentDir rest acc loadingStack
-    processImports evalFunc env currentDir (other : rest) acc loadingStack = do
-        processImports evalFunc env currentDir rest (other : acc) loadingStack
-    
-    evalDefinitions :: (Env -> Expr -> IO (Either RuntimeError Value)) -> Env -> [TopLevel] -> IO (Either RuntimeError Env)
-    evalDefinitions _ env [] = return $ Right env
-    evalDefinitions evalFunc env (TLDef var maybeType expr : rest) = do
-        case expr of
-            LetRec _ _ _ _ -> do
-                let (letrecs, remaining) = collectConsecutiveLetrecs (TLDef var maybeType expr : rest)
-                result <- processMutualRecursion evalFunc env letrecs remaining
-                case result of
-                    Left err -> return $ Left err
-                    Right finalEnv -> evalDefinitions evalFunc finalEnv remaining
-            _ -> do
-                result <- evalFunc env expr
-                case result of
-                    Left err -> return $ Left err
-                    Right val -> do
-                        let env' = Map.insert var val env
-                        evalDefinitions evalFunc env' rest
-    evalDefinitions evalFunc env (TLData _ _ constructors : rest) = do
-        let env' = Map.union (dataConstructorsValueEnv constructors) env
-        evalDefinitions evalFunc env' rest
-    evalDefinitions evalFunc env (_ : rest) = evalDefinitions evalFunc env rest
-    
-    collectConsecutiveLetrecs :: [TopLevel] -> ([TopLevel], [TopLevel])
-    collectConsecutiveLetrecs [] = ([], [])
-    collectConsecutiveLetrecs (TLDef var maybeType expr : rest) =
-        case expr of
-            LetRec _ _ _ _ ->
-                let (moreLetrecs, remaining) = collectConsecutiveLetrecs rest
-                in (TLDef var maybeType expr : moreLetrecs, remaining)
-            _ -> ([], TLDef var maybeType expr : rest)
-    collectConsecutiveLetrecs (other : rest) = ([], other : rest)
-    
-    processMutualRecursion :: (Env -> Expr -> IO (Either RuntimeError Value)) -> Env -> [TopLevel] -> [TopLevel] -> IO (Either RuntimeError Env)
-    processMutualRecursion evalFunc env letrecs remaining = do
-        refs <- mapM (\_ -> newIORef (VFun "_placeholder" (IntLit 0) Map.empty)) letrecs
-        let refMap = Map.fromList $ zipWith (\topLevel ref ->
-                case topLevel of
-                    TLDef var _ _ -> (var, VRef ref)
-                    _ -> error "processMutualRecursion: expected TLDef") letrecs refs
-        let mutualEnv = Map.union refMap env
-        results <- mapM (\case
-                TLDef var _ expr ->
-                    case expr of
-                        LetRec _ _ recVal _ -> evalFunc mutualEnv recVal
-                        _ -> return $ Left $ TypeError "Expected LetRec expression"
-                _ -> return $ Left $ TypeError "Expected TLDef with LetRec") letrecs
-        let findError = foldr (\result acc -> case result of Left err -> Left err; Right _ -> acc) (Right ()) results
-        case findError of
-            Left err -> return $ Left err
-            Right _ -> do
-                let recValues = rights results
-                let checkAndUpdate (recValue, ref) =
-                        case recValue of
-                            VFun _ _ _ -> do
-                                writeIORef ref recValue
-                                return $ Right ()
-                            _ -> return $ Left $ TypeError ("LetRec value must be a function, got: " ++ show recValue)
-                updateResults <- mapM checkAndUpdate (zip recValues refs)
-                let checkUpdates = foldr (\result acc -> case result of Left err -> Left err; Right _ -> acc) (Right ()) updateResults
-                case checkUpdates of
-                    Left err -> return $ Left err
-                    Right _ -> return $ Right mutualEnv
+filterByExports env names = Map.filterWithKey (\name _ -> name `elem` names) env
 
 loadModuleTypeEnvIO :: FilePath -> String -> IO (Either TypeError TypeEnv)
-loadModuleTypeEnvIO currentDir moduleName = loadModuleTypeEnvIOWithStack currentDir moduleName []
+loadModuleTypeEnvIO dir name = loadModuleTypeEnvIOWithStack dir name []
 
 loadModuleTypeEnvIOWithStack :: FilePath -> String -> [String] -> IO (Either TypeError TypeEnv)
-loadModuleTypeEnvIOWithStack currentDir moduleName loadingStack = do
-  if moduleName `elem` loadingStack
-      then return $ Left $ GeneralTypeError $ "Circular import detected during type checking: " ++ moduleName ++ " is already being loaded. Loading stack: " ++ intercalate " -> " (loadingStack ++ [moduleName])
-      else do
-          pathResult <- resolveModulePath currentDir moduleName
-          case pathResult of
-            Left err -> return $ Left $ GeneralTypeError $ "Failed to import module " ++ moduleName ++ ": " ++ err
-            Right path -> do
-              contentResult <- catchIOError (Right <$> readFile path) (return . Left . show)
-              case contentResult of
-                Left err -> return $ Left $ GeneralTypeError $ "IO error reading module " ++ moduleName ++ ": " ++ err
-                Right content -> do
-                  case parseProgram content of
-                    Left parseErr -> return $ Left $ GeneralTypeError $ "Parse error in module " ++ moduleName ++ ": " ++ show parseErr
-                    Right program -> do
-                      let isImport' (TLImport _) = True
-                          isImport' _ = False
-                          hasImports = case program of
-                            Program topLevels -> any isImport' topLevels
-                      let isLetrecDef' (TLDef _ _ (LetRec _ _ _ _)) = True
-                          isLetrecDef' _ = False
-                          hasLetrec = case program of
-                            Program topLevels -> any isLetrecDef' topLevels
-
-                      let moduleDir = takeDirectory path
-                      let newLoadingStack = loadingStack ++ [moduleName]
-                      typeResult <- typeCheckProgramWithDirIO (loadModuleTypeEnvIOWithStackWrapper newLoadingStack) moduleDir program
-                      case typeResult of
-                        Left typeErr -> return $ Left $ GeneralTypeError $ "Type error in module " ++ moduleName ++ ": " ++ show typeErr
-                        Right _ -> do
-                          extractTypeEnvIOWithStack moduleDir program newLoadingStack
-
-loadModuleTypeEnvIOWithStackWrapper :: [String] -> FilePath -> String -> IO (Either TypeError TypeEnv)
-loadModuleTypeEnvIOWithStackWrapper loadingStack currentDir moduleName =
-    loadModuleTypeEnvIOWithStack currentDir moduleName loadingStack
+loadModuleTypeEnvIOWithStack dir name stack
+  | name `elem` stack = return $ Left $ GeneralTypeError $ "Circular import detected during type checking: " ++ intercalate " -> " (stack ++ [name])
+  | otherwise = do
+      resolved <- resolveModulePath dir name
+      case resolved of
+        Left err -> return $ Left $ GeneralTypeError err
+        Right path -> do
+          source <- readSourceFile path
+          case source of
+            Left err -> return $ Left $ GeneralTypeError $ "IO error reading module " ++ name ++ ": " ++ show err
+            Right content -> case parseProgram content of
+              Left err -> return $ Left $ GeneralTypeError $ "Parse error in module " ++ name ++ ": " ++ show err
+              Right program -> extractTypeEnvIOWithStack (takeDirectory path) program (stack ++ [name])
 
 extractTypeEnvIO :: FilePath -> Program -> IO (Either TypeError TypeEnv)
-extractTypeEnvIO currentDir program = extractTypeEnvIOWithStack currentDir program []
+extractTypeEnvIO dir program = extractTypeEnvIOWithStack dir program []
 
 extractTypeEnvIOWithStack :: FilePath -> Program -> [String] -> IO (Either TypeError TypeEnv)
-extractTypeEnvIOWithStack currentDir program loadingStack = do
-    let (Program topLevels) = program
-    let exports = extractExports program
-    result <- go Map.empty topLevels
-    case result of
-        Left err -> return $ Left err
-        Right env -> return $ Right $ filterByExports env exports
-  where
-    go env [] = return $ Right env
-    go env (TLImport moduleName : rest) = do
-      moduleTypeEnvResult <- loadModuleTypeEnvIOWithStack currentDir moduleName loadingStack
-      case moduleTypeEnvResult of
-        Left err -> return $ Left err
-        Right moduleTypeEnv -> do
-          let mergedEnv = Map.union moduleTypeEnv env
-          go mergedEnv rest
-    go env (TLExport _ : rest) = go env rest
-    go env (TLData typeName typeVars constructors : rest) = do
-      let env' = Map.union (dataConstructorsTypeEnv typeName typeVars constructors) env
-      go env' rest
-    go env (TLDef var maybeType expr : rest) = do
-      case expr of
-        LetRec _ _ _ _ -> do
-          let (letrecs, remaining) = collectConsecutiveLetrecsExtract (TLDef var maybeType expr : rest)
-          mutualEnvResult <- processMutualRecursionTypeExtract env letrecs
-          case mutualEnvResult of
-            Left err -> return $ Left err
-            Right mutualEnv -> go mutualEnv remaining
-        _ -> do
-          case evalStateT (infer env expr) 0 of
-            Left err -> return $ Left err
-            Right (subst, defTy) -> do
-              let appliedTy = applySubst subst defTy
-              case maybeType of
-                Just annotatedTy -> do
-                  let syntaxTy = syntaxTypeToType annotatedTy
-                  case unify appliedTy syntaxTy of
-                    Left err -> return $ Left err
-                    Right unifySubst -> do
-                      let definitionSubst = composeSubst unifySubst subst
-                      let finalTy = applySubst unifySubst appliedTy
-                      let baseEnv = applySubstEnv definitionSubst env
-                      let env' = Map.insert var (generalize baseEnv finalTy) baseEnv
-                      go env' rest
-                Nothing -> do
-                  let baseEnv = applySubstEnv subst env
-                  let env' = Map.insert var (generalize baseEnv appliedTy) baseEnv
-                  go env' rest
-    go env (_ : rest) = go env rest
-    
-    collectConsecutiveLetrecsExtract :: [TopLevel] -> ([TopLevel], [TopLevel])
-    collectConsecutiveLetrecsExtract [] = ([], [])
-    collectConsecutiveLetrecsExtract (TLDef var maybeType expr : rest) =
-      case expr of
-        LetRec _ _ _ _ ->
-          let (moreLetrecs, remaining) = collectConsecutiveLetrecsExtract rest
-          in (TLDef var maybeType expr : moreLetrecs, remaining)
-        _ -> ([], TLDef var maybeType expr : rest)
-    collectConsecutiveLetrecsExtract (other : rest) = ([], other : rest)
-    
-    processMutualRecursionTypeExtract :: TypeEnv -> [TopLevel] -> IO (Either TypeError TypeEnv)
-    processMutualRecursionTypeExtract env letrecs = do
-      let funcTypes = map toFuncType letrecs
-      let mutualEnv = Map.union (Map.fromList [(var, scheme) | (var, _, _, scheme) <- funcTypes]) env
-      let results = map (typeCheckLetrec env mutualEnv) funcTypes
-      case lefts results of
-        err : _ -> return $ Left err
-        [] -> do
-          let successes = rights results
-          case mergeMutualSubstitutions (map fst successes) of
-            Left err -> return $ Left err
-            Right combinedSubst -> do
-              let baseEnv = applySubstEnv combinedSubst env
-              let finalTypes =
-                    zipWith
-                      (\(_, maybeAnnotatedType, _, _) inferredType ->
-                         case maybeAnnotatedType of
-                           Just annotatedType -> applySubst combinedSubst annotatedType
-                           Nothing -> applySubst combinedSubst inferredType)
-                      funcTypes
-                      (map snd successes)
-              let generalized =
-                    zipWith
-                      (\(var, maybeAnnotatedType, _, _) ty ->
-                         ( var
-                         , case maybeAnnotatedType of
-                             Just annotatedType -> generalize baseEnv (applySubst combinedSubst annotatedType)
-                             Nothing -> generalize baseEnv ty
-                         ))
-                      funcTypes
-                      finalTypes
-              let finalEnv = Map.union (Map.fromList generalized) baseEnv
-              return $ Right finalEnv
-      where
-        toFuncType :: TopLevel -> (String, Maybe Type, Type, Scheme)
-        toFuncType (TLDef var Nothing _) = (var, Nothing, TVar var, monoScheme (TVar var))
-        toFuncType (TLDef var (Just sType) _) =
-          let annotatedType = syntaxTypeToType sType
-          in (var, Just annotatedType, annotatedType, generalize env annotatedType)
-        toFuncType _ = error "processMutualRecursionTypeExtract: expected TLDef"
-
-        typeCheckLetrec :: TypeEnv -> TypeEnv -> (String, Maybe Type, Type, Scheme) -> Either TypeError (Substitution, Type)
-        typeCheckLetrec outerEnv mutualEnv (var, maybeAnnotatedType, assumedType, _) =
-          case Map.lookup var letrecMap of
-            Just (TLDef _ _ (LetRec _ _ val _)) ->
-              case evalStateT (infer mutualEnv val) 0 of
-                Left err -> Left err
-                Right (subst, valType) ->
-                  case maybeAnnotatedType of
-                    Just annotatedType ->
-                      let baseEnv = applySubstEnv subst outerEnv
-                          annotatedScheme = generalize baseEnv (applySubst subst annotatedType)
-                          inferredScheme = generalize baseEnv (applySubst subst valType)
-                      in case evalStateT (schemeIsInstanceOf annotatedScheme inferredScheme) 0 of
-                           Left err -> Left err
-                           Right True -> Right (subst, applySubst subst annotatedType)
-                           Right False -> Left $ GeneralTypeError "Recursive definition does not satisfy its annotated polymorphic type"
-                    Nothing ->
-                      case unify (applySubst subst assumedType) (applySubst subst valType) of
-                        Left err -> Left err
-                        Right unifySubst ->
-                          let finalSubst = composeSubst unifySubst subst
-                              finalType = applySubst finalSubst (applySubst subst assumedType)
-                          in Right (finalSubst, finalType)
-            _ -> Left (GeneralTypeError "processMutualRecursionTypeExtract: expected TLDef with LetRec")
-
-        letrecMap = Map.fromList
-          [ (name, topLevel)
-          | topLevel@(TLDef name _ (LetRec _ _ _ _)) <- letrecs
-          ]
+extractTypeEnvIOWithStack dir program stack = do
+  result <- inferProgramWithEnvIO (\path name -> loadModuleTypeEnvIOWithStack path name stack) dir Map.empty program
+  return $ fmap (\(env, _) -> filterTypeExports env (extractExports program)) result

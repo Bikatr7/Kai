@@ -9,8 +9,6 @@ import TypeChecker.Types
 import TypeChecker.Substitution
 import TypeChecker.Unification
 
-type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
-
 inferDataStructures :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferDataStructures infer env (ListLit es) = do
     elemType <- freshTVar

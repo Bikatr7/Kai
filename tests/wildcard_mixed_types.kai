@@ -1,2 +1,3 @@
 // expect: "result"
+// stdout: "side effect\n"
 let _ = 42 in let _ = true in let _ = print "side effect" in "result"

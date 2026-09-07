@@ -1,4 +1,5 @@
-// expect: ()
+// expect: (6, 9, 9, -6, 0, 16)
 let double = \x -> x * 2
 let triple = \x -> x * 3
 let square = \x -> x * x
+(double 3, triple 3, square 3, double (-3), triple 0, square (-4))

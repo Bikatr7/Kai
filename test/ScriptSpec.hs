@@ -1,215 +1,121 @@
 module ScriptSpec where
 
 import Test.Hspec
-import System.Directory (doesDirectoryExist, listDirectory)
+import System.Directory (doesDirectoryExist, listDirectory, findExecutable)
 import System.FilePath ((</>), takeExtension)
-import Data.List (sort)
-import Control.Monad (filterM, forM, forM_)
-
-import Parser
-import Evaluator
-import TypeChecker
-import Syntax
-import Data.Maybe (isNothing, listToMaybe)
-import qualified Data.Map as Map
+import System.Exit (ExitCode(..))
+import Data.List (sort, stripPrefix)
+import Data.Char (isSpace)
+import Control.Monad (forM, forM_, when)
+import Data.Aeson (eitherDecode)
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as TextEncoding
+import System.Process (readProcessWithExitCode)
+import CLI (runCLI)
+import TestIO (captureOutput, withStdin)
+import TestSupport (readFixture)
 
 spec :: Spec
 spec = do
+  describe "Shared script fixture conventions" $ do
+    fixtures <- runIO $ do
+      bytes <- BS.readFile "test/fixtures/script_directives.json"
+      either (ioError . userError) pure (eitherDecode bytes :: Either String [(String, String, Bool)])
+    it "discovers shared directive cases" $ fixtures `shouldSatisfy` not . null
+    forM_ fixtures $ \(name, source, success) ->
+      it name $ case validateFixtureDirectives source of
+        Right () -> success `shouldBe` True
+        Left _ -> success `shouldBe` False
+
+  describe "Script output assertions" $ do
+    forM_ [
+        ("absent means silence", "", "Script checks passed\n", True),
+        ("unexpected output", "", "unexpected\nScript checks passed\n", False),
+        ("exact output", "// stdout: \"Hello, World!\\n\"", "Hello, World!\nScript checks passed\n", True),
+        ("wrong output", "// stdout: \"Hello, World!\\n\"", "Hello, somebody!\nScript checks passed\n", False),
+        ("missing output", "// stdout: \"hello\\n\"", "Script checks passed\n", False),
+        ("extra output", "// stdout: \"hello\\n\"", "hello\nextra\nScript checks passed\n", False),
+        ("wrong newline", "// stdout: \"hello\\n\"", "helloScript checks passed\n", False),
+        ("Unicode", "// stdout: \"é雪\\n\"", "é雪\nScript checks passed\n", True),
+        ("blank lines and spaces", "// stdout: \"  \\n\\n\"", "  \n\nScript checks passed\n", True),
+        ("missing success marker", "// stdout: \"hello\\n\"", "hello\n", False),
+        ("duplicate directive", "// stdout: \"\"\n// stdout: \"\"", "Script checks passed\n", False),
+        ("malformed JSON", "// stdout: hello", "Script checks passed\n", False),
+        ("non-string JSON", "// stdout: 42", "Script checks passed\n", False)
+      ] $ \(label, source, output, success) ->
+        it label $ case checkCapturedOutput source output of
+          Right () -> success `shouldBe` True
+          Left _ -> success `shouldBe` False
+    it "decodes Unicode stdin fixtures" $
+      stringFixture "stdin" "// stdin: \"é雪\\n\"" `shouldBe` Right "é雪\n"
+    it "checks the packaged CLI corpus harness against real programs and incorrect expectations" $ do
+      executable <- findExecutable "kai"
+      case executable of
+        Nothing -> expectationFailure "Built kai executable missing from PATH"
+        Just kai -> do
+          (code, out, err) <- readProcessWithExitCode "python3" ["test/script_corpus_test.py", kai] ""
+          if code == ExitSuccess then err `shouldContain` "OK"
+            else expectationFailure (out ++ err)
+
   describe "Script expectation coverage" $ do
     files <- runIO $ allKaiFilesIn "."
-    it "requires an expectation directive in every repository .kai file" $ do
-      missing <- filterM (fmap (isNothing . parseExpect) . readFile) files
-      missing `shouldBe` []
+    it "requires valid, unambiguous expectation directives in every repository .kai file" $ do
+      forM_ files $ \path -> do
+        source <- readFixture path
+        case validateFixtureDirectives source of
+          Right () -> pure ()
+          Left err -> expectationFailure (path ++ ": " ++ err)
+    it "checks script sensitivity reporting against passing, failing, and ineffective fixtures" $ do
+      executable <- findExecutable "kai"
+      case executable of
+        Nothing -> expectationFailure "Built kai executable missing from PATH"
+        Just kai -> do
+          (code, out, err) <- readProcessWithExitCode "python3" ["test/script_audit_test.py", kai] ""
+          if code == ExitSuccess then err `shouldContain` "OK"
+            else expectationFailure (out ++ err)
 
-  describe "Script files in tests/" $ do
-    files <- runIO $ kaiFilesIn "tests"
-    forM_ files $ \fp -> do
-      it fp $ do
-        content <- readFile fp
-        requireExpectation fp content
-        -- Try parsing as program first (new top-level definitions)
-        case parseProgram content of
-          Right program -> testProgram program content
-          Left _ -> case parseStatements content of
-            Right stmts | length stmts > 1 -> do
-              let expr = last stmts  -- Last statement is the main expression to test
-              testExpr expr content
-            _ -> case parseFileExpr content of
-              Left perr -> expectationFailure ("Parse error: " ++ show perr)
-              Right expr -> testExpr expr content
+  forM_ ["tests", "test"] $ \directory ->
+    describe ("Script files in " ++ directory ++ "/") $ do
+      files <- runIO $ allKaiFilesIn directory
+      when (directory == "tests") $
+        it "discovers executable fixtures" $ files `shouldSatisfy` not . null
+      forM_ files $ \path -> it path $ do
+        content <- readFixture path
+        input <- case stringFixture "stdin" content of
+          Right value -> return value
+          Left err -> expectationFailure err >> return ""
+        (exitCode, output) <- captureOutput $ withStdin input $ runCLI ["--check", path]
+        if exitCode == ExitSuccess
+          then checkCapturedOutput content output `shouldBe` Right ()
+          else expectationFailure output
 
-  describe "Script files in test/" $ do
-    files <- runIO $ kaiFilesIn "test"
-    forM_ files $ \fp -> do
-      it fp $ do
-        content <- readFile fp
-        requireExpectation fp content
-        -- For multi-statement files, use parseStatements directly
-        -- Only use parseFileExpr for files that can't be parsed as multiple statements
-        case parseStatements content of
-          Right stmts | length stmts > 1 -> do
-            let expr = last stmts  -- Last statement is the main expression to test
-            testExpr expr content
-          _ -> case parseFileExpr content of
-            Left perr -> expectationFailure ("Parse error: " ++ show perr)
-            Right expr -> testExpr expr content
+stringFixture :: String -> String -> Either String String
+stringFixture name source = case [value | line <- lines source, Just value <- [stripPrefix ("// " ++ name ++ ":") line]] of
+  [] -> Right ""
+  [value] -> case eitherDecode (BS.fromStrict $ TextEncoding.encodeUtf8 $ Text.pack value) of
+    Right text -> Right text
+    Left err -> Left $ "Bad " ++ name ++ " fixture: " ++ err
+  _ -> Left $ "Duplicate " ++ name ++ " fixture"
 
-testExpr :: Expr -> String -> IO ()
-testExpr expr content = do
-  case parseExpect content of
-    Just (ExpectValue expStr) -> do
-      requireExprTypeChecks expr
-      case parseExpr expStr of
-        Left perr -> expectationFailure ("Bad expect expr: " ++ show perr)
-        Right eexp -> do
-          requireExprTypeChecks eexp
-          if requiresIO expr
-            then do
-              result <- eval expr
-              case (result, evalPure eexp) of
-                (Right v, Right vexp) -> do
-                  if v == vexp
-                    then putStrLn $ "✅ PASS: Expected " ++ show vexp ++ ", got " ++ show v
-                    else expectationFailure $ "❌ FAIL: Expected " ++ show vexp ++ ", got " ++ show v
-                (Left rerr, _) -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
-                _ -> expectationFailure "❌ FAIL: Unexpected eval failure in expected expression"
-            else do
-              case (evalPure expr, evalPure eexp) of
-                (Right v, Right vexp) -> do
-                  if v == vexp
-                    then putStrLn $ "✅ PASS: Expected " ++ show vexp ++ ", got " ++ show v
-                    else expectationFailure $ "❌ FAIL: Expected " ++ show vexp ++ ", got " ++ show v
-                (Left rerr, _) -> expectationFailure ("❌ FAIL: Runtime error: " ++ show rerr)
-                _ -> expectationFailure "❌ FAIL: Unexpected eval failure in expected expression"
-    Just (ExpectType tyStr) -> do
-      let expectedTy = case tyStr of
-            "TInt" -> Right TInt
-            "TBool" -> Right TBool
-            "TString" -> Right TString
-            "TUnit" -> Right TUnit
-            _ -> Left ("Unknown type in expect-type: " ++ tyStr)
-      case expectedTy of
-        Left msg -> expectationFailure msg
-        Right ety -> case typeCheck expr of
-          Right ty -> do
-            if ty == ety
-              then putStrLn $ "✅ PASS: Expected type " ++ show ety ++ ", got " ++ show ty
-              else expectationFailure $ "❌ FAIL: Expected type " ++ show ety ++ ", got " ++ show ty
-          Left err -> expectationFailure ("❌ FAIL: Type error: " ++ show err)
-    Just ExpectError -> do
-      requireExprTypeChecks expr
-      if requiresIO expr
-        then do
-          result <- eval expr
-          case result of
-            Left err -> putStrLn $ "✅ PASS: Expected error, got: " ++ show err
-            Right v -> expectationFailure ("❌ FAIL: Expected error, got: " ++ show v)
-        else do
-          case evalPure expr of
-            Left err -> putStrLn $ "✅ PASS: Expected error, got: " ++ show err
-            Right v -> expectationFailure ("❌ FAIL: Expected error, got: " ++ show v)
-    Nothing -> expectationFailure "Missing required // expect directive"
+validateFixtureDirectives :: String -> Either String ()
+validateFixtureDirectives source = do
+  required "expect" True
+  required "expect-type" False
+  _ <- stringFixture "stdin" source
+  _ <- stringFixture "stdout" source
+  pure ()
+  where
+    required name mandatory = case [value | line <- lines source, Just value <- [stripPrefix ("// " ++ name ++ ":") line]] of
+      [] | not mandatory -> Right ()
+      [value] | not (all isSpace value) -> Right ()
+      _ -> Left $ "Missing, empty, or duplicate " ++ name ++ " fixture"
 
-requiresIO :: Expr -> Bool
-requiresIO Input = True
-requiresIO Args = True
-requiresIO (ReadFile _) = True
-requiresIO (WriteFile _ _) = True
-requiresIO (AppendFile _ _) = True
-requiresIO (FileExists _) = True
-requiresIO (ListDirectory _) = True
-requiresIO (CreateDirectory _) = True
-requiresIO (RemoveDirectory _) = True
-requiresIO GetCurrentDirectory = True
-requiresIO (SetCurrentDirectory _) = True
-requiresIO (System _) = True
-requiresIO (GetEnv _) = True
-requiresIO (SetEnv _ _) = True
-requiresIO (Exit _) = True
-requiresIO (Add e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Sub e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Mul e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Div e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Concat e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (And e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Or e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Not e) = requiresIO e
-requiresIO (Eq e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Lt e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Gt e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (If cond thenE elseE) = requiresIO cond || requiresIO thenE || requiresIO elseE
-requiresIO (Lambda _ _ body) = requiresIO body
-requiresIO (App f arg) = requiresIO f || requiresIO arg
-requiresIO (Let _ _ val body) = requiresIO val || requiresIO body
-requiresIO (LetRec _ _ val body) = requiresIO val || requiresIO body
-requiresIO (Print e) = requiresIO e
-requiresIO (Seq e1 e2) = requiresIO e1 || requiresIO e2
-requiresIO (Case scrutinee branches) = requiresIO scrutinee || any (requiresIO . snd) branches
-requiresIO (RecordLit fields) = any (requiresIO . snd) fields
-requiresIO (RecordAccess e _) = requiresIO e
-requiresIO (ListLit es) = any requiresIO es
-requiresIO (TupleLit es) = any requiresIO es
-requiresIO _ = False
-
-testProgram :: Program -> String -> IO ()
-testProgram program content = do
-  case parseExpect content of
-    Just (ExpectValue expStr) -> do
-      requireProgramTypeChecks program
-      case parseExpr expStr of
-        Left perr -> expectationFailure ("Bad expect expr: " ++ show perr)
-        Right eexp -> do
-          requireExprTypeChecks eexp
-          result <- evalProgram program
-          case (result, evalPure eexp) of
-            (Right v, Right vexp) -> v `shouldBe` vexp
-            (Left rerr, _) -> expectationFailure ("Runtime error: " ++ show rerr)
-            _ -> expectationFailure "Unexpected eval failure in expected expression"
-    Just (ExpectType tyStr) -> do
-      let expectedTy = case tyStr of
-            "TInt" -> Right TInt
-            "TBool" -> Right TBool
-            "TString" -> Right TString
-            "TUnit" -> Right TUnit
-            _ -> Left ("Unknown type in expect-type: " ++ tyStr)
-      case expectedTy of
-        Left msg -> expectationFailure msg
-        Right ety -> case typeCheckProgram program of
-          Right ty -> ty `shouldBe` ety
-          Left err -> expectationFailure ("Type error: " ++ show err)
-    Just ExpectError -> do
-      requireProgramTypeChecks program
-      result <- evalProgram program
-      case result of
-        Left _ -> return ()  -- Expected error, test passes
-        Right v -> expectationFailure ("Expected error, got: " ++ show v)
-    Nothing -> expectationFailure "Missing required // expect directive"
-
-requireExpectation :: FilePath -> String -> IO ()
-requireExpectation fp content =
-  case parseExpect content of
-    Just _ -> return ()
-    Nothing -> expectationFailure $ fp ++ " must contain // expect:, // expect-type:, or // expect-error"
-
-requireExprTypeChecks :: Expr -> IO ()
-requireExprTypeChecks expr =
-  case typeCheck expr of
-    Left err -> expectationFailure $ "Type error before script evaluation: " ++ show err
-    Right _ -> return ()
-
-requireProgramTypeChecks :: Program -> IO ()
-requireProgramTypeChecks program =
-  case typeCheckProgram program of
-    Left err -> expectationFailure $ "Type error before program evaluation: " ++ show err
-    Right _ -> return ()
-
--- Utilities
-kaiFilesIn :: FilePath -> IO [FilePath]
-kaiFilesIn dir = do
-  exists <- doesDirectoryExist dir
-  if not exists then pure [] else do
-    entries <- listDirectory dir
-    pure $ sort [ dir </> e | e <- entries, takeExtension e == ".kai" ]
+checkCapturedOutput :: String -> String -> Either String ()
+checkCapturedOutput source output = do
+  expected <- (++ "Script checks passed\n") <$> stringFixture "stdout" source
+  if output == expected then Right ()
+    else Left $ "Expected stdout " ++ show expected ++ ", got " ++ show output
 
 allKaiFilesIn :: FilePath -> IO [FilePath]
 allKaiFilesIn dir = do
@@ -225,24 +131,3 @@ allKaiFilesIn dir = do
     pure $ sort (concat nested)
   where
     ignoredDirectories = [".git", ".stack-work", "dist-site", "dist-newstyle"]
-
-data ExpectDirective
-  = ExpectValue String
-  | ExpectType String
-  | ExpectError
-
-parseExpect :: String -> Maybe ExpectDirective
-parseExpect content =
-  let ls = lines content
-      isExpect s = "// expect:" `prefixOf` s
-      isType s = "// expect-type:" `prefixOf` s
-      isErr s = "// expect-error" `prefixOf` s
-      prefixOf p s = take (length p) s == p
-  in listToMaybe $ map toDir $ filter (\s -> isExpect s || isType s || isErr s) ls
-  where
-    trim = reverse . dropWhile (== ' ') . reverse . dropWhile (== ' ')
-    toDir s
-      | "// expect-type:" `isPref` s = ExpectType (trim (drop (length "// expect-type:") s))
-      | "// expect:" `isPref` s = ExpectValue (trim (drop (length "// expect:") s))
-      | otherwise = ExpectError
-    isPref p s = take (length p) s == p

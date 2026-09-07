@@ -1,10 +1,12 @@
 module LambdaSpec where
 
 import Test.Hspec
+import qualified TestSupport
 import Syntax
 import TypeChecker
 import Evaluator
 import Parser
+import qualified Data.Map as Map
 
 spec :: Spec
 spec = describe "Lambda Functions" $ do
@@ -12,7 +14,9 @@ spec = describe "Lambda Functions" $ do
   describe "Basic Lambda Creation" $ do
     it "creates a simple lambda function" $ do
       case parseEvaluate "\\x -> x + 1" of
-        Right (VFun "x" _ _) -> True `shouldBe` True
+        Right (VFun "x" body environment) -> do
+          body `shouldBe` Add (Var "x") (IntLit 1)
+          environment `shouldBe` Map.empty
         _ -> expectationFailure "Should create a lambda function"
   
   describe "Function Application" $ do
@@ -45,6 +49,4 @@ spec = describe "Lambda Functions" $ do
 
 -- Helper function
 parseEvaluate :: String -> Either RuntimeError Value
-parseEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> evalPure expr
+parseEvaluate = TestSupport.evaluateSource

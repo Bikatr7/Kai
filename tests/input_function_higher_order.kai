@@ -1,3 +1,5 @@
+// expect: "Transformed: Ada"
+// stdin: "Ada\n"
 // Test input with higher-order functions
 // expect-type: TString
 

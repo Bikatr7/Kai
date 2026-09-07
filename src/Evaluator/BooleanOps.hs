@@ -1,101 +1,56 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Evaluator.BooleanOps where
 
 import Evaluator.Types
-import Evaluator.Helpers (bindResult)
+import Control.Monad.Except (MonadError, throwError, liftEither)
+import Evaluator.Helpers (evalInIO)
 import Syntax
 import qualified Data.Map as Map
 
-type EvalFunc = Env -> Expr -> Either RuntimeError Value
-type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
-
-evalBooleanOps :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
+evalBooleanOps :: MonadError RuntimeError m => Eval m -> Eval m
 evalBooleanOps eval env (And e1 e2) = do
   v1 <- eval env e1
   v2 <- eval env e2
   case (v1, v2) of
-    (VBool b1, VBool b2) -> Right $ VBool (b1 && b2)
-    _ -> Left $ TypeError "AND requires boolean operands"
+    (VBool b1, VBool b2) -> pure $ VBool (b1 && b2)
+    _ -> throwError $ TypeError "AND requires boolean operands"
 evalBooleanOps eval env (Or e1 e2) = do
   v1 <- eval env e1
   v2 <- eval env e2
   case (v1, v2) of
-    (VBool b1, VBool b2) -> Right $ VBool (b1 || b2)
-    _ -> Left $ TypeError "OR requires boolean operands"
+    (VBool b1, VBool b2) -> pure $ VBool (b1 || b2)
+    _ -> throwError $ TypeError "OR requires boolean operands"
 evalBooleanOps eval env (Not e) = do
   v <- eval env e
   case v of
-    VBool b -> Right $ VBool (not b)
-    _ -> Left $ TypeError "NOT requires a boolean operand"
+    VBool b -> pure $ VBool (not b)
+    _ -> throwError $ TypeError "NOT requires a boolean operand"
 evalBooleanOps eval env (Eq e1 e2) = do
   v1 <- eval env e1
   v2 <- eval env e2
-  VBool <$> valuesEqual v1 v2
+  VBool <$> liftEither (valuesEqual v1 v2)
 evalBooleanOps eval env (Lt e1 e2) = do
   v1 <- eval env e1
   v2 <- eval env e2
   case (v1, v2) of
-    (VInt n1, VInt n2) -> Right $ VBool (n1 < n2)
-    _ -> Left $ TypeError "Less than comparison requires integer operands"
+    (VInt n1, VInt n2) -> pure $ VBool (n1 < n2)
+    _ -> throwError $ TypeError "Less than comparison requires integer operands"
 evalBooleanOps eval env (Gt e1 e2) = do
   v1 <- eval env e1
   v2 <- eval env e2
   case (v1, v2) of
-    (VInt n1, VInt n2) -> Right $ VBool (n1 > n2)
-    _ -> Left $ TypeError "Greater than comparison requires integer operands"
+    (VInt n1, VInt n2) -> pure $ VBool (n1 > n2)
+    _ -> throwError $ TypeError "Greater than comparison requires integer operands"
 evalBooleanOps eval env (If c t e) = do
   vc <- eval env c
   case vc of
     VBool True -> eval env t
     VBool False -> eval env e
-    _ -> Left $ TypeError "If condition must be a boolean"
+    _ -> throwError $ TypeError "If condition must be a boolean"
 evalBooleanOps _ _ _ = error "evalBooleanOps called on non-boolean operation"
 
 evalBooleanOpsIO :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
-evalBooleanOpsIO eval env (And e1 e2) =
-  evalBooleanBinaryIO eval env e1 e2 $ \v1 v2 -> case (v1, v2) of
-      (VBool b1, VBool b2) -> Right $ VBool (b1 && b2)
-      _ -> Left $ TypeError "AND requires boolean operands"
-evalBooleanOpsIO eval env (Or e1 e2) =
-  evalBooleanBinaryIO eval env e1 e2 $ \v1 v2 -> case (v1, v2) of
-      (VBool b1, VBool b2) -> Right $ VBool (b1 || b2)
-      _ -> Left $ TypeError "OR requires boolean operands"
-evalBooleanOpsIO eval env (Not e) = do
-  r <- eval env e
-  return $ case r of
-    Left err -> Left err
-    Right v -> case v of
-      VBool b -> Right $ VBool (not b)
-      _ -> Left $ TypeError "NOT requires a boolean operand"
-evalBooleanOpsIO eval env (Eq e1 e2) =
-  evalBooleanBinaryIO eval env e1 e2 $ \v1 v2 -> VBool <$> valuesEqual v1 v2
-evalBooleanOpsIO eval env (Lt e1 e2) =
-  evalBooleanBinaryIO eval env e1 e2 $ \v1 v2 -> case (v1, v2) of
-      (VInt n1, VInt n2) -> Right $ VBool (n1 < n2)
-      _ -> Left $ TypeError "Less than comparison requires integer operands"
-evalBooleanOpsIO eval env (Gt e1 e2) =
-  evalBooleanBinaryIO eval env e1 e2 $ \v1 v2 -> case (v1, v2) of
-      (VInt n1, VInt n2) -> Right $ VBool (n1 > n2)
-      _ -> Left $ TypeError "Greater than comparison requires integer operands"
-evalBooleanOpsIO eval env (If c t e) = do
-  rc <- eval env c
-  case rc of
-    Left err -> return $ Left err
-    Right (VBool True) -> eval env t
-    Right (VBool False) -> eval env e
-    Right _ -> return $ Left $ TypeError "If condition must be a boolean"
-evalBooleanOpsIO _ _ _ = error "evalBooleanOpsIO called on non-boolean operation"
-
-evalBooleanBinaryIO
-  :: EvalFuncIO
-  -> Env
-  -> Expr
-  -> Expr
-  -> (Value -> Value -> Either RuntimeError Value)
-  -> IO (Either RuntimeError Value)
-evalBooleanBinaryIO eval env e1 e2 combine =
-  bindResult (eval env e1) $ \v1 ->
-    bindResult (eval env e2) $ \v2 ->
-      return $ combine v1 v2
+evalBooleanOpsIO = evalInIO evalBooleanOps
 
 valuesEqual :: Value -> Value -> Either RuntimeError Bool
 valuesEqual left right = do

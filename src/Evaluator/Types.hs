@@ -22,13 +22,14 @@ data Value
   | VRecord (Map.Map String Value)
   | VTuple [Value]
   | VRef (IORef Value)
+  | VUninitialized String
 
 instance Show Value where
   show (VInt n) = show n
   show (VBool b) = show b
   show (VStr s) = show s
   show VUnit = "()"
-  show (VFun param body env) = "<function " ++ param ++ ">"
+  show (VFun param _ _) = "<function " ++ param ++ ">"
   show (VConstructor name _ []) = "<constructor " ++ name ++ ">"
   show (VConstructor name _ args) = "<constructor " ++ name ++ " " ++ show args ++ ">"
   show (VData name []) = name
@@ -40,6 +41,7 @@ instance Show Value where
   show (VList vs) = show vs
   show (VRecord m) = show m
   show (VTuple vs) = "(" ++ intercalate ", " (map show vs) ++ ")"
+  show (VUninitialized name) = "<uninitialized " ++ name ++ ">"
   show (VRef _) = "<ref>"
 
 instance Eq Value where
@@ -74,14 +76,20 @@ instance NFData Value where
   rnf (VList vs) = rnf vs
   rnf (VRecord m) = rnf m
   rnf (VTuple vs) = rnf vs
+  rnf (VUninitialized name) = rnf name
   rnf (VRef _) = ()  -- IORef can't be fully evaluated
   rnf (VFun _ _ _) = ()  -- Function can't be fully evaluated
 
 type Env = Map.Map String Value
 
+type Eval m = Env -> Expr -> m Value
+type EvalFunc = Eval (Either RuntimeError)
+type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
+
 data RuntimeError
   = DivByZero
   | IntegerOverflow
+  | UninitializedRecursion String
   | TypeError String
   | UnboundVariable String
   | RecordFieldNotFound String

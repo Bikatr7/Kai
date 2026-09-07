@@ -1,3 +1,5 @@
+// expect: "Processed: Ada (done)"
+// stdin: "Ada\n"
 // Test input with nested let bindings
 // expect-type: TString
 

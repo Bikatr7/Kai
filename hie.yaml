@@ -1,5 +1,7 @@
 cradle:
   stack:
+    - path: "./app"
+      component: "kai-lang:exe:kai"
     - path: "./src"
       component: "kai-lang:lib"
     - path: "./test"

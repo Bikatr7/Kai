@@ -9,15 +9,13 @@ import TypeChecker.Types
 import TypeChecker.Substitution
 import TypeChecker.Unification
 
-type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
-
 inferBindings :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferBindings infer env (Let var maybeType val body) = do
   (s1, valType) <- infer env val
   let inferredValType = applySubst s1 valType
   (s2, finalValType) <- case maybeType of
     Just sType -> do
-      let annotatedType = syntaxTypeToType sType
+      annotatedType <- inferAnnotation env sType
       s2 <- lift $ unify inferredValType annotatedType
       return (s2, applySubst s2 annotatedType)
     Nothing -> return (Map.empty, inferredValType)
@@ -35,7 +33,7 @@ inferBindings infer env (LetRec var maybeType val body) = do
   when (var == "_") $ throwError (InvalidWildcard "Wildcard variables (_) cannot be used in recursive definitions")
   case maybeType of
     Just sType -> do
-      let annotatedType = syntaxTypeToType sType
+      annotatedType <- inferAnnotation env sType
       let initialScheme = generalize env annotatedType
       let env' = Map.insert var initialScheme env
       (s1, valType) <- infer env' val
@@ -63,7 +61,7 @@ inferBindings infer env (LetRec var maybeType val body) = do
       return (finalSubst, bodyType)
 
 inferBindings infer env (TypeAnnotation e sType) = do
-  let annotatedType = syntaxTypeToType sType
+  annotatedType <- inferAnnotation env sType
   (s, exprType) <- infer env e
   s2 <- lift $ unify (applySubst s exprType) annotatedType
   let finalSubst = composeSubst s2 s

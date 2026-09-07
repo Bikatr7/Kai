@@ -1,3 +1,6 @@
+// expect: ()
+// stdout: "You entered: Ada\n"
+// stdin: "Ada\n"
 // Test input with print statements
 // expect-type: TUnit
 

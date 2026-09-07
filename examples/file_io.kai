@@ -1,3 +1,4 @@
+// expect: ()
 // expect-type: TUnit
 // File, directory, and environment workflow example.
 // Optional arg: a workspace directory. Without one, it writes in the current directory.

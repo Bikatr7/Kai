@@ -1,12 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Evaluator.Patterns where
 
 import Evaluator.Types
+import Control.Monad.Except (MonadError, throwError)
+import Evaluator.Helpers (evalInIO)
 import Syntax
 import qualified Data.Map as Map
-import Control.Monad (foldM)
-
-type EvalFunc = Env -> Expr -> Either RuntimeError Value
-type EvalFuncIO = Env -> Expr -> IO (Either RuntimeError Value)
 
 matchPattern :: Pattern -> Value -> Maybe Env
 matchPattern (PVar name) val = Just $ if name == "_" then Map.empty else Map.singleton name val
@@ -47,32 +46,19 @@ matchPattern (PConstructor name pats) (VData valueName values)
   | otherwise = Nothing
 matchPattern _ _ = Nothing
 
-evalPatterns :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
+evalPatterns :: MonadError RuntimeError m => Eval m -> Eval m
 evalPatterns eval env (Case scrutinee patterns) = do
   val <- eval env scrutinee
   tryPatterns env val patterns
   where
-    tryPatterns _ _ [] = Left $ TypeError "No matching pattern in case expression"
-    tryPatterns env val ((pat, expr) : rest) = do
+    tryPatterns _ _ [] = throwError $ TypeError "No matching pattern in case expression"
+    tryPatterns scope val ((pat, expr) : rest) = do
       case matchPattern pat val of
-        Nothing -> tryPatterns env val rest
+        Nothing -> tryPatterns scope val rest
         Just bindings ->
-          let newEnv = Map.union bindings env
+          let newEnv = Map.union bindings scope
           in eval newEnv expr
 evalPatterns _ _ _ = error "evalPatterns called on non-pattern expression"
 
 evalPatternsIO :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
-evalPatternsIO eval env (Case scrutinee patterns) = do
-  valResult <- eval env scrutinee
-  case valResult of
-    Left err -> return $ Left err
-    Right val -> tryPatterns env val patterns
-  where
-    tryPatterns _ _ [] = return $ Left $ TypeError "No matching pattern in case expression"
-    tryPatterns env val ((pat, expr) : rest) = do
-      case matchPattern pat val of
-        Nothing -> tryPatterns env val rest
-        Just bindings -> do
-          let newEnv = Map.union bindings env
-          eval newEnv expr
-evalPatternsIO _ _ _ = error "evalPatternsIO called on non-pattern expression"
+evalPatternsIO = evalInIO evalPatterns

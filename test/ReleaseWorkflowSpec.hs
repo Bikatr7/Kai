@@ -1,12 +1,16 @@
 module ReleaseWorkflowSpec where
 
 import Control.Exception (bracket)
-import Control.Monad (when)
+import Control.Monad (when, forM_)
 import qualified Data.ByteString as BS
 import Data.List (isInfixOf)
+import Data.Maybe (listToMaybe)
 import System.Directory
-  ( createDirectory
+  ( findExecutable
+  , findExecutablesInDirectories
+  , createDirectory
   , createDirectoryIfMissing
+  , copyFile
   , executable
   , getCurrentDirectory
   , getPermissions
@@ -16,19 +20,36 @@ import System.Directory
   , setPermissions
   , withCurrentDirectory
   )
+import System.Environment (getEnvironment)
+import System.Process (proc, readCreateProcessWithExitCode, CreateProcess(..), readProcessWithExitCode)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>))
+import System.FilePath ((</>), getSearchPath, normalise, takeFileName)
 import System.IO (hClose, openTempFile)
-import System.Process (readProcessWithExitCode)
+import qualified System.Info as System
 import Test.Hspec
 
 runAssetNameScript :: String -> String -> IO (ExitCode, String, String)
 runAssetNameScript os arch =
-  readProcessWithExitCode "bash" ["scripts/release-asset-name.sh", os, arch] ""
+  runBash ["scripts/release-asset-name.sh", os, arch]
 
 runPackageNameScript :: String -> String -> IO (ExitCode, String, String)
 runPackageNameScript os arch =
-  readProcessWithExitCode "bash" ["scripts/release-package-name.sh", os, arch] ""
+  runBash ["scripts/release-package-name.sh", os, arch]
+
+requireBash :: IO FilePath
+requireBash = do
+  directories <- getSearchPath
+  found <- findExecutablesInDirectories directories "bash"
+  maybe (expectationFailure "Bash is missing from PATH" >> pure "") pure (listToMaybe found)
+
+runBash :: [String] -> IO (ExitCode, String, String)
+runBash arguments = do
+  bash <- requireBash
+  readProcessWithExitCode bash arguments ""
+
+runBashWithoutZip :: [String] -> IO (ExitCode, String, String)
+runBashWithoutZip arguments = runBash $
+  ["-c", "command() { case \"$*\" in '-v ditto'|'-v zip'|'-v unzip') return 1 ;; *) builtin command \"$@\" ;; esac; }; export -f command; exec bash \"$@\"", "--"] ++ arguments
 
 withTempDirectory :: (FilePath -> IO a) -> IO a
 withTempDirectory action = do
@@ -80,6 +101,25 @@ spec = describe "Release workflow asset naming" $ do
   it "round-trips a real Windows ZIP with kai.exe at its root" $
     assertPackageRoundTrip "Windows" "X64" "kai-windows-amd64.zip" "kai.exe" False
 
+  it "preserves macOS ZIP contents and permissions using Python when archive tools are absent" $
+    assertPackageRoundTripWith runBashWithoutZip "macOS" "ARM64" "kai-macos-arm64.zip" "kai" True
+
+  forM_ [("Linux", "X64", "kai-linux-amd64.tar.gz", "kai", True),
+         ("macOS", "ARM64", "kai-macos-arm64.zip", "kai", True),
+         ("Windows", "X64", "kai-windows-amd64.zip", "kai.exe", False)] $
+    \(os, arch, packageName, binaryName, executableMode) ->
+      it ("packages " ++ os ++ " with non-executable source-archive helpers") $
+        withTempDirectory $ \helperDirectory -> do
+          forM_ ["package-release-binary.sh", "release-package-name.sh",
+                 "release-asset-name.sh", "extract-release-package.sh"] $ \name -> do
+            let destination = helperDirectory </> name
+            copyFile ("scripts" </> name) destination
+            permissions <- getPermissions destination
+            setPermissions destination permissions { executable = False }
+          let execute (script : arguments) = runBash ((helperDirectory </> takeFileName script) : arguments)
+              execute [] = expectationFailure "Missing helper script" >> pure (ExitFailure 1, "", "")
+          assertPackageRoundTripWith execute os arch packageName binaryName executableMode
+
   it "rejects a tar archive mislabeled as a Windows ZIP" $
     withTempDirectory $ \tempDir -> do
       let binary = tempDir </> "kai.exe"
@@ -92,10 +132,8 @@ spec = describe "Release workflow asset naming" $ do
       tarStderr `shouldBe` ""
 
       (extractExit, extractStdout, extractStderr) <-
-        readProcessWithExitCode
-          "bash"
+        runBash
           ["scripts/extract-release-package.sh", "Windows", packagePath, extractedDir]
-          ""
       extractExit `shouldBe` ExitFailure 1
       extractStdout `shouldBe` ""
       extractStderr `shouldContain` "not a valid non-empty ZIP archive"
@@ -111,7 +149,7 @@ spec = describe "Release workflow asset naming" $ do
     workflow `shouldSatisfy` isInfixOf "scripts/release-asset-name.sh"
     workflow `shouldSatisfy` not . isInfixOf "mv dist/kai dist/kai-macos-amd64"
 
-  it "starts for package changes on master and supports manual retries" $ do
+  it "declares package-change and manual release triggers on master" $ do
     workflow <- readFile ".github/workflows/release.yml"
     let triggerSection = unlines $ takeWhile (/= "permissions:") $ dropWhile (/= "on:") $ lines workflow
     triggerSection `shouldSatisfy` isInfixOf "push:"
@@ -122,7 +160,7 @@ spec = describe "Release workflow asset naming" $ do
     triggerSection `shouldSatisfy` isInfixOf "workflow_dispatch:"
     workflow `shouldSatisfy` isInfixOf "if: github.ref == 'refs/heads/master'"
 
-  it "gates release builds on tests and benchmark validation" $ do
+  it "declares test and benchmark commands and release job dependencies" $ do
     workflow <- readFile ".github/workflows/release.yml"
     workflow `shouldSatisfy` isInfixOf "stack test --fast"
     workflow `shouldSatisfy` isInfixOf "stack bench --benchmark-arguments=\"--iters 1\""
@@ -135,7 +173,7 @@ spec = describe "Release workflow asset naming" $ do
     workflow `shouldSatisfy` isInfixOf "overwrite_files: true"
     workflow `shouldSatisfy` isInfixOf "git rev-list -n 1"
 
-  it "pins release runners and verifies exact downloaded packages before publication" $ do
+  it "declares pinned runners and draft-package verification before publication" $ do
     workflow <- readFile ".github/workflows/release.yml"
     workflow `shouldSatisfy` isInfixOf "ubuntu-22.04"
     workflow `shouldSatisfy` isInfixOf "macos-15"
@@ -158,7 +196,7 @@ spec = describe "Release workflow asset naming" $ do
     verifySection `shouldSatisfy` isInfixOf "persist-credentials: false"
     verifySection `shouldSatisfy` isInfixOf "Download draft release package"
 
-  it "supports fail-closed macOS and Windows signing when explicitly enabled" $ do
+  it "includes opt-in macOS and Windows signing commands" $ do
     workflow <- readFile ".github/workflows/release.yml"
     workflow `shouldSatisfy` isInfixOf "vars.APPLE_SIGNING_ENABLED == 'true'"
     workflow `shouldSatisfy` isInfixOf "codesign"
@@ -170,6 +208,32 @@ spec = describe "Release workflow asset naming" $ do
   it "contains no malformed patch markers in shell command continuations" $ do
     workflow <- readFile ".github/workflows/release.yml"
     workflow `shouldSatisfy` not . isInfixOf "+            "
+
+  it "verifies actual release results including deliberate counterexamples" $ do
+    found <- findExecutable "kai"
+    binary <- maybe (expectationFailure "Built kai executable is missing from PATH" >> return "") return found
+    bash <- requireBash
+    environment <- getEnvironment
+    forM_ [("// expect: 42\n42", True), ("// expect: 42\n0", False),
+           ("// expect-type: TInt\n42", False),
+           ("// expect: \"Ada\"\n// stdin: \"Ada\\n\"\ninput", True),
+           ("// expect: error DivByZero\n1/0", True),
+           ("// expect: error DivByZero\nhead []", False)] $ \(source, success) ->
+      withTempDirectory $ \dir -> do
+        createDirectory (dir </> "tests")
+        writeFile (dir </> "tests" </> "fixture.kai") source
+        (versionCode, versionOut, _) <- readProcessWithExitCode binary ["--version"] ""
+        versionCode `shouldBe` ExitSuccess
+        let version = takeWhile (/= '\n') (drop 5 versionOut)
+            process = (proc bash ["scripts/test-release-binary.sh", binary, version])
+              { env = Just (("KAI_TEST_ROOT", dir) : filter ((/= "KAI_TEST_ROOT") . fst) environment) }
+        (code, out, err) <- readCreateProcessWithExitCode process ""
+        if success then do
+          if code == ExitSuccess then pure () else expectationFailure (out ++ err)
+          out `shouldContain` "release binary tests passed: 1/1"
+        else do
+          code `shouldBe` ExitFailure 1
+          err `shouldContain` "release binary failure:"
 
   it "syntax-checks every release helper script" $ do
     let scripts =
@@ -187,7 +251,9 @@ spec = describe "Release workflow asset naming" $ do
       stdout `shouldBe` expected
       stderr `shouldBe` ""
 
-    assertPackageRoundTrip os arch expectedPackage expectedBinary shouldBeExecutable =
+    assertPackageRoundTrip = assertPackageRoundTripWith runBash
+
+    assertPackageRoundTripWith execute os arch expectedPackage expectedBinary shouldBeExecutable =
       withTempDirectory $ \tempDir -> do
         repoDir <- getCurrentDirectory
         let binary = "fake-kai"
@@ -201,34 +267,43 @@ spec = describe "Release workflow asset naming" $ do
           createDirectoryIfMissing True packageDir
 
           (packageExit, packageStdout, packageStderr) <-
-            readProcessWithExitCode
-              "bash"
+            execute
               [repoDir </> "scripts/package-release-binary.sh", os, arch, binary, packageDir]
-              ""
           packageExit `shouldBe` ExitSuccess
           packageStderr `shouldBe` ""
           let packagePath = trimNewline packageStdout
-          packagePath `shouldBe` packageDir </> expectedPackage
+          normalise packagePath `shouldBe` normalise (packageDir </> expectedPackage)
           when (os /= "Linux") $ do
             header <- BS.take 4 <$> BS.readFile packagePath
             header `shouldBe` BS.pack [0x50, 0x4b, 0x03, 0x04]
+          when shouldBeExecutable $ do
+            let inspectMode = unlines $
+                  ["import sys, tarfile, zipfile"] ++
+                  (if os == "Linux" then
+                    ["with tarfile.open(sys.argv[1]) as archive:",
+                     "    mode = archive.getmember(sys.argv[2]).mode"]
+                   else
+                    ["with zipfile.ZipFile(sys.argv[1]) as archive:",
+                     "    mode = archive.getinfo(sys.argv[2]).external_attr >> 16"]) ++
+                  ["print(oct(mode & 0o7777))"]
+            (modeExit, modeOut, modeErr) <- readProcessWithExitCode
+              "python3" ["-c", inspectMode, packagePath, expectedBinary] ""
+            (modeExit, modeOut, modeErr) `shouldBe` (ExitSuccess, "0o755\n", "")
 
           (extractExit, extractStdout, extractStderr) <-
-            readProcessWithExitCode
-              "bash"
+            execute
               [repoDir </> "scripts/extract-release-package.sh", os, packagePath, extractedDir]
-              ""
           extractExit `shouldBe` ExitSuccess
           extractStderr `shouldBe` ""
           let extractedBinary = trimNewline extractStdout
-          extractedBinary `shouldBe` extractedDir </> expectedBinary
+          normalise extractedBinary `shouldBe` normalise (extractedDir </> expectedBinary)
           readFile extractedBinary `shouldReturn` contents
-          when shouldBeExecutable $ do
+          when (shouldBeExecutable && System.os /= "mingw32") $ do
             extractedPermissions <- getPermissions extractedBinary
             executable extractedPermissions `shouldBe` True
 
     assertBashSyntax script = do
-      (exitCode, stdout, stderr) <- readProcessWithExitCode "bash" ["-n", script] ""
+      (exitCode, stdout, stderr) <- runBash ["-n", script]
       exitCode `shouldBe` ExitSuccess
       stdout `shouldBe` ""
       stderr `shouldBe` ""

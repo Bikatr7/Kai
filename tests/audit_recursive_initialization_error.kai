@@ -1,0 +1,2 @@
+// expect: error UninitializedRecursion "x"
+letrec x : Int = x in x

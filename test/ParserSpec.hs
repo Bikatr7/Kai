@@ -3,9 +3,20 @@ module ParserSpec where
 import Test.Hspec
 import Syntax
 import Parser
+import Control.Monad (forM_)
 
 spec :: Spec
 spec = describe "Parser Tests" $ do
+  describe "File expression comments" $ do
+    forM_ ["// literal text", "  // literal text", "/* literal text */", "#! literal text", "雪"] $ \line ->
+      it ("preserves string content " ++ show line) $ do
+        let value = "first\n" ++ line ++ "\nlast"
+            source = "#!/usr/bin/env kai\n// actual comment\n\"" ++ value ++ "\"\n// final comment\n"
+        parseFileExpr source `shouldBe` Right (StrLit value)
+        parseFile "example.kai" source `shouldBe` Right (StrLit value)
+        parseProgram source `shouldBe` Right (Program [TLExpr (StrLit value)])
+    it "accepts nested comments around an expression" $
+      parseFileExpr "/* first /* nested */ last */ 42 // end" `shouldBe` Right (IntLit 42)
   
   describe "Number Parsing" $ do
     it "parses positive integers" $ do

@@ -8,11 +8,9 @@ module Parser
   , ParseErrorBundle
   ) where
 
-import Text.Megaparsec
-import Text.Megaparsec.Char
-import Control.Monad.Combinators (sepBy, sepBy1)
+import Text.Megaparsec hiding (chunk, sourceName)
 import Data.Void
-import Data.List (lines, isPrefixOf)
+import Data.List (isPrefixOf)
 import Data.Char (isAlphaNum, isSpace)
 import Syntax (Expr(..), TopLevel(..), Program(..), DataConstructor(..))
 import qualified Parser.Lexer as Lexer
@@ -32,18 +30,18 @@ data SplitMode
   = SplitNormal
   | SplitString Bool
   | SplitLineComment
-  | SplitBlockComment
+  | SplitBlockComment Int
 
 splitTopLevelChunks :: String -> [String]
 splitTopLevelChunks input = reverse $ finalize depthParens depthBrackets depthBraces mode current chunks
   where
-    (depthParens, depthBrackets, depthBraces, mode, current, chunks) = go 0 0 0 SplitNormal [] [] input
+    (depthParens, depthBrackets, depthBraces, mode, current, chunks) = go (0 :: Int) (0 :: Int) (0 :: Int) SplitNormal [] [] input
 
     go dp db dbr currentMode currentChunk acc [] = (dp, db, dbr, currentMode, currentChunk, acc)
     go dp db dbr SplitNormal currentChunk acc ('/':'/':rest) =
       go dp db dbr SplitLineComment (' ' : currentChunk) acc rest
     go dp db dbr SplitNormal currentChunk acc ('/':'*':rest) =
-      go dp db dbr SplitBlockComment (' ' : currentChunk) acc rest
+      go dp db dbr (SplitBlockComment 1) (' ' : currentChunk) acc rest
     go dp db dbr SplitNormal currentChunk acc ('"':rest) =
       go dp db dbr (SplitString False) ('"' : currentChunk) acc rest
     go dp db dbr SplitNormal currentChunk acc ('(':rest) =
@@ -87,25 +85,21 @@ splitTopLevelChunks input = reverse $ finalize depthParens depthBrackets depthBr
     go dp db dbr SplitLineComment currentChunk acc (_:rest) =
       go dp db dbr SplitLineComment currentChunk acc rest
 
-    go dp db dbr SplitBlockComment currentChunk acc ('*':'/':rest) =
-      go dp db dbr SplitNormal currentChunk acc rest
-    go dp db dbr SplitBlockComment currentChunk acc ('\r':rest) =
-      go dp db dbr SplitBlockComment currentChunk acc rest
-    go dp db dbr SplitBlockComment currentChunk acc ('\n':rest) =
-      go dp db dbr SplitBlockComment ('\n' : currentChunk) acc rest
-    go dp db dbr SplitBlockComment currentChunk acc (_:rest) =
-      go dp db dbr SplitBlockComment currentChunk acc rest
+    go dp db dbr (SplitBlockComment depth) currentChunk acc ('/':'*':rest) =
+      go dp db dbr (SplitBlockComment (depth + 1)) currentChunk acc rest
+    go dp db dbr (SplitBlockComment depth) currentChunk acc ('*':'/':rest) =
+      go dp db dbr (if depth == 1 then SplitNormal else SplitBlockComment (depth - 1)) currentChunk acc rest
+    go dp db dbr (SplitBlockComment depth) currentChunk acc ('\n':rest) =
+      go dp db dbr (SplitBlockComment depth) ('\n' : currentChunk) acc rest
+    go dp db dbr (SplitBlockComment depth) currentChunk acc (_:rest) =
+      go dp db dbr (SplitBlockComment depth) currentChunk acc rest
 
     finishChunk chunk acc =
       let cleaned = reverse chunk
       in if all isSpace cleaned then acc else cleaned : acc
 
-    finalize _ _ _ _ = finishChunk
-
-statements :: Parser [Expr]
-statements = many (expr <* Lexer.sc <* (eol <|> eof))
-  where
-    eol = try (some (char '\n') *> notFollowedBy (char '\r'))
+    finalize _ _ _ (SplitBlockComment _) chunk acc = finishChunk (reverse " /*" ++ chunk) acc
+    finalize _ _ _ _ chunk acc = finishChunk chunk acc
 
 parseExpr :: String -> Either (ParseErrorBundle String Void) Expr
 parseExpr = parse (Lexer.sc *> expr <* eof) ""
@@ -113,24 +107,14 @@ parseExpr = parse (Lexer.sc *> expr <* eof) ""
 parseStatements :: String -> Either (ParseErrorBundle String Void) [Expr]
 parseStatements content =
   let contentChunks = filter (not . null . dropWhile isSpace) $ splitTopLevelChunks (stripShebang content)
-      isPrefixOf prefix str = take (length prefix) str == prefix
       parseLine = parse (Lexer.sc *> expr <* eof) ""
-  in case mapM parseLine contentChunks of
-       Left err -> Left err
-       Right exprs -> Right exprs
+  in mapM parseLine contentChunks
 
 parseFileExpr :: String -> Either (ParseErrorBundle String Void) Expr
-parseFileExpr content =
-  let cleanContent = unlines $ filter (not . isComment) $ lines (stripShebang content)
-      isComment line = "//" `isPrefixOf` dropWhile isSpace line
-      isPrefixOf prefix str = take (length prefix) str == prefix
-  in parse (Lexer.sc *> expr <* eof) "" cleanContent
+parseFileExpr = parseExpr . stripShebang
 
 parseFile :: String -> String -> Either (ParseErrorBundle String Void) Expr
 parseFile sourceName = parse (Lexer.sc *> expr <* eof) sourceName . stripShebang
-
-parseFileStatements :: String -> String -> Either (ParseErrorBundle String Void) [Expr]
-parseFileStatements sourceName = parse (Lexer.sc *> statements <* eof) sourceName . stripShebang
 
 topLevelImport :: Parser TopLevel
 topLevelImport = do
@@ -148,7 +132,7 @@ topLevelDataDecl = do
   keyword "data"
   typeName <- constructorIdentifier
   typeVars <- many lowerIdentifier
-  symbol "="
+  _ <- symbol "="
   constructors <- sepBy1 dataConstructorDecl (symbol "|")
   return $ TLData typeName typeVars constructors
 
@@ -163,9 +147,9 @@ topLevelLetDef = do
   keyword "let"
   var <- identifier
   maybeType <- optional $ do
-    symbol ":"
+    _ <- symbol ":"
     syntaxType
-  symbol "="
+  _ <- symbol "="
   TLDef var maybeType <$> expr
 
 topLevelLetRecDef :: Parser TopLevel
@@ -173,9 +157,9 @@ topLevelLetRecDef = do
   keyword "letrec"
   var <- identifier
   maybeType <- optional $ do
-    symbol ":"
+    _ <- symbol ":"
     syntaxType
-  symbol "="
+  _ <- symbol "="
   (\val -> TLDef var maybeType (LetRec var maybeType val (Var var))) <$> expr
 
 topLevelExpr :: Parser TopLevel
@@ -205,8 +189,8 @@ parseTopLevelChunk chunk
         Left _ -> parse (Lexer.sc *> topLevelExpr <* eof) "" chunk
   | otherwise = parse (Lexer.sc *> topLevelExpr <* eof) "" chunk
 
-coalesceProgramChunks :: [String] -> Either (ParseErrorBundle String Void) [String]
-coalesceProgramChunks = go []
+parseTopLevels :: [String] -> Either (ParseErrorBundle String Void) [TopLevel]
+parseTopLevels = go []
   where
     go acc [] = Right (reverse acc)
     go acc (chunk:rest) = consume chunk rest
@@ -214,11 +198,11 @@ coalesceProgramChunks = go []
         consume current remaining =
           case remaining of
             next:more
-              | startsWithContinuationPipe next ->
+              | startsWithContinuationPipe next || startsWithKeyword "in" next ->
                   consume (current ++ "\n" ++ next) more
             _ ->
               case parseTopLevelChunk current of
-                Right _ -> go (current : acc) remaining
+                Right parsed -> go (parsed : acc) remaining
                 Left err ->
                   case remaining of
                     [] -> Left err
@@ -232,9 +216,4 @@ coalesceProgramChunks = go []
 parseProgram :: String -> Either (ParseErrorBundle String Void) Program
 parseProgram content =
   let primitiveChunks = filter (not . null . dropWhile isSpace) $ splitTopLevelChunks (stripShebang content)
-  in case coalesceProgramChunks primitiveChunks of
-       Left err -> Left err
-       Right chunks ->
-         case mapM parseTopLevelChunk chunks of
-           Left err -> Left err
-           Right topLevels -> Right $ Program topLevels
+  in Program <$> parseTopLevels primitiveChunks

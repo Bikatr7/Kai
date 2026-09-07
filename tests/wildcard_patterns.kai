@@ -1,8 +1,9 @@
 // Test wildcard patterns in case expressions
-// expect: "matched"
+// expect: ("matched", "list matched", "tuple matched", "bound", "matched")
 
-let _ = case Just 42 of _ -> "matched" | Nothing -> "not matched"
-let _ = case [1, 2, 3] of _ -> "list matched" | [] -> "empty"
-let _ = case (1, "hello") of _ -> "tuple matched"
-let _ = case Just 42 of _ -> "bound" | Nothing -> "none"
-case Nothing of _ -> "matched" | Just x -> "should not match"
+let maybeResult = case Just 42 of _ -> "matched" | Nothing -> "not matched"
+let listResult = case [1, 2, 3] of _ -> "list matched" | [] -> "empty"
+let tupleResult = case (1, "hello") of _ -> "tuple matched"
+let boundResult = case Just 42 of _ -> "bound" | Nothing -> "none"
+let finalResult = case Nothing of _ -> "matched" | Just x -> "should not match"
+(maybeResult, listResult, tupleResult, boundResult, finalResult)

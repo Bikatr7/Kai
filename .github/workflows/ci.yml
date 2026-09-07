@@ -2,15 +2,19 @@ name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, 'validation/**' ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-22.04
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7.0.1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
     
@@ -22,7 +26,7 @@ jobs:
         stack-version: 'latest'
     
     - name: Cache dependencies
-      uses: actions/cache@v4
+      uses: actions/cache@v6.1.0
       with:
         path: |
           ~/.stack
@@ -33,7 +37,9 @@ jobs:
       run: stack test
 
     - name: Validate benchmark programs
-      run: stack bench --benchmark-arguments="--iters 1"
+      run: |
+        stack bench --benchmark-arguments="--iters 1"
+        python3 test/benchmark_runner_test.py "$(stack path --dist-dir)/build/kai-bench/kai-bench"
 
     - name: Build binary
       run: |
@@ -46,3 +52,127 @@ jobs:
       run: |
         VERSION=$(grep '^version:' package.yaml | cut -d' ' -f2)
         bash scripts/test-release-binary.sh ./dist/kai-ci "$VERSION"
+        PACKAGE=$(bash scripts/package-release-binary.sh "$RUNNER_OS" "$RUNNER_ARCH" ./dist/kai-ci dist/native-package)
+        EXTRACTED=$(bash scripts/extract-release-package.sh "$RUNNER_OS" "$PACKAGE" dist/native-extracted)
+        bash scripts/test-release-binary.sh "$EXTRACTED" "$VERSION"
+
+    - name: Render documentation for native interpreters
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/validation/')
+      env:
+        KAI_SITE_EXPORT_OUT_DIR: dist/documentation-site
+      run: bash scripts/export-site.sh
+
+    - uses: actions/upload-artifact@v7.0.1
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/validation/')
+      with:
+        name: validation-documentation
+        path: dist/documentation-site
+        if-no-files-found: error
+
+  native-packages:
+    name: Native language and package checks (${{ matrix.os }})
+    needs: test
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/validation/')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            macos-target: '11.3'
+          - os: windows-2022
+            macos-target: ''
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos-target }}
+      KAI_TEST_WEBSITE_HTML: dist/documentation-site/index.html
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: haskell-actions/setup@v2
+        id: haskell
+        with:
+          ghc-version: '9.4.8'
+          enable-stack: true
+          stack-version: 'latest'
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.stack
+            ${{ steps.haskell.outputs.stack-root }}
+            .stack-work
+          key: native-check-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('stack.yaml.lock', 'package.yaml') }}
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: validation-documentation
+          path: dist/documentation-site
+      - name: Select Git Bash for Windows subprocesses
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $gitRoot = Split-Path (Split-Path (Get-Command git.exe).Source -Parent) -Parent
+          $gitBin = Join-Path $gitRoot "bin"
+          $gitUsrBin = Join-Path $gitRoot "usr/bin"
+          if (!(Test-Path (Join-Path $gitBin "bash.exe"))) {
+            throw "Git Bash was not found beside git.exe"
+          }
+          $gitBin >> $env:GITHUB_PATH
+          $gitUsrBin >> $env:GITHUB_PATH
+      - name: Run language and integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = Windows ]; then
+            # POSIX permission/symlink and shell-exporter behavior is covered by Ubuntu and macOS.
+            stack --no-terminal test --test-arguments='--skip "Kai runner and installation" --skip "Static site exporter"'
+          else
+            stack --no-terminal test
+          fi
+      - name: Validate benchmark programs
+        if: success() || failure()
+        shell: bash
+        run: |
+          stack --no-terminal bench --benchmark-arguments="--iters 1"
+          python3 test/benchmark_runner_test.py "$(stack path --dist-dir)/build/kai-bench/kai-bench"
+      - name: Build, package, extract, and execute the CLI
+        if: success() || failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          stack --no-terminal build :kai
+          VERSION=$(grep '^version:' package.yaml | cut -d' ' -f2)
+          INSTALL_ROOT=$(stack path --local-install-root)
+          if [ "$RUNNER_OS" = Windows ]; then
+            BINARY="$INSTALL_ROOT/bin/kai.exe"
+          else
+            BINARY="$INSTALL_ROOT/bin/kai"
+          fi
+          bash scripts/test-release-binary.sh "$BINARY" "$VERSION"
+          PACKAGE=$(bash scripts/package-release-binary.sh "$RUNNER_OS" "$RUNNER_ARCH" "$BINARY" dist/native-package)
+          EXTRACTED=$(bash scripts/extract-release-package.sh "$RUNNER_OS" "$PACKAGE" dist/native-extracted)
+          bash scripts/test-release-binary.sh "$EXTRACTED" "$VERSION"
+      - name: Execute Windows package without compiler DLLs on PATH
+        if: (success() || failure()) && runner.os == 'Windows'
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          root = Path.cwd()
+          binary = root / "dist/native-extracted/kai.exe"
+          environment = os.environ.copy()
+          windows = Path(os.environ["SystemRoot"])
+          environment["PATH"] = os.pathsep.join(map(str, [windows / "System32", windows]))
+          subprocess.run(
+              [sys.executable, str(root / "scripts/check-script-corpus.py"), str(binary), str(root / "tests")],
+              cwd=binary.parent, env=environment, check=True,
+          )
+      - name: Check macOS deployment target
+        if: (success() || failure()) && runner.os == 'macOS'
+        shell: bash
+        run: |
+          xcrun vtool -show-build dist/native-extracted/kai > dist/macos-build-info.txt
+          cat dist/macos-build-info.txt
+          grep -Eq 'minos[[:space:]]+11\.3([[:space:]]|$)' dist/macos-build-info.txt

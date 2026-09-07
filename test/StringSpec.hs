@@ -35,9 +35,7 @@ spec = describe "String Support" $ do
   describe "Invalid" $ do
     it "rejects ++ with non-strings" $ do
       case parseExpr "1 ++ \"a\"" of
-        Right e -> case typeCheck e of
-          Left _ -> True `shouldBe` True
-          Right _ -> expectationFailure "should be type error"
+        Right e -> typeCheck e `shouldBe` Left (UnificationError TInt TString)
         Left _ -> expectationFailure "parse"
 
 

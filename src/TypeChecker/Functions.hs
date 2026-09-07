@@ -7,12 +7,10 @@ import TypeChecker.Types
 import TypeChecker.Substitution
 import TypeChecker.Unification
 
-type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
-
 inferFunctions :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferFunctions infer env (Lambda param maybeType body) = do
   paramType <- case maybeType of
-    Just sType -> return $ syntaxTypeToType sType
+    Just sType -> inferAnnotation env sType
     Nothing -> freshTVar
   let env' = Map.insert param (monoScheme paramType) env
   (s1, bodyType) <- infer env' body

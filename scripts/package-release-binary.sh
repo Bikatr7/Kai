@@ -18,7 +18,7 @@ if [ ! -f "$binary" ]; then
 fi
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-package_name=$("${script_dir}/release-package-name.sh" "$os" "$arch")
+package_name=$(bash "${script_dir}/release-package-name.sh" "$os" "$arch")
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/kai-release-package.XXXXXX")
 
 cleanup() {
@@ -57,8 +57,22 @@ case "$os" in
       ditto -c -k --norsrc "$work_dir/kai" "$package_path"
     elif command -v zip >/dev/null 2>&1; then
       (cd "$work_dir" && zip -q "$package_path" kai)
+    elif command -v python3 >/dev/null 2>&1; then
+      python3 - "$work_dir/kai" "$package_path" <<'PY'
+from pathlib import Path
+import stat
+import sys
+import zipfile
+
+entry = zipfile.ZipInfo("kai")
+entry.create_system = 3
+entry.external_attr = (stat.S_IFREG | 0o755) << 16
+entry.compress_type = zipfile.ZIP_DEFLATED
+with zipfile.ZipFile(sys.argv[2], "w") as archive:
+    archive.writestr(entry, Path(sys.argv[1]).read_bytes())
+PY
     else
-      echo "ditto or zip is required to package the macOS release" >&2
+      echo "ditto, zip, or python3 is required to package the macOS release" >&2
       exit 1
     fi
     ;;

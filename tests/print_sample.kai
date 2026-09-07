@@ -1,2 +1,3 @@
 // expect: "Hello, Kai!"
+// stdout: "Hello, Kai\n"
 let u = print "Hello, Kai" in "Hello, Kai!"

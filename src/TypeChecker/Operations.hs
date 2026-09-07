@@ -6,38 +6,15 @@ import Syntax (Expr(..))
 import TypeChecker.Types
 import TypeChecker.Substitution
 import TypeChecker.Unification
+import TypeChecker.Helpers
 import TypeChecker.Patterns
 
-type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
-
-inferTwo :: InferFunc -> TypeEnv -> Expr -> Expr -> TypeInfer (Substitution, Type, Type)
-inferTwo infer env e1 e2 = do
-  (s1, t1) <- infer env e1
-  (s2, t2) <- infer (applySubstEnv s1 env) e2
-  let combinedSubst = composeSubst s2 s1
-  return (combinedSubst, applySubst s2 t1, t2)
-
-inferThree :: InferFunc -> TypeEnv -> Expr -> Expr -> Expr -> TypeInfer (Substitution, Type, Type, Type)
-inferThree infer env e1 e2 e3 = do
-  (s1, t1) <- infer env e1
-  (s2, t2) <- infer (applySubstEnv s1 env) e2
-  let s12 = composeSubst s2 s1
-  (s3, t3) <- infer (applySubstEnv s12 env) e3
-  let s123 = composeSubst s3 s12
-  return (s123, applySubst s3 (applySubst s2 t1), applySubst s3 t2, t3)
-
 inferOperations :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
-inferOperations infer env (ParseInt e) = do
-  (s, eType) <- infer env e
-  s2 <- lift $ unify (applySubst s eType) TString
-  let finalSubst = composeSubst s2 s
-  return (finalSubst, TMaybe TInt)
+inferOperations infer env (ParseInt e) =
+  inferUnary infer env e TString (TMaybe TInt)
 
-inferOperations infer env (ToString e) = do
-  (s, eType) <- infer env e
-  s2 <- lift $ unify (applySubst s eType) TInt
-  let finalSubst = composeSubst s2 s
-  return (finalSubst, TString)
+inferOperations infer env (ToString e) =
+  inferUnary infer env e TInt TString
 
 inferOperations infer env (Show e) = do
   (s, _) <- infer env e
@@ -104,21 +81,8 @@ inferOperations infer env (Reverse lst) = do
     let finalSubst = composeSubst s' s
     return (finalSubst, applySubst finalSubst lstType)
 
-inferOperations infer env (Take n lst) = do
-    (s12, nType, lstType) <- inferTwo infer env n lst
-    s3 <- lift $ unify nType TInt
-    elemType <- freshTVar
-    s4 <- lift $ unify (applySubst s3 lstType) (TList elemType)
-    let finalSubst = composeSubst s4 (composeSubst s3 s12)
-    return (finalSubst, applySubst finalSubst lstType)
-
-inferOperations infer env (Drop n lst) = do
-    (s12, nType, lstType) <- inferTwo infer env n lst
-    s3 <- lift $ unify nType TInt
-    elemType <- freshTVar
-    s4 <- lift $ unify (applySubst s3 lstType) (TList elemType)
-    let finalSubst = composeSubst s4 (composeSubst s3 s12)
-    return (finalSubst, applySubst finalSubst lstType)
+inferOperations infer env (Take n lst) = inferSlice infer env n lst
+inferOperations infer env (Drop n lst) = inferSlice infer env n lst
 
 inferOperations infer env (Zip l1 l2) = do
     (s12, l1Type, l2Type) <- inferTwo infer env l1 l2
@@ -131,25 +95,14 @@ inferOperations infer env (Zip l1 l2) = do
     let finalElemType2 = applySubst finalSubst elemType2
     return (finalSubst, TList (TTuple [finalElemType1, finalElemType2]))
 
-inferOperations infer env (Split delim str) = do
-    (s12, delimType, strType) <- inferTwo infer env delim str
-    s3 <- lift $ unify delimType TString
-    s4 <- lift $ unify (applySubst s3 strType) TString
-    let finalSubst = composeSubst s4 (composeSubst s3 s12)
-    return (finalSubst, TList TString)
+inferOperations infer env (Split delim str) =
+  inferBinary infer env delim str TString TString (TList TString)
 
-inferOperations infer env (Join delim lst) = do
-    (s12, delimType, lstType) <- inferTwo infer env delim lst
-    s3 <- lift $ unify delimType TString
-    s4 <- lift $ unify (applySubst s3 lstType) (TList TString)
-    let finalSubst = composeSubst s4 (composeSubst s3 s12)
-    return (finalSubst, TString)
+inferOperations infer env (Join delim lst) =
+  inferBinary infer env delim lst TString (TList TString) TString
 
-inferOperations infer env (Trim str) = do
-    (s, strType) <- infer env str
-    s' <- lift $ unify (applySubst s strType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TString)
+inferOperations infer env (Trim str) =
+  inferUnary infer env str TString TString
 
 inferOperations infer env (Replace old new str) = do
     (s123, oldType, newType, strType) <- inferThree infer env old new str
@@ -159,80 +112,41 @@ inferOperations infer env (Replace old new str) = do
     let finalSubst = composeSubst s6 (composeSubst s5 (composeSubst s4 s123))
     return (finalSubst, TString)
 
-inferOperations infer env (StrLength str) = do
-    (s, strType) <- infer env str
-    s' <- lift $ unify (applySubst s strType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TInt)
+inferOperations infer env (StrLength str) =
+  inferUnary infer env str TString TInt
 
-inferOperations infer env (ReadFile path) = do
-    (s, pathType) <- infer env path
-    s' <- lift $ unify (applySubst s pathType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TString)
+inferOperations infer env (ReadFile path) =
+  inferUnary infer env path TString TString
 
-inferOperations infer env (WriteFile path content) = do
-    (s12, pathType, contentType) <- inferTwo infer env path content
-    s3 <- lift $ unify pathType TString
-    s4 <- lift $ unify (applySubst s3 contentType) TString
-    let finalSubst = composeSubst s4 (composeSubst s3 s12)
-    return (finalSubst, TUnit)
+inferOperations infer env (WriteFile path content) =
+  inferBinary infer env path content TString TString TUnit
 
-inferOperations infer env (AppendFile path content) = do
-    (s12, pathType, contentType) <- inferTwo infer env path content
-    s3 <- lift $ unify pathType TString
-    s4 <- lift $ unify (applySubst s3 contentType) TString
-    let finalSubst = composeSubst s4 (composeSubst s3 s12)
-    return (finalSubst, TUnit)
+inferOperations infer env (AppendFile path content) =
+  inferBinary infer env path content TString TString TUnit
 
-inferOperations infer env (FileExists path) = do
-    (s, pathType) <- infer env path
-    s' <- lift $ unify (applySubst s pathType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TBool)
+inferOperations infer env (FileExists path) =
+  inferUnary infer env path TString TBool
 
-inferOperations infer env (ListDirectory path) = do
-    (s, pathType) <- infer env path
-    s' <- lift $ unify (applySubst s pathType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TList TString)
+inferOperations infer env (ListDirectory path) =
+  inferUnary infer env path TString (TList TString)
 
-inferOperations infer env (CreateDirectory path) = do
-    (s, pathType) <- infer env path
-    s' <- lift $ unify (applySubst s pathType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TUnit)
+inferOperations infer env (CreateDirectory path) =
+  inferUnary infer env path TString TUnit
 
-inferOperations infer env (RemoveDirectory path) = do
-    (s, pathType) <- infer env path
-    s' <- lift $ unify (applySubst s pathType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TUnit)
+inferOperations infer env (RemoveDirectory path) =
+  inferUnary infer env path TString TUnit
 
-inferOperations infer env (SetCurrentDirectory path) = do
-    (s, pathType) <- infer env path
-    s' <- lift $ unify (applySubst s pathType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TUnit)
+inferOperations infer env (SetCurrentDirectory path) =
+  inferUnary infer env path TString TUnit
 
-inferOperations infer env (System command) = do
-    (s, commandType) <- infer env command
-    s' <- lift $ unify (applySubst s commandType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TInt)
+inferOperations infer env (System command) =
+  inferUnary infer env command TString TInt
 
-inferOperations infer env (GetEnv name) = do
-    (s, nameType) <- infer env name
-    s' <- lift $ unify (applySubst s nameType) TString
-    let finalSubst = composeSubst s' s
-    return (finalSubst, TMaybe TString)
+inferOperations infer env (GetEnv name) =
+  inferUnary infer env name TString (TMaybe TString)
 
-inferOperations infer env (SetEnv name value) = do
-    (s12, nameType, valueType) <- inferTwo infer env name value
-    s3 <- lift $ unify nameType TString
-    s4 <- lift $ unify (applySubst s3 valueType) TString
-    let finalSubst = composeSubst s4 (composeSubst s3 s12)
-    return (finalSubst, TUnit)
+inferOperations infer env (SetEnv name value) =
+  inferBinary infer env name value TString TString TUnit
 
 inferOperations infer env (Exit codeExpr) = do
     (s, codeType) <- infer env codeExpr
@@ -250,18 +164,27 @@ inferOperations infer env (Case scrutinee patterns) = do
   return (finalSubst, applySubst finalSubst resultType)
   where
     inferPatterns _ _ _ [] = return (Map.empty, TUnit)
-    inferPatterns env scrutType resultType ((pat, expr) : rest) = do
-      (patSubst, patEnv) <- inferPattern env pat scrutType
-      let appliedEnv = applySubstEnv patSubst env
+    inferPatterns scope scrutType resultType ((pat, expr) : rest) = do
+      (patSubst, patEnv) <- inferPattern scope pat scrutType
+      let appliedEnv = applySubstEnv patSubst scope
       let newEnv = Map.union (applySubstEnv patSubst patEnv) appliedEnv
       (exprSubst, exprType) <- infer newEnv expr
       unifySubst <- lift $ unify (applySubst exprSubst resultType) (applySubst exprSubst exprType)
       let combinedSubst = composeSubstList [patSubst, exprSubst, unifySubst]
       (restSubst, _) <- inferPatterns
-        (applySubstEnv combinedSubst env)
+        (applySubstEnv combinedSubst scope)
         (applySubst combinedSubst scrutType)
         (applySubst combinedSubst resultType)
         rest
       return (composeSubst restSubst combinedSubst, TUnit)
 
 inferOperations _ _ _ = error "inferOperations called on non-operation expression"
+
+inferSlice :: InferFunc -> TypeEnv -> Expr -> Expr -> TypeInfer (Substitution, Type)
+inferSlice infer env n lst = do
+    (s12, nType, lstType) <- inferTwo infer env n lst
+    s3 <- lift $ unify nType TInt
+    elemType <- freshTVar
+    s4 <- lift $ unify (applySubst s3 lstType) (TList elemType)
+    let finalSubst = composeSubst s4 (composeSubst s3 s12)
+    return (finalSubst, applySubst finalSubst lstType)

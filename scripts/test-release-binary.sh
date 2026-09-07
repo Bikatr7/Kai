@@ -43,56 +43,5 @@ if [ "$error_status" -eq 0 ] || ! grep -Fq "DivByZero" <<< "$error_output"; then
   exit 1
 fi
 
-total=0
-failed=0
-failures=()
-while IFS= read -r -d '' test_file; do
-  total=$((total + 1))
-  status=0
-  case "$test_file" in
-    */input*)
-      case "$(basename "$test_file")" in
-        input_boolean_logic.kai)
-          test_input='yes\nyes'
-          ;;
-        input_comparison_chain.kai)
-          test_input='a\na'
-          ;;
-        input_empty_handling.kai)
-          test_input=''
-          ;;
-        input_nested_conditionals.kai)
-          test_input='admin\nadmin'
-          ;;
-        *)
-          test_input='test_input'
-          ;;
-      esac
-      if [ "$(basename "$test_file")" = "input_empty_handling.kai" ]; then
-        printf '\n' | "$binary" "$test_file" >/dev/null 2>&1 || status=$?
-      else
-        printf '%b' "$test_input" | "$binary" "$test_file" >/dev/null 2>&1 || status=$?
-      fi
-      ;;
-    *)
-      "$binary" "$test_file" >/dev/null 2>&1 || status=$?
-      ;;
-  esac
-
-  if [ "$status" -ne 0 ]; then
-    failed=$((failed + 1))
-    failures+=("$test_file:$status")
-  fi
-done < <(find "$root_dir/tests" -type f -name '*.kai' -print0)
-
-if [ "$total" -eq 0 ]; then
-  echo "release binary test corpus is empty" >&2
-  exit 1
-fi
-
-if [ "$failed" -ne 0 ]; then
-  printf 'release binary failure: %s\n' "${failures[@]}" >&2
-  exit 1
-fi
-
-printf 'release binary tests passed: %d/%d\n' "$total" "$total"
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+python3 "$script_dir/check-script-corpus.py" "$binary" "$root_dir/tests"

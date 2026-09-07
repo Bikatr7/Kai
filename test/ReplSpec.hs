@@ -8,33 +8,9 @@ import System.IO (hClose, hGetContents, hPutStr, openTempFile)
 
 import CLI (runCLI, versionString)
 
-import System.Posix.IO
+import TestIO (captureOutput, withStdin)
 
-captureOutput :: IO a -> IO (a, String)
-captureOutput action = do
-  (readFd, writeFd) <- createPipe
-  oldStdout <- dup stdOutput
-  dupTo writeFd stdOutput
-  closeFd writeFd
-  result <- action
-  dupTo oldStdout stdOutput
-  closeFd oldStdout
-  readHandle <- fdToHandle readFd
-  hGetContents readHandle >>= \out -> evaluate (length out) >> return (result, out)
 
-withStdin :: String -> IO a -> IO a
-withStdin input action = do
-  (readFd, writeFd) <- createPipe
-  writeHandle <- fdToHandle writeFd
-  hPutStr writeHandle input
-  hClose writeHandle
-  oldStdin <- dup stdInput
-  dupTo readFd stdInput
-  closeFd readFd
-  result <- action
-  dupTo oldStdin stdInput
-  closeFd oldStdin
-  return result
 
 withTempKaiFile :: String -> (FilePath -> IO a) -> IO a
 withTempKaiFile content action = do
@@ -66,28 +42,27 @@ spec = describe "REPL" $ do
     exitCode `shouldBe` ExitSuccess
     output `shouldContain` (versionString ++ " REPL")
     output `shouldContain` "Session args come from: kai repl arg1 arg2"
-    output `shouldContain` "t0 -> t0"
+    output `shouldBe` replTranscript "kai> t0 -> t0\nkai> "
 
   it "keeps definitions across inputs" $ do
     (exitCode, output) <- captureOutput $ withStdin "let x = 41\nx + 1\n:quit\n" $ runCLI []
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "x : Int"
-    output `shouldContain` "42"
+    output `shouldBe` replTranscript "kai> x : Int\nkai> 42\nkai> "
 
   it "makes repl args available through args" $ do
     (exitCode, output) <- captureOutput $ withStdin "print (length args)\n:quit\n" $ runCLI ["repl", "foo", "bar"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "2"
+    output `shouldBe` replTranscript "kai> 2\n()\nkai> "
 
   it "supports multiline let-in input with inline comments and repl args" $ do
     let input =
           "let firstArg = head args in  // \"foo\"\n\
           \let numArgs = length args in  // 3\n\
-          \print (show args)  // [\"foo\", \"bar\", \"baz\"]\n\
+          \do { print firstArg; print numArgs; print (show args) }  // [\"foo\", \"bar\", \"baz\"]\n\
           \:quit\n"
     (exitCode, output) <- captureOutput $ withStdin input $ runCLI ["repl", "foo", "bar", "baz"]
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "[foo, bar, baz]"
+    output `shouldBe` replTranscript "kai> .... .... foo\n3\n[foo, bar, baz]\n()\nkai> "
 
   it "supports annotated polymorphic recursion in repl definitions" $ do
     let input =
@@ -97,7 +72,8 @@ spec = describe "REPL" $ do
     (exitCode, output) <- captureOutput $ withStdin input $ runCLI []
     exitCode `shouldBe` ExitSuccess
     output `shouldContain` "nestedLayers : Int -> ["
-    output `shouldContain` "3"
+    output `shouldContain` "\nkai> 3\nkai> "
+    output `shouldNotContain` "error:"
 
   it "continues data declarations when a line ends with a constructor separator" $ do
     let input =
@@ -107,11 +83,7 @@ spec = describe "REPL" $ do
           \:quit\n"
     (exitCode, output) <- captureOutput $ withStdin input $ runCLI []
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "Off : Flag"
-    output `shouldContain` "On : Flag"
-    output `shouldContain` ".... "
-    output `shouldContain` "1"
-    output `shouldNotContain` "Parse error:"
+    output `shouldBe` replTranscript "kai> .... Off : Flag\nOn : Flag\nkai> 1\nkai> "
 
   it "continues case alternatives when a branch line ends with a separator" $ do
     let input =
@@ -121,17 +93,13 @@ spec = describe "REPL" $ do
           \:quit\n"
     (exitCode, output) <- captureOutput $ withStdin input $ runCLI []
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` ".... "
-    output `shouldContain` "1"
-    output `shouldNotContain` "Parse error:"
+    output `shouldBe` replTranscript "kai> Off : Flag\nOn : Flag\nkai> .... 1\nkai> "
 
   it "still evaluates complete single-line data declarations immediately" $ do
     let input = "data Flag = Off\nOff\n:quit\n"
     (exitCode, output) <- captureOutput $ withStdin input $ runCLI []
     exitCode `shouldBe` ExitSuccess
-    output `shouldContain` "Off : Flag"
-    countOccurrences "Off" output `shouldSatisfy` (>= 2)
-    output `shouldNotContain` "Parse error:"
+    output `shouldBe` replTranscript "kai> Off : Flag\nkai> Off\nkai> "
 
   it "explains how repl args work in :help" $ do
     (exitCode, output) <- captureOutput $ withStdin ":help\n:quit\n" $ runCLI []
@@ -147,12 +115,19 @@ spec = describe "REPL" $ do
           let input = ":load " ++ path ++ "\nunwrap (Some 7)\n:quit\n"
           (exitCode, output) <- captureOutput $ withStdin input $ runCLI []
           exitCode `shouldBe` ExitSuccess
-          output `shouldContain` ("Loaded " ++ path)
-          output `shouldContain` "7"
+          output `shouldBe` replTranscript ("kai> Loaded " ++ path ++ "\nkai> 7\nkai> ")
 
   it "reloads the most recently loaded file" $ do
     withTempKaiFile "let value = 123456\nvalue\n" $ \path -> do
       let input = ":load " ++ path ++ "\n:reload\n:quit\n"
       (exitCode, output) <- captureOutput $ withStdin input $ runCLI []
       exitCode `shouldBe` ExitSuccess
-      countOccurrences "123456" output `shouldBe` 2
+      output `shouldBe` replTranscript
+        ("kai> 123456\nLoaded " ++ path ++ "\nkai> 123456\nLoaded " ++ path ++ "\nkai> ")
+
+replTranscript :: String -> String
+replTranscript body = unlines
+  [ versionString ++ " REPL"
+  , "Commands: :type EXPR, :load FILE, :reload, :quit, :help"
+  , "Session args come from: kai repl arg1 arg2  (or: kai --repl arg1 arg2)"
+  ] ++ body

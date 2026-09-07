@@ -1,4 +1,5 @@
 // expect: 9
+// stdout: "trail\n"
 do {
   print "trail";
   9;

@@ -1,3 +1,5 @@
+// expect: "Goodbye!"
+// stdin: "quit\n"
 // Test input with let binding in conditional
 // expect-type: TString
 

@@ -1,4 +1,4 @@
-// expect: 52
+// expect: (52, 21, 10, 7, 3)
 // Test complex combinator patterns with let bindings
 let S = \x -> \y -> \z -> x z (y z) in
   let K = \x -> \y -> x in
@@ -11,4 +11,4 @@ let S = \x -> \y -> \z -> x z (y z) in
                 let add10 = add 10 in
                   let compose_double_add10 = B double add10 in
                     let apply_to_16 = compose_double_add10 16 in
-                      apply_to_16
+                      (apply_to_16, S add double 7, K 10 20, I 7, C (\a -> \b -> a - b) 2 5)

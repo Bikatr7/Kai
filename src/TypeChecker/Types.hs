@@ -26,6 +26,8 @@ data Scheme = Forall [String] Type
 
 type TypeEnv = Map.Map String Scheme
 
+type InferFunc = TypeEnv -> Expr -> TypeInfer (Substitution, Type)
+
 -- Substitution maps type variables to types
 type Substitution = Map.Map String Type
 
@@ -40,6 +42,10 @@ data TypeError
   | RecordFieldMismatch String
   | InvalidWildcard String
   | GeneralTypeError String
+  | DuplicatePatternBinding String
+  | DuplicateRecordField String
+  | InvalidDataDeclaration String
+  | ConstructorPatternArity String Int Int
   deriving (Show, Eq)
 
 -- Type inference monad
@@ -82,3 +88,34 @@ instance NFData Type where
 
 instance NFData Scheme where
   rnf (Forall vars ty) = rnf vars `seq` rnf ty
+
+-- Declaration metadata cannot be addressed by a source-language identifier.
+dataTypeKey :: String -> String
+dataTypeKey name = "@type:" ++ name
+
+validateSyntaxType :: TypeEnv -> SyntaxType -> Either TypeError Type
+validateSyntaxType env syntax = do
+  validate syntax
+  return (syntaxTypeToType syntax)
+  where
+    validate (STCustom name args) = case Map.lookup (dataTypeKey name) env of
+      Nothing -> Left $ InvalidDataDeclaration ("Unknown type: " ++ name)
+      Just (Forall vars _) | length vars /= length args ->
+        Left $ InvalidDataDeclaration ("Wrong type arity: " ++ name)
+      Just _ -> mapM_ validate args
+    validate (STFun a b) = validate a >> validate b
+    validate (STMaybe a) = validate a
+    validate (STEither a b) = validate a >> validate b
+    validate (STList a) = validate a
+    validate (STTuple ts) = mapM_ validate ts
+    validate (STRecord fields) = do
+      uniqueFields (map fst fields)
+      mapM_ (validate . snd) fields
+    validate _ = Right ()
+    uniqueFields [] = Right ()
+    uniqueFields (name:names)
+      | name `elem` names = Left (DuplicateRecordField name)
+      | otherwise = uniqueFields names
+
+constructorKey :: String -> String
+constructorKey name = "@constructor:" ++ name

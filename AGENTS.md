@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Contributor instructions for Kai **0.0.4.6**.
+
 ## Read README.md in its entirety.
 ## Read DEVELOPING.md in its entirety.
 ## Read FEATURES.md in its entirety.
@@ -15,8 +17,9 @@ You are not to hardcode tests, you are not to delete tests. If a test fails and 
 
 ## Test Structure
 - **Unit tests**: `test/*.hs` files using Hspec
-- **Script tests**: `tests/*.kai` files with `// expect:` directives
-- **Property tests**: QuickCheck in PropertyBasedSpec.hs
+- **Script tests**: `.kai` files discovered recursively under `tests/` and `test/`
+- **Property tests**: QuickCheck in `PropertyBasedSpec.hs` and the feature specs
+- **Integration tests**: CLI, REPL, modules, examples, UTF-8 I/O, runner installation, source archives, and release helpers
 
 ## Adding Tests
 
@@ -24,39 +27,64 @@ You are not to hardcode tests, you are not to delete tests. If a test fails and 
 ```haskell
 module NewFeatureSpec where
 import Test.Hspec
-import Syntax
-import Parser
-import Evaluator
+import Evaluator (Value(..))
+import TestSupport (evaluateCheckedSource)
 
 spec :: Spec
 spec = describe "Feature" $ do
   it "description" $ do
-    parseEvaluate "expression" `shouldBe` Right (VInt 42)
-
-parseEvaluate :: String -> Either RuntimeError Value
-parseEvaluate input = case parseExpr input of
-  Left _ -> Left (TypeError "Parse error")
-  Right expr -> evalPure expr
+    evaluateCheckedSource "40 + 2" `shouldBe` Right (VInt 42)
 ```
+
+Use `TestSupport` for valid source fixtures: parse/type setup failures must fail
+the test, never become simulated language errors. Use `inferSource` for type-error
+tests and `parseExpr` directly for parser-error tests. Use `shouldInfer` to compare
+complete polymorphic types without depending on fresh-variable names.
 
 ### Script Test Pattern
 ```kai
 // expect: 42
-expression_to_test
+40 + 2
 ```
+
+Printing and input require observable assertions as well as the return value:
+
+```kai
+// expect: ()
+// expect-type: TUnit
+// stdin: "Ada\n"
+// stdout: "Hello, Ada!\n"
+print ("Hello, " ++ input ++ "!")
+```
+
+`()` is the result of `print`. The exact greeting is checked by `// stdout:`.
+`stack test` and `scripts/check-script-corpus.py` supply the JSON `// stdin:`
+fixture and compare exact stdout, including whitespace and newlines. Missing
+stdin means EOF; missing stdout means silence. `kai --check FILE.kai` checks
+value/error and optional type directives; it reads real stdin and does not check
+stdout itself. Keep directives unique, nonempty, and at the start of their lines.
 
 ### Error Testing
 ```haskell
-case parseEvaluate "5 / 0" of
-  Left DivByZero -> True `shouldBe` True
-  _ -> expectationFailure "Should be division by zero"
+evaluateCheckedSource "5 / 0" `shouldBe` Left DivByZero
 ```
+
+Import `RuntimeError(DivByZero)` from `Evaluator` for this assertion. Test exact
+error constructors, and assert that later effects do not occur after a failure.
 
 ## Rules
 - ALL `.kai` files MUST have `// expect:` directive
 - Test specific error types, not generic failures
 - Add new unit tests to `test/Spec.hs`
 - Run tests: `stack test`
+- Run expanded properties: `stack test --test-arguments='--qc-max-success=1000 --seed=42'`
+- Assert every behavior named by the test: returned values, printed output,
+  filesystem changes, and exit status as applicable. A definition-only module
+  loading successfully does not establish that its exported functions work.
+- Keep filesystem fixtures in temporary directories and restore stdin, stdout,
+  environment variables, and the current directory after exceptions.
+- See [DEVELOPING.md](DEVELOPING.md#test-suite-structure) for fixture helpers,
+  per-test reports, script assertion checks, and platform-specific commands.
 
 ## File Organization
 - `ArithmeticSpec.hs` + `tests/arithmetic.kai`
@@ -79,14 +107,12 @@ case parseEvaluate "5 / 0" of
 - **Feature priorities**: Match the roadmap and current limitations listed in README.md
 - **Documentation updates**: When adding language features, update README.md, SPEC.md, website, FEATURES.md and DEVELOPING.md
 
-## Recent Major Improvements (v0.0.3.2+)
-- **Type annotations**: Optional Haskell-style type annotations for lambdas and let bindings
-- **Error handling system**: Full Maybe/Either types with pattern matching for graceful error handling
-- **Safe conversion functions**: `parseInt : String -> Maybe Int` returns `Nothing` for invalid input
-- **Case expressions**: Pattern matching for handling Maybe/Either and other data types safely
-- **Wildcard variables**: Use `_` in let bindings to discard unused values (`let _ = print "hello" in 42`)
-- **Expression sequencing**: Use `;` to sequence expressions for side effects (`print "first"; print "second"; 42`)
-- **Recursion fixes**: Fixed critical evaluator bug preventing infinite recursion with IO operations
-- **Performance fixes**: Eliminated infinite loops in deeply nested expressions (1000+ levels)
-- **Clean CLI**: Debug output hidden by default, use `--debug` flag when needed
-- **Interactive examples**: Working calculator demonstrating language features including new wildcard and sequencing features
+## Kai 0.0.4.6 Implementation Notes
+- Builtins are first-class and support partial application; supplied arguments evaluate immediately.
+- Recursive constants and closures initialize in source order. Reading an uninitialized recursive binding returns `UninitializedRecursion`.
+- Annotation variables are scoped independently; constructor patterns require the declared arity and cannot repeat bound names.
+- Imported declaration compatibility preserves parameter positions and constructor privacy.
+- Repeated prefix operators are supported; literals, conversions, and arithmetic enforce signed 32-bit bounds.
+- Scripts, imported modules, and text-file operations use UTF-8. Console streams use their host encoding.
+- `print` flushes stdout; an output failure stops later effects and makes the CLI fail.
+- Stress tests exercise 1000-level parsing, inference, and evaluation. Benchmark execution and timing comparisons are separate checks.

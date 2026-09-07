@@ -1,5 +1,5 @@
-// expect: ()
+// expect: (5, 6, -1, -5, 0, 7)
 let add = \x -> \y -> x + y
 let multiply = \x -> \y -> x * y
 let subtract = \x -> \y -> x - y
-
+(add 2 3, multiply 2 3, subtract 2 3, add (-2) (-3), multiply 0 7, subtract 10 3)

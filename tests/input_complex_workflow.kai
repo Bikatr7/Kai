@@ -1,3 +1,5 @@
+// expect: "Welcome, Ada"
+// stdin: "Ada\n"
 // Test complex workflow with input, let, and functions
 // expect-type: TString
 

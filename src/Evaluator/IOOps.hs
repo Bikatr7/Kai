@@ -1,9 +1,9 @@
 module Evaluator.IOOps where
 
 import Evaluator.Types
-import Evaluator.Helpers (bindResult, showValue)
+import Evaluator.Helpers (evalInIO, showValue)
+import Control.Monad.Except (ExceptT(..), throwError)
 import Syntax
-import System.IO (getLine)
 import qualified System.IO as IO
 import System.Directory (createDirectory, doesFileExist, getCurrentDirectory, removeDirectory, setCurrentDirectory)
 import qualified System.Directory as Directory
@@ -12,10 +12,12 @@ import System.Exit (ExitCode(..))
 import qualified System.Process as Process
 import Control.Exception (IOException, try)
 import qualified Data.Map as Map
-import Data.IORef (readIORef)
+import qualified UTF8
 
-type EvalFunc = Env -> Expr -> Either RuntimeError Value
-type EvalIOFunc = Env -> Expr -> IO (Either RuntimeError Value)
+cliArgsEnv :: [String] -> Env
+cliArgsEnv scriptArgs =
+  let argValues = VList (map VStr scriptArgs)
+  in Map.fromList [("__args__", argValues), ("args", argValues)]
 
 lookupArgs :: Env -> Value
 lookupArgs env =
@@ -26,7 +28,7 @@ lookupArgs env =
       Nothing -> VList []
 
 evalIOPure :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
-evalIOPure _ _ Input = Right $ VStr "World" -- For test compatibility
+evalIOPure _ _ Input = Left $ TypeError "input not available in pure evaluation"
 evalIOPure _ env Args = Right $ lookupArgs env
 evalIOPure eval env (Print e) = do
   _ <- eval env e
@@ -50,153 +52,83 @@ evalIOPure eval env (Exit e) = do
     _ -> Left $ TypeError "exit: code must be an integer"
 evalIOPure _ _ _ = error "evalIOPure called on non-IO expression"
 
-evalIOWithEnv :: EvalIOFunc -> Env -> Expr -> IO (Either RuntimeError Value)
-evalIOWithEnv eval env (Var x) = do
-  case Map.lookup x env of
-    Just (VRef ref) -> do
-      val <- readIORef ref
-      return $ Right val
-    Just v -> return $ Right v
-    Nothing -> return $ Left $ UnboundVariable x
-evalIOWithEnv _ _ Input = do
-    result <- try getLine :: IO (Either IOException String)
-    return $ case result of
-      Right line -> Right $ VStr line
-      Left _ -> Left $ TypeError "input: could not read from stdin"
-evalIOWithEnv _ env Args = return $ Right $ lookupArgs env
-evalIOWithEnv eval env (Print e) = do
-  result <- eval env e
-  case result of
-    Left err -> return $ Left err
-    Right v -> putStrLn (showValue v) >> return (Right VUnit)
-evalIOWithEnv eval env (ReadFile path) = do
-    pathResult <- eval env path
-    case pathResult of
-        Left err -> return $ Left err
-        Right (VStr p) -> do
-            result <- try (IO.readFile p >>= forceContents) :: IO (Either IOException String)
-            case result of
-                Right contents -> return $ Right $ VStr contents
-                Left _ -> return $ Left $ TypeError $ "readFile: could not read file '" ++ p ++ "'"
-        Right _ -> return $ Left $ TypeError "readFile: path must be a string"
+-- All real I/O uses the same language-error adapter as ordinary operations.
+evalIOWithEnv :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
+evalIOWithEnv = evalInIO evalIO
+
+evalIO :: Eval (ExceptT RuntimeError IO) -> Eval (ExceptT RuntimeError IO)
+evalIO _ _ Input = attempt "input: could not read from stdin" VStr getLine
+evalIO _ env Args = pure $ lookupArgs env
+evalIO eval env (Print expression) = do
+  value <- eval env expression
+  attempt "print: could not write to stdout" (const VUnit) $
+    putStrLn (showValue value) >> IO.hFlush IO.stdout
+evalIO eval env (ReadFile path) =
+  withString eval env path "readFile: path must be a string" $ \p ->
+    attempt ("readFile: could not read file '" ++ p ++ "'") VStr (UTF8.readFile p)
+evalIO eval env (WriteFile path content) =
+  withStrings eval env path content "writeFile: path must be a string" "writeFile: content must be a string" $ \p c ->
+    attempt ("writeFile: could not write to file '" ++ p ++ "'") (const VUnit) (UTF8.writeFile p c)
+evalIO eval env (AppendFile path content) =
+  withStrings eval env path content "appendFile: path must be a string" "appendFile: content must be a string" $ \p c ->
+    attempt ("appendFile: could not append to file '" ++ p ++ "'") (const VUnit) (UTF8.appendFile p c)
+evalIO eval env (FileExists path) =
+  withString eval env path "fileExists: path must be a string" $ \p ->
+    attempt ("fileExists: could not inspect path '" ++ p ++ "'") VBool (doesFileExist p)
+evalIO eval env (ListDirectory path) =
+  withString eval env path "listDirectory: path must be a string" $ \p ->
+    attempt ("listDirectory: could not list directory '" ++ p ++ "'") (VList . map VStr) (Directory.listDirectory p)
+evalIO eval env (CreateDirectory path) =
+  withString eval env path "createDirectory: path must be a string" $ \p ->
+    attempt ("createDirectory: could not create directory '" ++ p ++ "'") (const VUnit) (createDirectory p)
+evalIO eval env (RemoveDirectory path) =
+  withString eval env path "removeDirectory: path must be a string" $ \p ->
+    attempt ("removeDirectory: could not remove directory '" ++ p ++ "'") (const VUnit) (removeDirectory p)
+evalIO _ _ GetCurrentDirectory =
+  attempt "getCurrentDirectory: could not get current directory" VStr getCurrentDirectory
+evalIO eval env (SetCurrentDirectory path) =
+  withString eval env path "setCurrentDirectory: path must be a string" $ \p ->
+    attempt ("setCurrentDirectory: could not change directory to '" ++ p ++ "'") (const VUnit) (setCurrentDirectory p)
+evalIO eval env (System commandExpr) =
+  withString eval env commandExpr "system: command must be a string" $ \command ->
+    attempt "system: could not execute command" exitValue (Process.system command)
   where
-    forceContents contents = length contents `seq` return contents
-evalIOWithEnv eval env (WriteFile path content) = do
-    bindResult (eval env path) $ \pathValue ->
-      bindResult (eval env content) $ \contentValue ->
-        case (pathValue, contentValue) of
-          (VStr p, VStr c) -> do
-            result <- try (IO.writeFile p c) :: IO (Either IOException ())
-            case result of
-              Right _ -> return $ Right VUnit
-              Left _ -> return $ Left $ TypeError $ "writeFile: could not write to file '" ++ p ++ "'"
-          (VStr _, _) -> return $ Left $ TypeError "writeFile: content must be a string"
-          _ -> return $ Left $ TypeError "writeFile: path must be a string"
-evalIOWithEnv eval env (AppendFile path content) =
-    bindResult (eval env path) $ \pathValue ->
-      bindResult (eval env content) $ \contentValue ->
-        case (pathValue, contentValue) of
-          (VStr p, VStr c) -> do
-            result <- try (IO.appendFile p c) :: IO (Either IOException ())
-            case result of
-              Right _ -> return $ Right VUnit
-              Left _ -> return $ Left $ TypeError $ "appendFile: could not append to file '" ++ p ++ "'"
-          (VStr _, _) -> return $ Left $ TypeError "appendFile: content must be a string"
-          _ -> return $ Left $ TypeError "appendFile: path must be a string"
-evalIOWithEnv eval env (FileExists path) = do
-    pathResult <- eval env path
-    case pathResult of
-        Left err -> return $ Left err
-        Right (VStr p) -> do
-            result <- try (doesFileExist p) :: IO (Either IOException Bool)
-            case result of
-              Right exists -> return $ Right $ VBool exists
-              Left _ -> return $ Left $ TypeError $ "fileExists: could not inspect path '" ++ p ++ "'"
-        Right _ -> return $ Left $ TypeError "fileExists: path must be a string"
-evalIOWithEnv eval env (ListDirectory path) = do
-    pathResult <- eval env path
-    case pathResult of
-        Left err -> return $ Left err
-        Right (VStr p) -> do
-            result <- try (Directory.listDirectory p) :: IO (Either IOException [FilePath])
-            case result of
-                Right names -> return $ Right $ VList (map VStr names)
-                Left _ -> return $ Left $ TypeError $ "listDirectory: could not list directory '" ++ p ++ "'"
-        Right _ -> return $ Left $ TypeError "listDirectory: path must be a string"
-evalIOWithEnv eval env (CreateDirectory path) = do
-    pathResult <- eval env path
-    case pathResult of
-        Left err -> return $ Left err
-        Right (VStr p) -> do
-            result <- try (createDirectory p) :: IO (Either IOException ())
-            case result of
-                Right _ -> return $ Right VUnit
-                Left _ -> return $ Left $ TypeError $ "createDirectory: could not create directory '" ++ p ++ "'"
-        Right _ -> return $ Left $ TypeError "createDirectory: path must be a string"
-evalIOWithEnv eval env (RemoveDirectory path) = do
-    pathResult <- eval env path
-    case pathResult of
-        Left err -> return $ Left err
-        Right (VStr p) -> do
-            result <- try (removeDirectory p) :: IO (Either IOException ())
-            case result of
-                Right _ -> return $ Right VUnit
-                Left _ -> return $ Left $ TypeError $ "removeDirectory: could not remove directory '" ++ p ++ "'"
-        Right _ -> return $ Left $ TypeError "removeDirectory: path must be a string"
-evalIOWithEnv _ _ GetCurrentDirectory = do
-    result <- try getCurrentDirectory :: IO (Either IOException FilePath)
-    case result of
-      Right path -> return $ Right $ VStr path
-      Left _ -> return $ Left $ TypeError "getCurrentDirectory: could not get current directory"
-evalIOWithEnv eval env (SetCurrentDirectory path) = do
-    pathResult <- eval env path
-    case pathResult of
-        Left err -> return $ Left err
-        Right (VStr p) -> do
-            result <- try (setCurrentDirectory p) :: IO (Either IOException ())
-            case result of
-                Right _ -> return $ Right VUnit
-                Left _ -> return $ Left $ TypeError $ "setCurrentDirectory: could not change directory to '" ++ p ++ "'"
-        Right _ -> return $ Left $ TypeError "setCurrentDirectory: path must be a string"
-evalIOWithEnv eval env (System commandExpr) = do
-    commandResult <- eval env commandExpr
-    case commandResult of
-        Left err -> return $ Left err
-        Right (VStr command) -> do
-            result <- try (Process.system command) :: IO (Either IOException ExitCode)
-            case result of
-              Right exitResult -> return $ Right $ VInt $ case exitResult of
-                ExitSuccess -> 0
-                ExitFailure code -> code
-              Left _ -> return $ Left $ TypeError "system: could not execute command"
-        Right _ -> return $ Left $ TypeError "system: command must be a string"
-evalIOWithEnv eval env (GetEnv nameExpr) = do
-    nameResult <- eval env nameExpr
-    case nameResult of
-        Left err -> return $ Left err
-        Right (VStr name) -> do
-            result <- try (lookupEnv name) :: IO (Either IOException (Maybe String))
-            case result of
-              Right value -> return $ Right $ case value of
-                Just val -> VJust (VStr val)
-                Nothing -> VNothing
-              Left _ -> return $ Left $ TypeError $ "getEnv: could not read environment variable '" ++ name ++ "'"
-        Right _ -> return $ Left $ TypeError "getEnv: name must be a string"
-evalIOWithEnv eval env (SetEnv nameExpr valueExpr) =
-    bindResult (eval env nameExpr) $ \nameValue ->
-      bindResult (eval env valueExpr) $ \environmentValue ->
-        case (nameValue, environmentValue) of
-          (VStr name, VStr value) -> do
-            result <- try (setEnv name value) :: IO (Either IOException ())
-            case result of
-              Right _ -> return $ Right VUnit
-              Left _ -> return $ Left $ TypeError $ "setEnv: could not set environment variable '" ++ name ++ "'"
-          (VStr _, _) -> return $ Left $ TypeError "setEnv: value must be a string"
-          _ -> return $ Left $ TypeError "setEnv: name must be a string"
-evalIOWithEnv eval env (Exit codeExpr) = do
-    codeResult <- eval env codeExpr
-    case codeResult of
-        Left err -> return $ Left err
-        Right (VInt code) -> return $ Left $ ExitRequested code
-        Right _ -> return $ Left $ TypeError "exit: code must be an integer"
-evalIOWithEnv _ _ _ = error "evalIOWithEnv called on non-IO expression"
+    exitValue ExitSuccess = VInt 0
+    exitValue (ExitFailure code) = VInt code
+evalIO eval env (GetEnv nameExpr) =
+  withString eval env nameExpr "getEnv: name must be a string" $ \name ->
+    attempt ("getEnv: could not read environment variable '" ++ name ++ "'") (maybe VNothing (VJust . VStr)) (lookupEnv name)
+evalIO eval env (SetEnv nameExpr valueExpr) =
+  withStrings eval env nameExpr valueExpr "setEnv: name must be a string" "setEnv: value must be a string" $ \name value ->
+    attempt ("setEnv: could not set environment variable '" ++ name ++ "'") (const VUnit) (setEnv name value)
+evalIO eval env (Exit codeExpr) = do
+  value <- eval env codeExpr
+  case value of
+    VInt code -> throwError $ ExitRequested code
+    _ -> throwError $ TypeError "exit: code must be an integer"
+evalIO _ _ _ = error "evalIO called on non-IO expression"
+
+attempt :: String -> (a -> Value) -> IO a -> ExceptT RuntimeError IO Value
+attempt message wrap action = ExceptT $ do
+  result <- tryIO action
+  pure $ either (const $ Left $ TypeError message) (Right . wrap) result
+  where
+    tryIO :: IO a -> IO (Either IOException a)
+    tryIO = try
+
+withString :: Eval (ExceptT RuntimeError IO) -> Env -> Expr -> String -> (String -> ExceptT RuntimeError IO Value) -> ExceptT RuntimeError IO Value
+withString eval env expression message next = do
+  value <- eval env expression
+  case value of
+    VStr text -> next text
+    _ -> throwError $ TypeError message
+
+-- Evaluate both operands before validating their types, matching strict application.
+withStrings :: Eval (ExceptT RuntimeError IO) -> Env -> Expr -> Expr -> String -> String -> (String -> String -> ExceptT RuntimeError IO Value) -> ExceptT RuntimeError IO Value
+withStrings eval env first second firstError secondError next = do
+  firstValue <- eval env first
+  secondValue <- eval env second
+  case (firstValue, secondValue) of
+    (VStr a, VStr b) -> next a b
+    (VStr _, _) -> throwError $ TypeError secondError
+    _ -> throwError $ TypeError firstError

@@ -1,2 +1,2 @@
-// expect: 42
-let _ = discard 42 in 42
+// expect: ((), 42)
+let ignored = discard 42 in (ignored, 42)
