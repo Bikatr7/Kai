@@ -5,10 +5,14 @@ module CLI (
 
 import Evaluator.IOOps (cliArgsEnv)
 import Syntax
-import TypeChecker (typeCheck, typeCheckProgramWithDirIO)
+import TypeChecker (inferProgramWithWarningsIO)
+import TypeChecker.Warnings (reportWarnings)
+import qualified Data.Map as Map
 import Evaluator
 import REPL (runREPL)
 import Parser
+import Diagnostics (renderTypeError, renderRuntimeError)
+import Text.Megaparsec (errorBundlePretty)
 import System.Exit (ExitCode(..))
 import System.FilePath (takeDirectory)
 import Paths_kai_lang (version)
@@ -51,33 +55,33 @@ reportToStderr :: String -> IO ()
 reportToStderr message =
   void (try (hPutStrLn stderr message >> hFlush stderr) :: IO (Either IOException ()))
 
-runtimeToExitCode :: RuntimeError -> IO ExitCode
-runtimeToExitCode (ExitRequested 0) = return ExitSuccess
-runtimeToExitCode (ExitRequested code) = return $ ExitFailure code
-runtimeToExitCode err = reportFailure $ "Runtime error: " ++ show err
+runtimeToExitCode :: Bool -> RuntimeError -> IO ExitCode
+runtimeToExitCode _ (ExitRequested 0) = return ExitSuccess
+runtimeToExitCode _ (ExitRequested code) = return $ ExitFailure code
+runtimeToExitCode debug err = reportFailure $
+  if debug then "Runtime error: " ++ show err else renderRuntimeError err
 
 runExpression :: Bool -> String -> IO ExitCode
 runExpression debug input = do
   when debug $ putStrLn $ "\nExpression: " ++ input
-  case parseProgram input of
+  case parseLocatedProgram "<expression>" input of
     Right program -> runProgram debug "." [] program
-    Left _ -> case parseExpr input of
-      Left parseErr -> reportFailure $ "Parse error: " ++ show parseErr
-      Right expr -> runSingleExpression debug [] expr
+    Left parseErr -> reportFailure $ "Parse error: " ++ errorBundlePretty parseErr
 
 runProgram :: Bool -> FilePath -> [String] -> Program -> IO ExitCode
 runProgram debug currentDir scriptArgs program = do
   when debug $ putStrLn $ "Program AST: " ++ show program
   when debug $ putStr "Type: "
-  typeResult <- typeCheckProgramWithDirIO ModuleSystem.loadModuleTypeEnvIO currentDir program
+  typeResult <- inferProgramWithWarningsIO ModuleSystem.loadModuleTypeEnvWithWarningsIO currentDir Map.empty program
   case typeResult of
-    Left err -> reportFailure $ "Type error: " ++ show err
-    Right ty -> do
+    Left err -> reportFailure $ if debug then "Type error: " ++ show err else renderTypeError err
+    Right ((_,ty),warnings) -> do
+      reportWarnings warnings
       when debug $ print ty
       when debug $ putStr "Evaluation: "
       result <- evalProgramWithEnv (cliArgsEnv scriptArgs) currentDir program
       case result of
-        Left err -> runtimeToExitCode err
+        Left err -> runtimeToExitCode debug err
         Right val -> do
           when debug $ print val
           return ExitSuccess
@@ -90,37 +94,11 @@ runFile debug filename scriptArgs = do
     Left ioErr -> reportFailure $ "IO error: " ++ show ioErr
     Right content -> do
       let currentDir = takeDirectory filename
-      case parseProgram content of
+      case parseLocatedProgram filename content of
         Right program -> do
           when debug $ putStrLn "Parsed as program"
           runProgram debug currentDir scriptArgs program
-        Left _ -> do
-          when debug $ putStrLn "Falling back to legacy parsing"
-          case parseFileExpr content of
-            Left _ -> case parseStatements content of
-              Left parseErr -> reportFailure $ "Parse error: " ++ show parseErr
-              Right stmts -> runStatements debug scriptArgs stmts
-            Right expr -> runSingleExpression debug scriptArgs expr
-
-runSingleExpression :: Bool -> [String] -> Expr -> IO ExitCode
-runSingleExpression debug scriptArgs expr = do
-  when debug $ putStrLn $ "AST: " ++ show expr
-  when debug $ putStr "Type: "
-  case typeCheck expr of
-    Left err -> reportFailure $ "Type error: " ++ show err
-    Right ty -> do
-      when debug $ print ty
-      when debug $ putStr "Evaluation: "
-      result <- evalWithEnv (cliArgsEnv scriptArgs) expr
-      case result of
-        Left err -> runtimeToExitCode err
-        Right val -> do
-          when debug $ print val
-          return ExitSuccess
-
-runStatements :: Bool -> [String] -> [Expr] -> IO ExitCode
-runStatements debug scriptArgs stmts =
-  runProgram debug "." scriptArgs (Program (map TLExpr stmts))
+        Left parseErr -> reportFailure $ "Parse error: " ++ errorBundlePretty parseErr
 
 runCLI :: [String] -> IO ExitCode
 runCLI args = do

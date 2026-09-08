@@ -3,6 +3,9 @@ module ExampleSpec where
 import Test.Hspec
 import Control.Exception (IOException, bracket, bracket_, evaluate, try)
 import Control.Monad (forM_, when)
+import qualified Data.ByteString as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import System.Directory (createDirectory, doesFileExist, getCurrentDirectory, setCurrentDirectory, getTemporaryDirectory, removeDirectoryRecursive, removeFile)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.Exit (ExitCode(..))
@@ -43,6 +46,49 @@ withTempTextFile dir content =
 
 spec :: Spec
 spec = describe "Examples" $ do
+  forM_ ["", "\n", "\n\n"] $ \input ->
+    it ("finishes the file report normally at EOF after " ++ show input) $ do
+      result <- captureOutput $ withStdin input $ runCLI ["examples/file_report.kai"]
+      result `shouldBe` (ExitSuccess,"Summary: 0 read, 0 failed, 0 characters\n")
+
+  forM_ [False,True] $ \stdinPaths ->
+    it ("reports multiple file failures and continues, stdin paths = " ++ show stdinPaths) $ withTempDir $ \dir -> do
+      let first = dir </> "first file.txt"
+          missing = dir </> "missing.txt"
+          invalid = dir </> "invalid.txt"
+          lastFile = dir </> "雪 file.txt"
+          empty = dir </> "empty.txt"
+          paths = [first,missing,invalid,lastFile,empty]
+      BS.writeFile first (Text.encodeUtf8 (Text.pack "Ada\n"))
+      BS.writeFile invalid (BS.pack [0xff,0xfe])
+      BS.writeFile lastFile (Text.encodeUtf8 (Text.pack "雪!"))
+      BS.writeFile empty BS.empty
+      let arguments = if stdinPaths then [] else paths
+          input = if stdinPaths then "\n" ++ unlines paths ++ "\n" else "this path must not be read\n"
+      result <- captureOutput $ withStdin input $ runCLI ("examples/file_report.kai" : arguments)
+      result `shouldBe` (ExitSuccess,unlines
+        ["OK " ++ first ++ ": 4 characters", "ERROR " ++ missing ++ ": NotFound",
+         "ERROR " ++ invalid ++ ": InvalidEncoding", "OK " ++ lastFile ++ ": 2 characters",
+         "OK " ++ empty ++ ": 0 characters", "Summary: 3 read, 2 failed, 6 characters"])
+      BS.readFile first `shouldReturn` Text.encodeUtf8 (Text.pack "Ada\n")
+      BS.readFile lastFile `shouldReturn` Text.encodeUtf8 (Text.pack "雪!")
+      doesFileExist missing `shouldReturn` False
+
+  it "counts repeated paths as separate requests, including a final unterminated stdin line" $ withTempDir $ \dir -> do
+    let path = dir </> "repeated.txt"
+    writeFile path "abc"
+    result <- captureOutput $ withStdin (path ++ "\n" ++ path) $ runCLI ["examples/file_report.kai"]
+    result `shouldBe` (ExitSuccess,unlines
+      ["OK " ++ path ++ ": 3 characters", "OK " ++ path ++ ": 3 characters",
+       "Summary: 2 read, 0 failed, 6 characters"])
+
+  it "finishes successfully after all requested file reads fail" $ withTempDir $ \dir -> do
+    let path = dir </> "missing.txt"
+    result <- captureOutput $ runCLI ["examples/file_report.kai",path,path]
+    result `shouldBe` (ExitSuccess,unlines
+      ["ERROR " ++ path ++ ": NotFound", "ERROR " ++ path ++ ": NotFound",
+       "Summary: 0 read, 2 failed, 0 characters"])
+
   forM_ [False, True] $ \fails ->
     it ("restores directory and environment after example failure = " ++ show fails) $
       withTempDir $ \dir -> do
@@ -59,6 +105,18 @@ spec = describe "Examples" $ do
           Right () -> fails `shouldBe` False
         getCurrentDirectory `shouldReturn` originalDir
         lookupEnv "KAI_EXAMPLE_MODE" `shouldReturn` originalMode
+
+  forM_ [("bad", "8", "First"), ("7", "bad", "Second")] $ \(left,right,label) ->
+    it ("recovers from an invalid " ++ label ++ " calculator input") $ do
+      (exitCode, output) <- captureOutput $ withStdin (unlines ["1",left,right,"5"]) $ runCLI ["examples/calculator.kai"]
+      exitCode `shouldBe` ExitSuccess
+      output `shouldBe` unlines
+        [ "=== Kai Calculator ===", "1) add  2) subtract  3) multiply  4) divide  5) exit"
+        , "Choose an option:", "First number:", "Second number:"
+        , label ++ " value must be an Int."
+        , "=== Kai Calculator ===", "1) add  2) subtract  3) multiply  4) divide  5) exit"
+        , "Choose an option:", "Goodbye."
+        ]
 
   it "runs the calculator example interactively" $ do
     (exitCode, output) <- captureOutput $ withStdin "1\n7\n8\n5\n" $ runCLI ["examples/calculator.kai"]

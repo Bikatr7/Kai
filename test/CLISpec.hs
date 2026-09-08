@@ -46,7 +46,7 @@ spec = describe "CLI" $ do
   it "returns a non-zero exit code for runtime errors" $ do
     (exitCode, output) <- captureOutput $ runCLI ["-e", "10 / 0"]
     exitCode `shouldBe` ExitFailure 1
-    output `shouldBe` "Runtime error: DivByZero\n"
+    output `shouldBe` "<expression>:1:1: Runtime error: Division by zero.\n1 | 10 / 0\n  | ^\n"
 
   it "returns a non-zero exit code for parse errors" $ do
     (exitCode, output) <- captureOutput $ runCLI ["-e", "let x ="]
@@ -81,7 +81,7 @@ spec = describe "CLI" $ do
     withTempKaiFile "print ({a = 1}.b)\n" $ \path -> do
       (exitCode, output) <- captureOutput $ runCLI [path]
       exitCode `shouldBe` ExitFailure 1
-      output `shouldBe` "Type error: RecordFieldMismatch \"b\"\n"
+      output `shouldBe` path ++ ":1:8: Type error: Missing record field 'b'.\n1 | print ({a = 1}.b)\n  |        ^\n"
 
   it "runs wildcard-pattern scripts through the real CLI path" $ do
     withTempKaiFile

@@ -38,7 +38,11 @@ set +e
 error_output=$("$binary" -e '1 / 0' 2>&1)
 error_status=$?
 set -e
-if [ "$error_status" -eq 0 ] || ! grep -Fq "DivByZero" <<< "$error_output"; then
+error_output=$(tr -d '\r' <<< "$error_output")
+expected_error='<expression>:1:1: Runtime error: Division by zero.
+1 | 1 / 0
+  | ^'
+if [ "$error_status" -ne 1 ] || [ "$error_output" != "$expected_error" ]; then
   echo "release binary did not report division by zero correctly" >&2
   exit 1
 fi

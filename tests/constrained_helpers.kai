@@ -1,0 +1,5 @@
+// expect: ("ab", [1, 2], true, false)
+// expect-type: TTuple [TString,TList TInt,TBool,TBool]
+let append = \x -> \y -> x ++ y
+let same : Eq a => a -> a -> Bool = \x -> \y -> x == y
+(append "a" "b", append [1] [2], same [1, 2] [1, 2], same "a" "b")

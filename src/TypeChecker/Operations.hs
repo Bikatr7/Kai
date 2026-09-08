@@ -2,7 +2,10 @@ module TypeChecker.Operations where
 
 import qualified Data.Map as Map
 import Control.Monad.Trans (lift)
-import Syntax (Expr(..))
+import Syntax (Expr(..), exprSpan)
+import TypeChecker.Coverage (checkCoverage)
+import Control.Monad.Except (catchError, throwError)
+import Control.Monad.State (modify)
 import TypeChecker.Types
 import TypeChecker.Substitution
 import TypeChecker.Unification
@@ -10,6 +13,20 @@ import TypeChecker.Helpers
 import TypeChecker.Patterns
 
 inferOperations :: InferFunc -> TypeEnv -> Expr -> TypeInfer (Substitution, Type)
+inferOperations infer env (Attempt e) = do
+  result <- freshTVar
+  inferUnary infer env e (TFun TUnit result) (TEither (TCustom "Error" []) result)
+inferOperations infer env (Raise e) = do
+  result <- freshTVar
+  inferUnary infer env e (TCustom "Error" []) result
+inferOperations infer env (ReadLine e) = inferUnary infer env e TUnit (TMaybe TString)
+inferOperations infer env (HeadMaybe e) = do
+  element <- freshTVar
+  inferUnary infer env e (TList element) (TMaybe element)
+inferOperations infer env (TailMaybe e) = do
+  element <- freshTVar
+  inferUnary infer env e (TList element) (TMaybe (TList element))
+
 inferOperations infer env (ParseInt e) =
   inferUnary infer env e TString (TMaybe TInt)
 
@@ -46,38 +63,38 @@ inferOperations infer env (Map f lst) = do
     (s12, fType, lstType) <- inferTwo infer env f lst
     elemType <- freshTVar
     resultType <- freshTVar
-    s3 <- lift $ unify fType (TFun elemType resultType)
-    s4 <- lift $ unify (applySubst s3 lstType) (TList (applySubst s3 elemType))
+    s3 <- unifyInfer fType (TFun elemType resultType)
+    s4 <- unifyInfer (applySubst s3 lstType) (TList (applySubst s3 elemType))
     let finalSubst = composeSubst s4 (composeSubst s3 s12)
     return (finalSubst, TList (applySubst finalSubst resultType))
 
 inferOperations infer env (Filter f lst) = do
     (s12, fType, lstType) <- inferTwo infer env f lst
     elemType <- freshTVar
-    s3 <- lift $ unify fType (TFun elemType TBool)
-    s4 <- lift $ unify (applySubst s3 lstType) (TList (applySubst s3 elemType))
+    s3 <- unifyInfer fType (TFun elemType TBool)
+    s4 <- unifyInfer (applySubst s3 lstType) (TList (applySubst s3 elemType))
     let finalSubst = composeSubst s4 (composeSubst s3 s12)
     return (finalSubst, applySubst finalSubst lstType)
 
 inferOperations infer env (Foldl f acc lst) = do
     (s123, fType, accType, lstType) <- inferThree infer env f acc lst
     elemType <- freshTVar
-    s4 <- lift $ unify fType (TFun accType (TFun elemType accType))
-    s5 <- lift $ unify (applySubst s4 lstType) (TList (applySubst s4 elemType))
+    s4 <- unifyInfer fType (TFun accType (TFun elemType accType))
+    s5 <- unifyInfer (applySubst s4 lstType) (TList (applySubst s4 elemType))
     let finalSubst = composeSubst s5 (composeSubst s4 s123)
     return (finalSubst, applySubst finalSubst accType)
 
 inferOperations infer env (Length lst) = do
     (s, lstType) <- infer env lst
     elemType <- freshTVar
-    s' <- lift $ unify (applySubst s lstType) (TList elemType)
+    s' <- unifyInfer (applySubst s lstType) (TList elemType)
     let finalSubst = composeSubst s' s
     return (finalSubst, TInt)
 
 inferOperations infer env (Reverse lst) = do
     (s, lstType) <- infer env lst
     elemType <- freshTVar
-    s' <- lift $ unify (applySubst s lstType) (TList elemType)
+    s' <- unifyInfer (applySubst s lstType) (TList elemType)
     let finalSubst = composeSubst s' s
     return (finalSubst, applySubst finalSubst lstType)
 
@@ -88,8 +105,8 @@ inferOperations infer env (Zip l1 l2) = do
     (s12, l1Type, l2Type) <- inferTwo infer env l1 l2
     elemType1 <- freshTVar
     elemType2 <- freshTVar
-    s3 <- lift $ unify l1Type (TList elemType1)
-    s4 <- lift $ unify (applySubst s3 l2Type) (TList elemType2)
+    s3 <- unifyInfer l1Type (TList elemType1)
+    s4 <- unifyInfer (applySubst s3 l2Type) (TList elemType2)
     let finalSubst = composeSubst s4 (composeSubst s3 s12)
     let finalElemType1 = applySubst finalSubst elemType1
     let finalElemType2 = applySubst finalSubst elemType2
@@ -106,9 +123,9 @@ inferOperations infer env (Trim str) =
 
 inferOperations infer env (Replace old new str) = do
     (s123, oldType, newType, strType) <- inferThree infer env old new str
-    s4 <- lift $ unify oldType TString
-    s5 <- lift $ unify (applySubst s4 newType) TString
-    s6 <- lift $ unify (applySubst s5 strType) TString
+    s4 <- unifyInfer oldType TString
+    s5 <- unifyInfer (applySubst s4 newType) TString
+    s6 <- unifyInfer (applySubst s5 strType) TString
     let finalSubst = composeSubst s6 (composeSubst s5 (composeSubst s4 s123))
     return (finalSubst, TString)
 
@@ -150,7 +167,7 @@ inferOperations infer env (SetEnv name value) =
 
 inferOperations infer env (Exit codeExpr) = do
     (s, codeType) <- infer env codeExpr
-    s' <- lift $ unify (applySubst s codeType) TInt
+    s' <- unifyInfer (applySubst s codeType) TInt
     resultType <- freshTVar
     let finalSubst = composeSubst s' s
     return (finalSubst, applySubst finalSubst resultType)
@@ -161,15 +178,24 @@ inferOperations infer env (Case scrutinee patterns) = do
   let env' = applySubstEnv s1 env
   (s2, _) <- inferPatterns env' (applySubst s1 scrutType) resultType patterns
   let finalSubst = composeSubst s2 s1
+  warnings <- lift $ checkCoverage (applySubstEnv finalSubst env)
+    (applySubst finalSubst scrutType) (map fst patterns)
+  modify $ \state -> state { inferredWarnings = inferredWarnings state ++ map warningLocation warnings }
   return (finalSubst, applySubst finalSubst resultType)
   where
+    warningLocation warning@(UnreachableAlternative index) = case drop (index-1) patterns of
+      (_,branch):_ -> maybe warning (`locateWarning` warning) (exprSpan branch)
+      _ -> warning
+    warningLocation warning = warning
     inferPatterns _ _ _ [] = return (Map.empty, TUnit)
     inferPatterns scope scrutType resultType ((pat, expr) : rest) = do
-      (patSubst, patEnv) <- inferPattern scope pat scrutType
+      let atBranch failure = maybe failure (`locateTypeError` failure) (exprSpan expr)
+      (patSubst, patEnv) <- inferPattern scope pat scrutType `catchError` (throwError . atBranch)
       let appliedEnv = applySubstEnv patSubst scope
       let newEnv = Map.union (applySubstEnv patSubst patEnv) appliedEnv
       (exprSubst, exprType) <- infer newEnv expr
-      unifySubst <- lift $ unify (applySubst exprSubst resultType) (applySubst exprSubst exprType)
+      unifySubst <- unifyInfer (applySubst exprSubst resultType) (applySubst exprSubst exprType)
+        `catchError` (throwError . atBranch)
       let combinedSubst = composeSubstList [patSubst, exprSubst, unifySubst]
       (restSubst, _) <- inferPatterns
         (applySubstEnv combinedSubst scope)
@@ -183,8 +209,8 @@ inferOperations _ _ _ = error "inferOperations called on non-operation expressio
 inferSlice :: InferFunc -> TypeEnv -> Expr -> Expr -> TypeInfer (Substitution, Type)
 inferSlice infer env n lst = do
     (s12, nType, lstType) <- inferTwo infer env n lst
-    s3 <- lift $ unify nType TInt
+    s3 <- unifyInfer nType TInt
     elemType <- freshTVar
-    s4 <- lift $ unify (applySubst s3 lstType) (TList elemType)
+    s4 <- unifyInfer (applySubst s3 lstType) (TList elemType)
     let finalSubst = composeSubst s4 (composeSubst s3 s12)
     return (finalSubst, applySubst finalSubst lstType)

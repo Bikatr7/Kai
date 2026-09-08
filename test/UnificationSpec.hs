@@ -90,7 +90,7 @@ spec = describe "Unification Algorithm Edge Cases" $ do
       let a = TVar "a"
           b = TVar "b"
       TestSupport.shouldInfer "\\f -> \\x -> \\y -> f (if x == y then x else y)"
-        (TFun (TFun a b) (TFun a (TFun a b)))
+        (TQualified [Equality a] (TFun (TFun a b) (TFun a (TFun a b))))
 
   describe "Function Type Unification" $ do  
     it "unifies function parameters correctly" $ do

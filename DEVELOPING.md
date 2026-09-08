@@ -2,6 +2,22 @@
 
 This document helps contributors work on Kai’s codebase efficiently.
 
+## Next Release: 0.0.5.0
+
+Follow [the release design](RELEASE-0.0.5.0.md) for the five required language
+changes: structured error recovery, short-circuit booleans, ordinary builtin
+application, record/concatenation inference, and static equality/pattern checks.
+Source-aware diagnostics, safe input/list helpers, migration examples, and native
+acceptance tests are included. REPL history/completion and broader stdlib work
+follow these requirements.
+
+The design specifies implementation order and acceptance coverage. Keep current
+semantics documented until their implementation and tests change together. Future
+syntax belongs in `text` fences in the design; executable `kai` examples in the
+language docs must work with the documented interpreter version. Retain existing
+tests, updating expectations only for deliberately changed semantics and adding
+the corresponding migration case.
+
 ## Architecture Overview
 
 ### Modular Design
@@ -25,14 +41,16 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - **Types.hs**: Type annotation parsing
 - **Patterns.hs**: Pattern matching syntax parsing
 - **ComplexExpr.hs**: Complex expressions (lambdas, conditionals, bindings)
-- **Builtins.hs**: Built-in function parsing
+- **Builtins.hs**: Legacy zero-argument expression parsing; callable names use ordinary variable/application parsing
 - **Expressions.hs**: Main expression parser with operator precedence
-- **Parser.hs**: Public interface coordinating all parsing components
+- **Source.hs**: Physical source lines, original excerpts and source-preserving top-level chunks
+- **Parser.hs**: Public interface coordinating all parsing components; located entry points serve CLI, modules and REPL
 
 #### Type Checker (`src/TypeChecker/`)
 - **Types.hs**: Core type definitions and syntax-type conversions
 - **Substitution.hs**: Type variable substitution with composition optimization
-- **Unification.hs**: Unification algorithm with occurs check
+- **Unification.hs**: Unification and open-row reconciliation with occurs/kind checks
+- **Constraints.hs**: Retained `Eq`/`Append` predicates, annotation contexts, narrow equality defaulting, and terminating custom-data comparability analysis
 - **Literals.hs**: Literal and variable type inference
 - **Arithmetic.hs**: Arithmetic operator type checking
 - **ControlFlow.hs**: Control flow type checking
@@ -42,6 +60,8 @@ The codebase follows a modular architecture with clear separation of concerns. E
 - **Operations.hs**: Built-in operation type checking
 - **Helpers.hs**: Shared operand inference and fixed-signature constraints, with substitutions passed to later operands
 - **Patterns.hs**: Pattern type checking
+- **Coverage.hs**: Exhaustiveness witnesses and unreachable alternatives using constructor-pattern matrices
+- **Warnings.hs**: Human-readable warning output on stderr
 - **Inference.hs**: Main type inference dispatcher
 - **TypeChecker.hs**: Shared program/definition inference used by files, module exports, and the REPL; one fresh-variable supply per recursive block
 
@@ -70,6 +90,12 @@ runtime error. Recursive reference allocation and external I/O remain specific
 to the I/O evaluator. Module export filtering is shared by scripts, imports,
 and the REPL.
 
+#### Diagnostics (`src/Diagnostics.hs`)
+- Normal errors show source file, line, column and excerpt, plus relevant function/import context.
+- `Located` expressions and `TLAt` declarations carry source spans. Legacy parser entry points retain their unannotated AST contract.
+- Structured type/runtime errors remain available to library callers and `--debug`. Script error expectations strip only source context before comparing the exact underlying error.
+- `SourceLocationSpec.hs` checks comments, CRLF, Unicode, tabs, imported/retained definitions, type grouping and 1000-level source preservation.
+
 #### Text Files (`src/UTF8.hs`, `src/SourceIO.hs`)
 - Source files and `readFile`/`writeFile`/`appendFile` use UTF-8 independently of the host locale.
 - Reads force decoding before closing the handle so decoding failures reach the caller's IO error handler.
@@ -88,44 +114,51 @@ and the REPL.
 - Evaluation: strict (call-by-value).
 - Integers: signed 32-bit values; literals, `parseInt`, and arithmetic results enforce the range, and arithmetic overflow returns `IntegerOverflow`.
 - Unit: `()` value with type `TUnit`.
-- `print : a -> Unit` prints, flushes stdout, and returns `()`. Write or flush failures return `TypeError "print: could not write to stdout"` and stop later effects.
+- `print : a -> Unit` prints, flushes stdout, and returns `()`. Write or flush failures raise a structured `IOError` and stop later effects inside the action.
 - `input : String` reads a line from stdin.
 - `args : [String]` returns command-line arguments passed to the script or REPL session.
 - File and directory I/O: `readFile`, `writeFile`, `appendFile`, `fileExists`, `listDirectory`, `createDirectory`, `removeDirectory`, `getCurrentDirectory`, `setCurrentDirectory`.
 - Process/environment access: `system`, `getEnv`, `setEnv`, `exit`.
 - A leading shebang line (`#!/usr/bin/env kai`) is ignored when parsing files.
-- Error handling: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions for pattern matching.
+- Error handling: `attempt : (Unit -> a) -> Either Error a` catches recoverable failures; `raise : Error -> a` raises or rethrows them. Effects already performed remain.
+- `readLine ()` returns `Nothing` at EOF and `Just ""` for blank input; `headMaybe` and `tailMaybe` return optional list results.
+- Functions may perform I/O regardless of their input/output type. Kai does not enforce purity.
 - Safe conversion functions: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`.
 - List functions: `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`.
 - String functions: `split`, `join`, `trim`, `replace`, `strLength`.
 - Tuple functions: `fst`, `snd` for pairs.
 - Custom data types: top-level `data` declarations produce constructor functions and constructor patterns.
-- Equality: primitive and composite data compare structurally; different constructors compare as false, while callable values and recursive runtime references raise a runtime `TypeError` at any nesting depth.
+- Equality: `Eq a` constraints reject callable payloads statically, including private or nested fields. Comparable data use structural equality. Direct evaluator callers retain defensive runtime checks.
+- Concatenation: retained `Append a` constraints allow generic string/list helpers without defaulting unknown types. Qualified annotations must include required contexts.
+- Records: accessors infer open rows; literals and closed annotations retain exact fields. Row kinds, duplicate labels, missing fields, and infinite rows are checked.
 - Type annotations: Optional Haskell-style annotations for lambdas and let bindings. Variables are fresh for each annotation; repeated variables within one annotation remain tied.
-- Constructor patterns require every field. Imported declaration compatibility compares parameter positions, and constructor visibility is tracked separately from ordinary values.
+- Constructor patterns require every field, and cases must be exhaustive. Coverage checks combinations of nested payloads and terminates on recursive ADTs. Private constructors require a catch-all without leaking their names.
+- Unreachable alternatives warn on stderr. The warnings travel through definition inference and module loading; the REPL reports each prechecked input once.
+- Imported declaration compatibility compares parameter positions, and constructor visibility is tracked separately from ordinary values.
 - Let, letrec, top-level, and imported definitions are generalized; lambda parameters and pattern bindings remain monomorphic within each use site.
 - Recursive calls can use different type instantiations when the binding has an explicit annotation. Without an annotation, calls within its recursive group are monomorphic; the completed definition can still be generalized for later uses.
 - `fix : (a -> a) -> a` provides an explicitly typed fixed-point combinator; forcing an unproductive fixed point returns a Kai runtime error.
 - `do { ... }` blocks are syntactic sugar for sequencing; entries are separated by `;`, and `do {}` evaluates to `()`.
 - Strings: escapes `\"`, `\\`, `\n`. Unknown escapes are errors with a helpful message.
 - Precedence (highest to lowest):
-  1) application and field access `.field` (one left-associated chain)
-  2) prefix `not`, unary `-`
-  3) `*`, `/` (left)
-  4) `+`, `-` (left)
-  5) `::` cons (right)
-  6) `++` concatenation (right)
-  7) `<`, `>`, `==` (non)
-  8) `and` (right)
-  9) `or` (right)
-  10) `;` sequencing (right, lowest)
+  1) field access `.field`
+  2) application (left)
+  3) prefix `not`, unary `-`
+  4) `*`, `/` (left)
+  5) `+`, `-` (left)
+  6) `::` cons (right)
+  7) `++` concatenation (right)
+  8) `<`, `>`, `==` (non)
+  9) `and` (right)
+  10) `or` (right)
+  11) `;` sequencing (right, lowest)
 
 Notes:
 - `+` is disambiguated from `++` in the lexer to ensure `++` parses correctly at its precedence.
 - Application binds tighter than prefix: `-f x` parses as `Sub (IntLit 0) (f x)`.
-- Application and field access are consumed in source order: `f x.field` means `(f x).field`, while `record.fn x` means `(record.fn) x`. Write `f (x.field)` to pass a field value.
+- Field access binds tighter than application: `f x.field` means `f (x.field)`, while `record.fn x` means `(record.fn) x`. Write `(f x).field` to select from the result.
 - Prefix chains compose from right to left; `not not true` and `- - 5` are valid. Each numeric negation checks overflow.
-- Both boolean operands are evaluated; `and` and `or` do not short-circuit. Only the selected `if` branch executes.
+- Boolean operators short-circuit: `false and rhs` and `true or rhs` skip the right operand. Both operands are statically checked. Only the selected `if` branch executes.
 - File and `-e` execution print only explicit output. The REPL displays expression results; `--debug` also displays evaluation details.
 
 ## Build and Test
@@ -152,8 +185,9 @@ Prereqs: Stack, GHC, Cabal, Python 3, Bash, Make, curl, tar, zip, and unzip. Cab
 - Property tests: `PropertyBasedSpec.hs` and feature-specific specs
 - Evaluator consistency: `EvaluatorConsistencySpec.hs` compares pure and I/O results against explicit expectations, checks operand effects in source order, and injects failures at each operand to ensure later effects stop.
 - Runner integration: `RunnerSpec.hs` covers executable selection, direct OS shebang launch, arguments, exit status, symlinks, and installation in temporary directories.
+- Recovery example: `file_report.kai` accepts arguments or EOF-terminated path input, handles individual read failures and prints independently checked totals. `ExampleSpec.hs` asserts missing/invalid UTF-8 files, later successes, blank input, repeated paths and exact output.
 - Example programs: `ExampleSpec.hs` checks exact output, interactive input, command-line arguments, and file effects. `ExampleAssertionsSpec.hs` checks every example file's value/type directives in isolated copies, rejects deliberately incorrect directives, and calls every example-library export with normal and boundary inputs, including each module copy.
-- Documentation examples: `DocumentationSpec.hs` executes `kai` fences in README, SPEC, DEVELOPING, and FEATURES, checks `// =>` result claims and SPEC builtin signatures, and runs rendered website examples. Unannotated examples check successful execution; they do not assert a final value or exact output. Use `text` fences for syntax templates and signature references. Examples in agent guides and benchmark commands need their own checks when edited.
+- Documentation examples: `DocumentationSpec.hs` executes `kai` fences in README, SPEC, DEVELOPING, FEATURES, and MIGRATING-0.0.5.0, checks `// =>` result claims and SPEC builtin signatures, and runs rendered website examples. Unannotated examples check successful execution; they do not assert a final value or exact output. Use `text` fences for syntax templates and signature references. Examples in agent guides and benchmark commands need their own checks when edited.
 - Source archives: `SourceDistributionSpec.hs` checks that Cabal packages all scripts, fixtures, documentation, and website assets. Generate an archive with `stack sdist`.
 
 Every repository `.kai` file requires `// expect:`. All scripts under `tests/`
@@ -342,9 +376,9 @@ runs on the same machine and build profile.
 ## Notes / TODOs
 
 - **For each release**: Keep package, docs, website, tests, and benchmarks synchronized. Publishing begins with the `master` version-bump push described above.
-- **Development focus**: REPL polish (`history`, `completion`, better diagnostics)
-- **Development focus**: Fill stdlib gaps that matter for scripts (line-oriented file helpers, JSON/HTTP, a few missing utilities)
-- **Defer by default**: Package manager, formatter/linter/LSP, and full polymorphic-recursion inference or other advanced type-system work unless scripting ergonomics are already in good shape
+- **Development focus**: Complete all five language changes and supporting work in [the 0.0.5.0 design](RELEASE-0.0.5.0.md).
+- **Next ergonomic follow-up**: REPL history/completion and broader scripting helpers, including JSON/HTTP.
+- **Defer by default**: Package manager, formatter/linter/LSP, general type classes/effects, and full polymorphic-recursion inference. Open records and the fixed equality/concatenation constraints belong to the core language.
 - When changing semantics, align README.md, SPEC.md, website, and DEVELOPING.md immediately.
 - Always verify that stress tests pass after performance-critical changes.
 - Cross-platform support: Conditional dependencies for Windows compatibility

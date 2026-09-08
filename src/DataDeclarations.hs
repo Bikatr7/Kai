@@ -7,6 +7,8 @@ module DataDeclarations
   , filterTypeExports
   , constructorPatternScheme
   , dataConstructorsValueEnv
+  , standardDataTypeEnv
+  , standardDataValueEnv
   ) where
 
 import qualified Data.Map as Map
@@ -16,6 +18,17 @@ import Syntax
 import Evaluator.Types
 import TypeChecker.Types
 import TypeChecker.Substitution (alphaEquivalentSchemes)
+import StandardData (standardDataDeclarations)
+import Control.Applicative ((<|>))
+
+standardDataTypeEnv :: TypeEnv
+standardDataTypeEnv = either (error . show) id $
+  foldl (\result (name,vars,constructors) -> result >>= \env ->
+    registerDataDeclarationInternal env name vars constructors) (Right Map.empty) standardDataDeclarations
+
+standardDataValueEnv :: Env
+standardDataValueEnv = Map.unions [dataConstructorsValueEnv constructors |
+  (_,_,constructors) <- standardDataDeclarations]
 
 constructorResultType :: String -> [String] -> Type
 constructorResultType typeName typeVars = TCustom typeName (map TVar typeVars)
@@ -45,7 +58,11 @@ dataConstructorsValueEnv constructors =
       | otherwise = VConstructor constructorName (length argTypes) []
 
 registerDataDeclaration :: TypeEnv -> String -> [String] -> [DataConstructor] -> Either TypeError TypeEnv
-registerDataDeclaration env name vars constructors = do
+registerDataDeclaration env =
+  registerDataDeclarationInternal (Map.union env standardDataTypeEnv)
+
+registerDataDeclarationInternal :: TypeEnv -> String -> [String] -> [DataConstructor] -> Either TypeError TypeEnv
+registerDataDeclarationInternal env name vars constructors = do
   when (Map.member (dataTypeKey name) env) $
     Left $ InvalidDataDeclaration ("Duplicate type: " ++ name)
   unique "type parameter" vars
@@ -76,6 +93,9 @@ registerDataDeclaration env name vars constructors = do
     checkVariables (STList a) = checkVariables a
     checkVariables (STTuple ts) = mapM_ checkVariables ts
     checkVariables (STRecord fs) = mapM_ (checkVariables . snd) fs
+    checkVariables (STQualified _ _) = Left $ InvalidDataDeclaration "Constructor fields cannot have qualified types"
+    checkVariables (STRecordRow _ _) = Left $ InvalidDataDeclaration
+      "Data parameters have value kind; use a type parameter to store an open record"
     checkVariables (STCustom _ ts) = mapM_ checkVariables ts
     checkVariables _ = Right ()
 
@@ -111,4 +131,5 @@ filterTypeExports env names = Map.filterWithKey keep env
       | otherwise = key `elem` names
 
 constructorPatternScheme :: TypeEnv -> String -> Maybe Scheme
-constructorPatternScheme env name = Map.lookup (constructorKey name) env
+constructorPatternScheme env name = Map.lookup (constructorKey name) env <|>
+  Map.lookup (constructorKey name) standardDataTypeEnv

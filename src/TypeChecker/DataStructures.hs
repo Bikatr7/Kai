@@ -18,38 +18,42 @@ inferDataStructures infer env (ListLit es) = do
     inferListElem elemType subst e = do
         (s, t) <- infer (applySubstEnv subst env) e
         let subst' = composeSubst s subst
-        s' <- lift $ unify (applySubst subst' t) (applySubst subst' elemType)
+        s' <- unifyInfer (applySubst subst' t) (applySubst subst' elemType)
         return $ composeSubst s' subst'
 
 inferDataStructures infer env (Cons h t) = do
     (s1, hType) <- infer env h
     (s2, tType) <- infer (applySubstEnv s1 env) t
-    s3 <- lift $ unify (applySubst s2 tType) (TList (applySubst s2 hType))
+    s3 <- unifyInfer (applySubst s2 tType) (TList (applySubst s2 hType))
     let finalSubst = composeSubstList [s1, s2, s3]
     return (finalSubst, applySubst finalSubst tType)
 
 inferDataStructures infer env (Head e) = do
     (s, eType) <- infer env e
     elemType <- freshTVar
-    s' <- lift $ unify (applySubst s eType) (TList elemType)
+    s' <- unifyInfer (applySubst s eType) (TList elemType)
     let finalSubst = composeSubst s' s
     return (finalSubst, applySubst finalSubst elemType)
 
 inferDataStructures infer env (Tail e) = do
     (s, eType) <- infer env e
     elemType <- freshTVar
-    s' <- lift $ unify (applySubst s eType) (TList elemType)
+    s' <- unifyInfer (applySubst s eType) (TList elemType)
     let finalSubst = composeSubst s' s
     return (finalSubst, applySubst finalSubst eType)
 
 inferDataStructures infer env (Null e) = do
     (s, eType) <- infer env e
     elemType <- freshTVar
-    s' <- lift $ unify (applySubst s eType) (TList elemType)
+    s' <- unifyInfer (applySubst s eType) (TList elemType)
     let finalSubst = composeSubst s' s
     return (finalSubst, TBool)
 
 inferDataStructures infer env (RecordLit fields) = do
+    let names = map fst fields
+    case [name | (index,name) <- zip [0 :: Int ..] names, name `elem` drop (index + 1) names] of
+      name:_ -> lift $ Left $ DuplicateRecordField name
+      [] -> pure ()
     (finalSubst, typedFields) <- foldM inferField (Map.empty, []) fields
     let finalFields = reverse $ map (second (applySubst finalSubst)) typedFields
     return (finalSubst, TRecord (Map.fromList finalFields))
@@ -67,7 +71,8 @@ inferDataStructures infer env (RecordAccess r field) = do
             Nothing -> lift $ Left $ RecordFieldMismatch field
         resolvedType -> do
             fieldType <- freshTVar
-            s' <- lift $ unify resolvedType (TRecord (Map.singleton field fieldType))
+            row <- freshRowVar
+            s' <- unifyInfer resolvedType (TOpenRecord (Map.singleton field fieldType) row)
             let finalSubst = composeSubst s' s
             return (finalSubst, applySubst finalSubst fieldType)
 
@@ -85,7 +90,7 @@ inferDataStructures infer env (Fst e) = do
     (s, tType) <- infer env e
     t1 <- freshTVar
     t2 <- freshTVar
-    s' <- lift $ unify (applySubst s tType) (TTuple [t1, t2])
+    s' <- unifyInfer (applySubst s tType) (TTuple [t1, t2])
     let finalSubst = composeSubst s' s
     return (finalSubst, applySubst finalSubst t1)
 
@@ -93,7 +98,7 @@ inferDataStructures infer env (Snd e) = do
     (s, tType) <- infer env e
     t1 <- freshTVar
     t2 <- freshTVar
-    s' <- lift $ unify (applySubst s tType) (TTuple [t1, t2])
+    s' <- unifyInfer (applySubst s tType) (TTuple [t1, t2])
     let finalSubst = composeSubst s' s
     return (finalSubst, applySubst finalSubst t2)
 

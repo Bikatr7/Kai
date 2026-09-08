@@ -1,6 +1,7 @@
 module Evaluator.Program (evaluateTopLevels) where
 
 import qualified Data.Map as Map
+import Data.Bifunctor (first)
 import DataDeclarations (dataConstructorsValueEnv)
 import Evaluator.Types
 import Evaluator.Helpers (bindResult)
@@ -12,6 +13,8 @@ evaluateTopLevels :: (Env -> Expr -> IO (Either RuntimeError Value)) -> (String 
 evaluateTopLevels evaluate load initial (Program levels) = go initial levels
   where
     go env [] = return $ Right (env, VUnit)
+    go env (TLAt location level:rest) =
+      first (locateRuntimeError location UnitLit) <$> go env (level:rest)
     go env (TLExpr expression : rest) =
       bindResult (evaluate env expression) $ \value ->
         if null rest then return $ Right (env, value) else go env rest

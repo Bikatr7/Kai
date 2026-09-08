@@ -57,7 +57,7 @@ getHomeR = do
             <div .stat-number>4
             <div .stat-label>Base Types
           <div .stat-item>
-            <div .stat-number>39
+            <div .stat-number>44
             <div .stat-label>Built-in Operations
           <div .stat-item>
             <div .stat-number>v0.0.4.6
@@ -89,7 +89,7 @@ getHomeR = do
             <p>Unit, property, script, and integration tests check values, exact printed output, real input, modules, executable shebang scripts, and deeply nested expressions.
           <div .feature>
             <h3>Developer Experience
-            <p>CLI plus a multiline REPL with `:type`, `:load`, and `:reload`, alongside file execution, --debug, --version/-V, and comprehensive documentation.
+            <p>CLI plus a multiline REPL with `:type`, `:load`, and `:reload`, alongside file execution, --debug, --version/-V, and source diagnostics with file, line, column and call/import context.
           <div .feature>
             <h3>Module System
             <p>Import modules with `import ModuleName`, define values with `let` and `letrec`, and control constructor visibility with explicit exports. Recursive initializers run in source order and stop on errors.
@@ -278,13 +278,27 @@ getHomeR = do
             <code>case [1, 2, 3, 4] of _ :: _ -> "list has values" | [] -> "list is empty"
 
         <div .element-block>
+          <h3>Reusable Helpers and Recovery
+          <div .code-example .kai-example>
+            <code>let append = \left -> \right -> left ++ right
+            <code>let total = \record -> record.a + record.b
+            <code>print (append "a" "b", append [1] [2], total {a = 2, b = 3, extra = true})
+            <code>case attempt (\unit -> 1 / 0) of Left DivisionByZero -> print "Recovered" | Left other -> raise other | Right value -> print value
+          <p>Reusable functions retain Eq and Append requirements. Callable equality and incomplete matches are rejected before effects run. Unreachable alternatives produce warnings. Function types describe inputs and outputs without enforcing purity.
+
+        <div .element-block>
+          <h3>File Reports That Continue After Read Failures
+          <p>Run examples/file_report.kai with file paths as arguments, or supply one path per stdin line until EOF. It reports each read failure, processes later files, and summarizes successful reads, failures and total characters.
+          <p>See MIGRATING-0.0.5.0.md for recovery boundaries, changed boolean effects, builtin shadowing, field precedence, record rows, constraints and exhaustive matches.
+
+        <div .element-block>
           <h3>Type Safety Examples
           <div .code-example>
             <code>1 + true
-            <span .error-comment>// Type error: UnificationError TBool TInt
+            <span .error-comment>// Type error: Cannot match Bool with Int.
             <br>
             <code>if 5 then 1 else 2
-            <span .error-comment>// Type error: UnificationError TInt TBool
+            <span .error-comment>// Type error: Cannot match Int with Bool.
 
       <section #limitations>
         <h2>Current Limitations
@@ -295,7 +309,7 @@ getHomeR = do
             <span>REPL is still minimal: no history or completion yet
             <br>
             <span .limitation>×
-            <span>Scripts stop at the first error; the REPL accepts the next input
+            <span>Unhandled errors stop scripts; attempt/raise provide explicit runtime recovery
             <br>
             <span .limitation>×
             <span>Integer-only arithmetic (no floating-point)
@@ -304,7 +318,7 @@ getHomeR = do
             <span>Polymorphic recursive calls need explicit annotations; completed recursive definitions can still be generalized
             <br>
             <span .limitation>×
-            <span>No JSON/HTTP/package-manager story yet; records require exact field sets, and show/print are display rather than serialization
+            <span>No JSON/HTTP/package manager yet; show/print are display rather than serialization
 
       <section #roadmap>
         <h2>Kai v0.0.4.6 & Roadmap
@@ -328,7 +342,7 @@ getHomeR = do
             <div .timeline-marker data-step="4">
             <div .timeline-content>
               <h3>Type System (Done)
-              <p>Static type inference with unification and occurs check
+              <p>Static inference with open record rows, Eq/Append constraints, and occurs/kind checks
           <div .timeline-item>
             <div .timeline-marker data-step="5">
             <div .timeline-content>
@@ -343,12 +357,12 @@ getHomeR = do
             <div .timeline-marker data-step="7">
             <div .timeline-content>
               <h3>Data Structures (Done)
-              <p>Lists, tuples, records, custom data types with first-class constructor functions, pattern matching, Maybe/Either error handling
+              <p>Lists, tuples, records, custom data types with first-class constructor functions, exhaustive pattern matching, Maybe/Either error handling
           <div .timeline-item>
             <div .timeline-marker data-step="8">
             <div .timeline-content>
               <h3>Standard Library (Done)
-              <p>List functions, string functions, file/directory/process helpers, a typed fixpoint combinator, and 39 built-ins
+              <p>List functions, string functions, file/directory/process helpers, a typed fixpoint combinator, and 44 built-ins
           <div .timeline-item>
             <div .timeline-marker data-step="9">
             <div .timeline-content>
@@ -377,8 +391,13 @@ getHomeR = do
           <div .timeline-item>
             <div .timeline-marker data-step="14">
             <div .timeline-content>
+              <h3>Next: v0.0.5.0
+              <p>Structured errors with attempt/raise recovery; safe line input and optional list accessors; short-circuit booleans; ordinary builtin application; open record inference and reusable concatenation; static equality constraints and exhaustive patterns; source-aware diagnostics and migration examples
+          <div .timeline-item>
+            <div .timeline-marker data-step="15">
+            <div .timeline-content>
               <h3>Later Releases
-              <p>REPL polish, friendlier diagnostics, richer stdlib helpers, formatter/linter, package manager, HTTP/JSON work, and fuller polymorphic-recursion ergonomics
+              <p>REPL history/completion, richer stdlib helpers, HTTP/JSON, formatter/linter and editor support, package management, module-qualified types, wider numbers, and later runtime/type-system work
 
       <footer>
         <p .copyright>Kai Language · Functional-first scripting · Implemented in Haskell

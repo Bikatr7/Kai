@@ -29,6 +29,7 @@ extra-source-files:
 dependencies:
   - base >= 4.7 && < 5
   - containers
+  - text
   - megaparsec
   - parser-combinators
   - mtl
@@ -42,10 +43,12 @@ library:
   source-dirs: src
   exposed-modules:
     - CLI
+    - Diagnostics
     - ModuleSystem
     - Syntax
     - Parser
     - Evaluator
+    - Evaluator.Errors
     - TypeChecker
 
 executables:

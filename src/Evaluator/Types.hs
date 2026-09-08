@@ -94,4 +94,35 @@ data RuntimeError
   | UnboundVariable String
   | RecordFieldNotFound String
   | ExitRequested Int
+  | EmptyListError String
+  | EndOfInputError
+  | IOFailure IOErrorKind String (Maybe String) String
+  | UserFailure String
+  | RuntimeAt SourceSpan RuntimeError
+  | RuntimeContext String SourceSpan RuntimeError
   deriving (Show, Eq)
+
+data IOErrorKind
+  = NotFound | PermissionDenied | AlreadyExists | InvalidPath
+  | InvalidEncoding | ResourceBusy | OtherIO
+  deriving (Show, Eq, Enum, Bounded)
+
+stripRuntimeLocation :: RuntimeError -> RuntimeError
+stripRuntimeLocation (RuntimeAt _ failure) = stripRuntimeLocation failure
+stripRuntimeLocation (RuntimeContext _ _ failure) = stripRuntimeLocation failure
+stripRuntimeLocation failure = failure
+
+locateRuntimeError :: SourceSpan -> Expr -> RuntimeError -> RuntimeError
+locateRuntimeError _ _ failure@ExitRequested {} = failure
+locateRuntimeError location expression failure = case failure of
+  RuntimeAt {} -> context
+  RuntimeContext {} -> context
+  _ -> RuntimeAt location failure
+  where
+    context = case unlocatedExpr expression of
+      App fun _ -> RuntimeContext ("while evaluating " ++ callableName fun) location failure
+      _ -> failure
+    callableName fun = case unlocatedExpr fun of
+      Var name -> "call to " ++ name
+      App inner _ -> callableName inner
+      _ -> "function application"

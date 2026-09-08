@@ -31,9 +31,10 @@ Features:
 - **Functions**: lambdas (`\x -> expr`), application (`f x`), closures, partially applied builtins, and `fix : (a -> a) -> a`
 - **Static typing & inference**: `Int`, `Bool`, `String`, `Unit`, lists, records, tuples, functions, `Maybe`, `Either`, and custom types with unification, occurs check, generalized let-polymorphism, and explicitly annotated polymorphic recursion
 - **Type annotations**: Optional type annotations (`let x : Int = 42`, `\x : String -> expr`)
-- **Error handling**: Maybe/Either types with `Just`, `Nothing`, `Left`, `Right` constructors and case expressions
+- **Error handling**: Maybe/Either values, structured `Error` constructors, explicit `attempt`/`raise` recovery, and case expressions
+- **Safe input and list access**: `readLine ()` distinguishes EOF from a blank line; `headMaybe` and `tailMaybe` return optional values
 - **Safe conversion functions**: `parseInt : String -> Maybe Int`, `toString : Int -> String`, `show : a -> String`, `discard : a -> Unit`
-- **Pattern matching**: Case expressions for handling Maybe/Either, tuples, records, lists, and user-defined constructors
+- **Pattern matching**: Exhaustive cases for Maybe/Either, tuples, records, lists, and user-defined constructors, with missing-pattern diagnostics and unreachable-branch warnings
 - **Custom data types**: Top-level `data` declarations with first-class, partially applicable constructor functions and constructor patterns
 - **Do blocks**: `do { expr1; expr2; expr3 }` for readable effect sequencing, with `do {}` evaluating to `()`
 - **Wildcard variables**: `_` still works in let bindings when you truly want to discard a value (`let _ = expensiveCall in body`)
@@ -48,12 +49,17 @@ Features:
 
 Current limitations:
 
-- REPL is functional but still minimal: no history, completion, or pretty diagnostics
+- REPL is functional but still minimal: no history or completion
 - Standard library is broader now, but still missing line-oriented file helpers, JSON/HTTP, and a package story
-- A failed script stops at the first error; the REPL reports errors and accepts the next input
-- Record functions require exact field sets; row polymorphism is not implemented
+- Unhandled failures stop a script; explicit `attempt` boundaries allow recovery from runtime I/O, arithmetic, list, and application-defined errors
+- Record literals and closed annotations have exact field sets; inferred accessors accept additional fields through open rows
 - `show` and `print` are human-readable display, not round-trip serialization
 - Polymorphic recursive calls require explicit annotations; completed recursive definitions can still be generalized for later uses
+
+Normal type and runtime diagnostics include source file, line, column and an
+excerpt, with relevant function/import context. `--debug` retains structured
+internal errors. See [Migrating to 0.0.5.0](MIGRATING-0.0.5.0.md) for changed
+behavior and executable migration examples.
 
 ## Quickstart
 
@@ -202,6 +208,21 @@ toString 100         // => "100"
 parseInt "42"        // => Just 42
 ```
 
+Recovering from runtime failures:
+
+```kai
+case attempt (\unit -> 1 / 0) of
+  Left DivisionByZero -> 42
+  | Left other -> raise other
+  | Right value -> value  // => 42
+```
+
+`attempt` takes a function so the operation executes inside the recovery boundary.
+It returns `Either Error a`; wrapping an operation in `Right` alone cannot catch a
+failure. Earlier effects remain, while later effects inside a failing action are
+skipped. `exit`, cancellation, parse/type errors, and interpreter faults do not
+become recoverable values.
+
 Lists, tuples, and records:
 
 ```kai
@@ -216,6 +237,23 @@ snd((42, "world"))      // => "world"
 {a = 1, b = true}.a    // => 1
 {a = 1} == {a = 1}      // => true
 ```
+
+Reusable record and constrained helpers:
+
+```kai
+let total = \record -> record.a + record.b in
+total {a = 1, b = 2, extra = true}  // => 3
+
+let append = \x -> \y -> x ++ y in
+(append "a" "b", append [1] [2])  // => ("ab", [1, 2])
+
+let same : Eq a => a -> a -> Bool = \x -> \y -> x == y in
+same [1, 2] [1, 2]  // => true
+```
+
+`Append a` permits strings and lists; `Eq a` requires comparable data. These
+requirements survive aliases, recursive definitions, modules, and REPL inputs.
+An explicit open record annotation is `{a : Int | row}`; `{a : Int}` remains closed.
 
 List and string functions:
 
@@ -254,6 +292,7 @@ x + y           // => 30
 Runnable example scripts in `examples/`:
 
 - `examples/text_analysis.kai`: modules, records, `Maybe`, and file-or-stdin-style scripting with `args`
+- `examples/file_report.kai`: per-file recovery, exact success/failure totals, and EOF-driven path input
 - `examples/file_counter.kai`: `Either`-based CLI validation plus reusable text-analysis helpers
 - `examples/list_processing.kai`: lists, records, `zip`, and a let-polymorphic tagging helper
 - `examples/custom_data_types.kai`: an expression-tree pipeline with constructor functions, recursive simplification, and constructor patterns
@@ -295,8 +334,8 @@ print ("First argument: " ++ firstArg)
 Type safety (checked before evaluation):
 
 ```kai
-1 + true         // Type error: UnificationError TBool TInt
-if 5 then 1 else 2  // Type error: UnificationError TInt TBool
+1 + true         // Type error: Cannot match Bool with Int.
+if 5 then 1 else 2  // Type error: Cannot match Int with Bool.
 ```
 
 ## Performance Benchmarks
@@ -332,23 +371,24 @@ See `benchmarks/README.md` for detailed benchmark documentation and regression t
 
 ## Language Notes
 
-- Keywords are reserved. The current list includes control-flow, I/O, module, and data constructors such as `if`, `let`, `letrec`, `do`, `case`, `import`, `export`, `Just`, `Nothing`, `Left`, and `Right`; see `SPEC.md` for the exact list.
+- Keywords such as `if`, `let`, `letrec`, `do`, `case`, `import`, and `export` are reserved. Callable builtins and constructors use ordinary names; see `SPEC.md` for the exact keyword list.
 - Wildcard variable `_` can be used in let bindings and pattern matching to discard values: `let _ = expression in body`, `case x of _ -> "any" | Just val -> "some"`.
 - `do { ... }` is the idiomatic way to sequence effects. Entries are separated by semicolons, and `do {}` evaluates to `()`.
 - Expression sequencing with `;` has lowest precedence and is right-associative: `a; b; c` = `a; (b; c)`.
 - Unary minus is a prefix operator (e.g., `-5`, `10 - (-3)`). Use parentheses for signed function arguments: `f (-1)`; `7 -2` is subtraction.
 - Prefix operators may repeat: `not not true` and `- - 5`. They apply from right to left, with integer overflow checked at each negation.
-- Builtins can be stored or partially applied: `let f = take 2 in f [1,2,3]`. Parenthesize a builtin passed to another builtin, as in `map (length) [[1],[2,3]]`.
+- Builtins can be stored or partially applied: `let f = take 2 in f [1,2,3]`. Builtins use ordinary application, as in `map length [[1],[2,3]]`, and may be shadowed by local definitions.
 - Recursive bindings allow constants and closures. Reading a recursive binding before initialization returns `UninitializedRecursion`.
 - Type variables are local to each annotation; their spelling does not connect separate annotations. Constructor patterns require every declared field.
+- Cases must cover every possible input of their scrutinee type. Unreachable alternatives warn on stderr. Parenthesize a nested `case` before adding alternatives to its enclosing case.
 - Imported data declarations compare parameter positions and payload types, independent of parameter spelling. Private constructors remain private.
 - Integer literals, `parseInt`, and arithmetic results are constrained to signed 32-bit values. Arithmetic overflow raises `IntegerOverflow`.
-- Equality is structural for primitive and composite data. Different constructors compare as `false`; callable values and recursive runtime references are not comparable and raise a runtime `TypeError`, even when nested.
+- Equality is structural for comparable data. Inference retains `Eq a` requirements on reusable functions and rejects callable payloads before execution, including nested or private constructor fields. Different constructors compare as `false`.
 - Concatenation (`++`) works for both strings and lists, right-associative, with lower precedence than `+`/`-`: `"a" ++ "b" ++ "c"` parses as `"a" ++ ("b" ++ "c")`, `[1, 2] ++ [3, 4]` parses as `[1, 2] ++ [3, 4]`.
 - Supported string escapes: `\"`, `\\`, `\n`. Unknown escapes are errors.
-- `print` evaluates its argument, prints and flushes it, and returns unit `()`. An output failure returns a runtime `TypeError` and stops subsequent effects.
-- Application and field access form one left-associated chain, tighter than prefix and infix operators. `f x.field` means `(f x).field`; use `f (x.field)` to pass a field value.
-- `and` and `or` evaluate both operands. Use `if` when a branch must avoid an effect or runtime error.
+- `print` evaluates its argument, prints and flushes it, and returns unit `()`. An output failure raises a structured `IOError` and stops subsequent effects inside the current action.
+- Field access binds tighter than application, which binds tighter than prefix and infix operators. `f x.field` means `f (x.field)`; use `(f x).field` to access the result.
+- `and` and `or` short-circuit: `false and rhs` and `true or rhs` skip `rhs`. Both operands must still type-check as booleans.
 - Multi-statement files are supported: top-level newlines split expressions, while nested `()`, `[]`, `{}`, strings, and comments stay intact.
 
 ## Project Structure
@@ -439,13 +479,25 @@ Design philosophy:
 
 Roadmap:
 
-The roadmap focuses on scripting tools and the interactive development experience.
+**Next release: 0.0.5.0 — error recovery and predictable language behavior.**
+The [release design](RELEASE-0.0.5.0.md) defines the semantics, migration work,
+implementation order, and acceptance requirements.
 
-**Next focus**
-- Better REPL ergonomics: history, completion, and friendlier diagnostics
-- More stdlib depth: line-oriented file helpers, JSON/HTTP, and a few missing script-heavy helpers
-- Tooling: formatter/linter polish, editor support, and eventually package management
-- Advanced type-system work remains deferred behind scripting ergonomics, especially full polymorphic-recursion inference/ergonomics and richer type features
+- Structured errors with explicit recovery through `attempt`/`raise`, plus safe
+  line input and optional list accessors
+- Short-circuit `and`/`or` and consistent builtin function application
+- Open record inference and reusable constrained concatenation helpers
+- Static equality constraints and exhaustive pattern checking
+- Source-aware diagnostics, migration examples, and native package validation
+
+These are targets for 0.0.5.0. The language reference and examples above describe
+0.0.4.6. Function types describe inputs and outputs; they do not enforce purity.
+
+REPL history/completion follows this language work. JSON/HTTP, formatter/linter
+and editor support, package management, module-qualified types, wider numbers,
+and a new execution engine remain later projects. Open records and the built-in
+`Eq`/`Append` constraints are in scope; general type classes, effect types, and
+other advanced type-system features remain deferred.
 
 Example current Kai script style:
 

@@ -2,6 +2,8 @@ module Evaluator (
     Value(..),
     Env,
     RuntimeError(..),
+    IOErrorKind(..),
+    stripRuntimeLocation,
     eval,
     evalWithEnv,
     evalPure,
@@ -12,12 +14,17 @@ module Evaluator (
 
 import ModuleSystem (filterByExports, loadModule, ModuleInfo(..))
 
+import Data.Bifunctor (first)
 import Syntax
 import Evaluator.Program (evaluateTopLevels)
 import qualified Data.Map as Map
+import Control.Applicative ((<|>))
+import StandardLibrary (standardValueEnv)
 import Data.IORef
 import Evaluator.Types
 import Evaluator.Helpers (bindResult)
+import Evaluator.Errors (evalRecoveryWith)
+import Control.Monad.Except (ExceptT(..), runExceptT)
 import Evaluator.Literals
 import Evaluator.Arithmetic
 import Evaluator.BooleanOps
@@ -42,6 +49,12 @@ evalPure = evalPureWithEnv Map.empty
 
 evalPureWithEnv :: Env -> Expr -> Either RuntimeError Value
 evalPureWithEnv env expr = case expr of
+  Located location expression -> first (locateRuntimeError location expression) (evalPureWithEnv env expression)
+  Attempt _ -> evalRecoveryWith pure evalPureWithEnv env expr
+  Raise _ -> evalRecoveryWith pure evalPureWithEnv env expr
+  ReadLine _ -> evalIOPure evalPureWithEnv env expr
+  HeadMaybe _ -> evalDataStructures evalPureWithEnv env expr
+  TailMaybe _ -> evalDataStructures evalPureWithEnv env expr
   IntLit _ -> evalLiteral expr
   BoolLit _ -> evalLiteral expr
   StrLit _ -> evalLiteral expr
@@ -49,7 +62,7 @@ evalPureWithEnv env expr = case expr of
   Input -> evalIOPure evalPureWithEnv env expr
   Args -> evalIOPure evalPureWithEnv env expr
   GetCurrentDirectory -> evalIOPure evalPureWithEnv env expr
-  Var x -> case Map.lookup x env of
+  Var x -> case Map.lookup x env <|> Map.lookup x standardValueEnv of
     Just (VUninitialized name) -> Left $ UninitializedRecursion name
     Just v -> Right v
     Nothing -> Left $ UnboundVariable x
@@ -133,6 +146,12 @@ evalPureWithEnv env expr = case expr of
 
 evalWithEnv :: Env -> Expr -> IO (Either RuntimeError Value)
 evalWithEnv env expr = case expr of
+  Located location expression -> first (locateRuntimeError location expression) <$> evalWithEnv env expression
+  Attempt _ -> recover
+  Raise _ -> recover
+  ReadLine _ -> evalIOWithEnv evalWithEnv env expr
+  HeadMaybe _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
+  TailMaybe _ -> DataIO.evalDataStructuresIO evalWithEnv env expr
   Input -> evalIOWithEnv evalWithEnv env expr
   Args -> evalIOWithEnv evalWithEnv env expr
   Print _ -> evalIOWithEnv evalWithEnv env expr
@@ -149,7 +168,7 @@ evalWithEnv env expr = case expr of
   GetEnv _ -> evalIOWithEnv evalWithEnv env expr
   SetEnv _ _ -> evalIOWithEnv evalWithEnv env expr
   Exit _ -> evalIOWithEnv evalWithEnv env expr
-  Var x -> case Map.lookup x env of
+  Var x -> case Map.lookup x env <|> Map.lookup x standardValueEnv of
     Nothing -> return $ Left $ UnboundVariable x
     Just value -> resolveCallableIO value
   Lambda _ _ _ -> evalFunctionsIO evalWithEnv env expr
@@ -218,6 +237,9 @@ evalWithEnv env expr = case expr of
   ERight _ -> ConvIO.evalConversionsIO evalWithEnv env expr
   Case _ _ -> PatIO.evalPatternsIO evalWithEnv env expr
   _ -> return $ evalPureWithEnv env expr
+  where
+    recover = runExceptT $ evalRecoveryWith (ExceptT . resolveCallableIO)
+      (\scope expression -> ExceptT $ evalWithEnv scope expression) env expr
 
 fixPlaceholder :: Value
 fixPlaceholder = VData "\0kai-fix-uninitialized" []

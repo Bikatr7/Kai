@@ -11,6 +11,8 @@ import System.Environment (lookupEnv, setEnv)
 import System.Exit (ExitCode(..))
 import qualified System.Process as Process
 import Control.Exception (IOException, try)
+import qualified System.IO.Error as IOE
+import GHC.IO.Exception (IOErrorType(InvalidArgument))
 import qualified Data.Map as Map
 import qualified UTF8
 
@@ -29,6 +31,7 @@ lookupArgs env =
 
 evalIOPure :: EvalFunc -> Env -> Expr -> Either RuntimeError Value
 evalIOPure _ _ Input = Left $ TypeError "input not available in pure evaluation"
+evalIOPure _ _ (ReadLine _) = Left $ TypeError "readLine not available in pure evaluation"
 evalIOPure _ env Args = Right $ lookupArgs env
 evalIOPure eval env (Print e) = do
   _ <- eval env e
@@ -57,50 +60,65 @@ evalIOWithEnv :: EvalFuncIO -> Env -> Expr -> IO (Either RuntimeError Value)
 evalIOWithEnv = evalInIO evalIO
 
 evalIO :: Eval (ExceptT RuntimeError IO) -> Eval (ExceptT RuntimeError IO)
-evalIO _ _ Input = attempt "input: could not read from stdin" VStr getLine
+evalIO _ _ Input = ExceptT $ do
+  result <- try getLine
+  pure $ case result of
+    Right line -> Right (VStr line)
+    Left err | IOE.isEOFError err -> Left EndOfInputError
+             | otherwise -> Left $ ioFailure "input" Nothing err
+evalIO evaluate env (ReadLine argument) = do
+  value <- evaluate env argument
+  case value of
+    VUnit -> ExceptT $ do
+      result <- try getLine
+      pure $ case result of
+        Right line -> Right (VJust (VStr line))
+        Left err | IOE.isEOFError err -> Right VNothing
+                 | otherwise -> Left $ ioFailure "readLine" Nothing err
+    _ -> throwError $ TypeError "readLine expects Unit"
 evalIO _ env Args = pure $ lookupArgs env
 evalIO eval env (Print expression) = do
   value <- eval env expression
-  attempt "print: could not write to stdout" (const VUnit) $
+  performIO "print" Nothing (const VUnit) $
     putStrLn (showValue value) >> IO.hFlush IO.stdout
 evalIO eval env (ReadFile path) =
   withString eval env path "readFile: path must be a string" $ \p ->
-    attempt ("readFile: could not read file '" ++ p ++ "'") VStr (UTF8.readFile p)
+    performIO "readFile" (Just p) VStr (UTF8.readFile p)
 evalIO eval env (WriteFile path content) =
   withStrings eval env path content "writeFile: path must be a string" "writeFile: content must be a string" $ \p c ->
-    attempt ("writeFile: could not write to file '" ++ p ++ "'") (const VUnit) (UTF8.writeFile p c)
+    performIO "writeFile" (Just p) (const VUnit) (UTF8.writeFile p c)
 evalIO eval env (AppendFile path content) =
   withStrings eval env path content "appendFile: path must be a string" "appendFile: content must be a string" $ \p c ->
-    attempt ("appendFile: could not append to file '" ++ p ++ "'") (const VUnit) (UTF8.appendFile p c)
+    performIO "appendFile" (Just p) (const VUnit) (UTF8.appendFile p c)
 evalIO eval env (FileExists path) =
   withString eval env path "fileExists: path must be a string" $ \p ->
-    attempt ("fileExists: could not inspect path '" ++ p ++ "'") VBool (doesFileExist p)
+    performIO "fileExists" (Just p) VBool (doesFileExist p)
 evalIO eval env (ListDirectory path) =
   withString eval env path "listDirectory: path must be a string" $ \p ->
-    attempt ("listDirectory: could not list directory '" ++ p ++ "'") (VList . map VStr) (Directory.listDirectory p)
+    performIO "listDirectory" (Just p) (VList . map VStr) (Directory.listDirectory p)
 evalIO eval env (CreateDirectory path) =
   withString eval env path "createDirectory: path must be a string" $ \p ->
-    attempt ("createDirectory: could not create directory '" ++ p ++ "'") (const VUnit) (createDirectory p)
+    performIO "createDirectory" (Just p) (const VUnit) (createDirectory p)
 evalIO eval env (RemoveDirectory path) =
   withString eval env path "removeDirectory: path must be a string" $ \p ->
-    attempt ("removeDirectory: could not remove directory '" ++ p ++ "'") (const VUnit) (removeDirectory p)
+    performIO "removeDirectory" (Just p) (const VUnit) (removeDirectory p)
 evalIO _ _ GetCurrentDirectory =
-  attempt "getCurrentDirectory: could not get current directory" VStr getCurrentDirectory
+  performIO "getCurrentDirectory" Nothing VStr getCurrentDirectory
 evalIO eval env (SetCurrentDirectory path) =
   withString eval env path "setCurrentDirectory: path must be a string" $ \p ->
-    attempt ("setCurrentDirectory: could not change directory to '" ++ p ++ "'") (const VUnit) (setCurrentDirectory p)
+    performIO "setCurrentDirectory" (Just p) (const VUnit) (setCurrentDirectory p)
 evalIO eval env (System commandExpr) =
   withString eval env commandExpr "system: command must be a string" $ \command ->
-    attempt "system: could not execute command" exitValue (Process.system command)
+    performIO "system" Nothing exitValue (Process.system command)
   where
     exitValue ExitSuccess = VInt 0
     exitValue (ExitFailure code) = VInt code
 evalIO eval env (GetEnv nameExpr) =
   withString eval env nameExpr "getEnv: name must be a string" $ \name ->
-    attempt ("getEnv: could not read environment variable '" ++ name ++ "'") (maybe VNothing (VJust . VStr)) (lookupEnv name)
+    performIO "getEnv" Nothing (maybe VNothing (VJust . VStr)) (lookupEnv name)
 evalIO eval env (SetEnv nameExpr valueExpr) =
   withStrings eval env nameExpr valueExpr "setEnv: name must be a string" "setEnv: value must be a string" $ \name value ->
-    attempt ("setEnv: could not set environment variable '" ++ name ++ "'") (const VUnit) (setEnv name value)
+    performIO "setEnv" Nothing (const VUnit) (setEnv name value)
 evalIO eval env (Exit codeExpr) = do
   value <- eval env codeExpr
   case value of
@@ -108,13 +126,27 @@ evalIO eval env (Exit codeExpr) = do
     _ -> throwError $ TypeError "exit: code must be an integer"
 evalIO _ _ _ = error "evalIO called on non-IO expression"
 
-attempt :: String -> (a -> Value) -> IO a -> ExceptT RuntimeError IO Value
-attempt message wrap action = ExceptT $ do
+performIO :: String -> Maybe String -> (a -> Value) -> IO a -> ExceptT RuntimeError IO Value
+performIO operation (Just path) _ _ | '\0' `elem` path =
+  throwError $ IOFailure InvalidPath operation (Just path) "Paths cannot contain NUL characters."
+performIO operation path wrap action = ExceptT $ do
   result <- tryIO action
-  pure $ either (const $ Left $ TypeError message) (Right . wrap) result
+  pure $ either (Left . ioFailure operation path) (Right . wrap) result
   where
     tryIO :: IO a -> IO (Either IOException a)
     tryIO = try
+
+ioFailure :: String -> Maybe String -> IOException -> RuntimeError
+ioFailure operation path failure = IOFailure category operation path (show failure)
+  where
+    category
+      | IOE.ioeGetLocation failure == "Kai.UTF8.decode" && IOE.ioeGetErrorType failure == InvalidArgument = InvalidEncoding
+      | IOE.isDoesNotExistError failure = NotFound
+      | IOE.isPermissionError failure = PermissionDenied
+      | IOE.isAlreadyExistsError failure = AlreadyExists
+      | IOE.isAlreadyInUseError failure = ResourceBusy
+      | Just _ <- path, IOE.ioeGetErrorType failure == InvalidArgument = InvalidPath
+      | otherwise = OtherIO
 
 withString :: Eval (ExceptT RuntimeError IO) -> Env -> Expr -> String -> (String -> ExceptT RuntimeError IO Value) -> ExceptT RuntimeError IO Value
 withString eval env expression message next = do

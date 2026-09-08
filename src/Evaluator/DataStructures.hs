@@ -24,14 +24,26 @@ evalDataStructuresWith _ eval env (Head e) = do
     v <- eval env e
     case v of
         VList (h:_) -> pure h
-        VList [] -> throwError $ TypeError "Head of an empty list"
+        VList [] -> throwError $ EmptyListError "head"
         _ -> throwError $ TypeError "Head expects a list"
 evalDataStructuresWith _ eval env (Tail e) = do
     v <- eval env e
     case v of
         VList (_:t) -> pure $ VList t
-        VList [] -> throwError $ TypeError "Tail of an empty list"
+        VList [] -> throwError $ EmptyListError "tail"
         _ -> throwError $ TypeError "Tail expects a list"
+evalDataStructuresWith _ eval env (HeadMaybe e) = do
+    v <- eval env e
+    case v of
+        VList (h:_) -> pure $ VJust h
+        VList [] -> pure VNothing
+        _ -> throwError $ TypeError "headMaybe expects a list"
+evalDataStructuresWith _ eval env (TailMaybe e) = do
+    v <- eval env e
+    case v of
+        VList (_:t) -> pure $ VJust (VList t)
+        VList [] -> pure VNothing
+        _ -> throwError $ TypeError "tailMaybe expects a list"
 evalDataStructuresWith _ eval env (Null e) = do
     v <- eval env e
     case v of

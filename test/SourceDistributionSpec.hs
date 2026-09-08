@@ -24,6 +24,7 @@ spec = describe "Source distribution" $
       (tarCode,tarErr) `shouldBe` (ExitSuccess,"")
       let files = map (normalise . drop 1 . dropWhile (/= '/')) (lines listing)
           required = ["README.md","DEVELOPING.md","FEATURES.md","SPEC.md","AGENTS.md",
+                      "RELEASE-0.0.5.0.md","MIGRATING-0.0.5.0.md","src/Diagnostics.hs",
                       "package.yaml","stack.yaml","stack.yaml.lock","Makefile",
                       "app/Main.hs","src/TypeChecker/Helpers.hs",
                       "scripts/kai","scripts/check-script-corpus.py","scripts/check-doc-examples.py",

@@ -13,54 +13,54 @@ inferPatternUnchecked :: TypeEnv -> Pattern -> Type -> TypeInfer (Substitution, 
 inferPatternUnchecked _ (PVar name) ty =
   return (Map.empty, if name == "_" then Map.empty else Map.singleton name (monoScheme ty))
 inferPatternUnchecked _ (PInt _) ty = do
-  s <- lift $ unify ty TInt
+  s <- unifyInfer ty TInt
   return (s, Map.empty)
 inferPatternUnchecked _ (PBool _) ty = do
-  s <- lift $ unify ty TBool
+  s <- unifyInfer ty TBool
   return (s, Map.empty)
 inferPatternUnchecked _ (PStr _) ty = do
-  s <- lift $ unify ty TString
+  s <- unifyInfer ty TString
   return (s, Map.empty)
 inferPatternUnchecked _ PUnit ty = do
-  s <- lift $ unify ty TUnit
+  s <- unifyInfer ty TUnit
   return (s, Map.empty)
 inferPatternUnchecked env (PJust pat) ty = do
   tyVar <- freshTVar
-  s1 <- lift $ unify ty (TMaybe tyVar)
+  s1 <- unifyInfer ty (TMaybe tyVar)
   (s2, patEnv) <- inferPatternUnchecked env pat (applySubst s1 tyVar)
   return (composeSubst s2 s1, patEnv)
 inferPatternUnchecked _ PNothing ty = do
   tyVar <- freshTVar
-  s <- lift $ unify ty (TMaybe tyVar)
+  s <- unifyInfer ty (TMaybe tyVar)
   return (s, Map.empty)
 inferPatternUnchecked env (PLeft pat) ty = do
   tyVar1 <- freshTVar
   tyVar2 <- freshTVar
-  s1 <- lift $ unify ty (TEither tyVar1 tyVar2)
+  s1 <- unifyInfer ty (TEither tyVar1 tyVar2)
   (s2, patEnv) <- inferPatternUnchecked env pat (applySubst s1 tyVar1)
   return (composeSubst s2 s1, patEnv)
 inferPatternUnchecked env (PRight pat) ty = do
   tyVar1 <- freshTVar
   tyVar2 <- freshTVar
-  s1 <- lift $ unify ty (TEither tyVar1 tyVar2)
+  s1 <- unifyInfer ty (TEither tyVar1 tyVar2)
   (s2, patEnv) <- inferPatternUnchecked env pat (applySubst s1 tyVar2)
   return (composeSubst s2 s1, patEnv)
 inferPatternUnchecked env (PList pats) ty = do
     elemType <- freshTVar
-    s1 <- lift $ unify ty (TList elemType)
+    s1 <- unifyInfer ty (TList elemType)
     inferPatternSiblings env s1 [(pat, elemType) | pat <- pats]
 inferPatternUnchecked env (PCons h t) ty = do
     elemType <- freshTVar
-    s1 <- lift $ unify ty (TList elemType)
+    s1 <- unifyInfer ty (TList elemType)
     inferPatternSiblings env s1 [(h, elemType), (t, TList elemType)]
 inferPatternUnchecked env (PRecord fields) ty = do
     fieldTypes <- mapM (const freshTVar) fields
     let typedFields = zipWith (\(name, _) fieldType -> (name, fieldType)) fields fieldTypes
-    s1 <- lift $ unify ty (TRecord (Map.fromList typedFields))
+    s1 <- unifyInfer ty (TRecord (Map.fromList typedFields))
     inferPatternSiblings env s1 (zip (map snd fields) fieldTypes)
 inferPatternUnchecked env (PTuple pats) ty = do
     elemTypes <- mapM (const freshTVar) pats
-    s1 <- lift $ unify ty (TTuple elemTypes)
+    s1 <- unifyInfer ty (TTuple elemTypes)
     inferPatternSiblings env s1 (zip pats elemTypes)
 inferPatternUnchecked env (PConstructor name pats) ty =
   case constructorPatternScheme env name of
@@ -73,7 +73,7 @@ inferPatternUnchecked env (PConstructor name pats) ty =
         lift $ Left $ ConstructorPatternArity name expected (length pats)
       ctorType <- instantiate scheme
       (s1, remainingType, patEnv) <- consumeConstructorArgs env ctorType pats
-      s2 <- lift $ unify (applySubst s1 remainingType) (applySubst s1 ty)
+      s2 <- unifyInfer (applySubst s1 remainingType) (applySubst s1 ty)
       let finalSubst = composeSubst s2 s1
       return (finalSubst, applySubstEnv finalSubst patEnv)
 
@@ -94,7 +94,7 @@ consumeConstructorArgs _ ctorType [] = return (Map.empty, ctorType, Map.empty)
 consumeConstructorArgs env ctorType (pat : rest) = do
   argType <- freshTVar
   resultType <- freshTVar
-  s1 <- lift $ unify ctorType (TFun argType resultType)
+  s1 <- unifyInfer ctorType (TFun argType resultType)
   let appliedEnv = applySubstEnv s1 env
   (s2, patEnv) <- inferPattern appliedEnv pat (applySubst s1 argType)
   let s12 = composeSubst s2 s1

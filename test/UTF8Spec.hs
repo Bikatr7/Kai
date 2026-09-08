@@ -13,7 +13,7 @@ import System.IO (hGetEncoding, hSetBinaryMode, hSetEncoding, latin1, stdin, std
 import Test.Hspec
 
 import CLI (runCLI)
-import Evaluator (Value(..), RuntimeError(..), evalWithEnv)
+import Evaluator (Value(..), RuntimeError(..), IOErrorKind(..), evalWithEnv)
 import ExampleSpec (withTempDir)
 import Syntax
 import TestIO (captureOutput, withStdin)
@@ -127,7 +127,12 @@ spec = describe "UTF-8 files" $ around_ withLatin1 $ do
         marker = dir </> "later.txt"
         expression = Seq (ReadFile (StrLit path)) (WriteFile (StrLit marker) (StrLit "unexpected"))
     BS.writeFile path (BS.pack [0xff])
-    evalWithEnv Map.empty expression `shouldReturn` Left (TypeError ("readFile: could not read file '" ++ path ++ "'"))
+    result <- evalWithEnv Map.empty expression
+    case result of
+      Left (IOFailure InvalidEncoding "readFile" (Just actual) detail) -> do
+        actual `shouldBe` path
+        detail `shouldSatisfy` (not . null)
+      other -> expectationFailure (show other)
     doesFileExist marker `shouldReturn` False
 
   it "fully decodes files spanning multiple input buffers" $ withTempDir $ \dir -> do

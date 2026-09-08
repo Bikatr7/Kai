@@ -1,5 +1,7 @@
 module Parser
-  ( parseExpr
+  ( parseLocatedExpr
+  , parseLocatedProgram
+  , parseExpr
   , parseStatements
   , parseFileExpr
   , parseFile
@@ -10,11 +12,13 @@ module Parser
 
 import Text.Megaparsec hiding (chunk, sourceName)
 import Data.Void
+import Data.Bifunctor (first)
 import Data.List (isPrefixOf)
 import Data.Char (isAlphaNum, isSpace)
 import Syntax (Expr(..), TopLevel(..), Program(..), DataConstructor(..))
 import qualified Parser.Lexer as Lexer
 import Parser.Expressions
+import Parser.Source
 import Parser.Literals (identifier, constructorIdentifier, lowerIdentifier)
 import Parser.Lexer (keyword, symbol)
 import Parser.Types (syntaxType, syntaxTypeAtom)
@@ -143,24 +147,30 @@ dataConstructorDecl = do
   return $ DataConstructor constructorName argTypes
 
 topLevelLetDef :: Parser TopLevel
-topLevelLetDef = do
+topLevelLetDef = topLevelLetDefWith expr
+
+topLevelLetDefWith :: Parser Expr -> Parser TopLevel
+topLevelLetDefWith expression = do
   keyword "let"
   var <- identifier
   maybeType <- optional $ do
     _ <- symbol ":"
     syntaxType
   _ <- symbol "="
-  TLDef var maybeType <$> expr
+  TLDef var maybeType <$> expression
 
 topLevelLetRecDef :: Parser TopLevel
-topLevelLetRecDef = do
+topLevelLetRecDef = topLevelLetRecDefWith expr
+
+topLevelLetRecDefWith :: Parser Expr -> Parser TopLevel
+topLevelLetRecDefWith expression = do
   keyword "letrec"
   var <- identifier
   maybeType <- optional $ do
     _ <- symbol ":"
     syntaxType
   _ <- symbol "="
-  (\val -> TLDef var maybeType (LetRec var maybeType val (Var var))) <$> expr
+  (\val -> TLDef var maybeType (LetRec var maybeType val (Var var))) <$> expression
 
 topLevelExpr :: Parser TopLevel
 topLevelExpr = TLExpr <$> expr
@@ -217,3 +227,48 @@ parseProgram :: String -> Either (ParseErrorBundle String Void) Program
 parseProgram content =
   let primitiveChunks = filter (not . null . dropWhile isSpace) $ splitTopLevelChunks (stripShebang content)
   in Program <$> parseTopLevels primitiveChunks
+
+-- Source-preserving entry points used by diagnostics. The original entry points
+-- retain their unannotated AST contract for library callers and parser tests.
+parseLocatedExpr :: FilePath -> String -> Either (ParseErrorBundle String Void) Expr
+parseLocatedExpr file input =
+  parse (Lexer.sc *> buildExpression (Just (sourceInfo file input)) True <* eof) file input
+
+parseLocatedProgram :: FilePath -> String -> Either (ParseErrorBundle String Void) Program
+parseLocatedProgram file input = Program <$> go (sourceChunks prepared)
+  where
+    info = sourceInfo file input
+    expression = buildExpression (Just info) True
+    prepared = case input of
+      '#':'!':rest -> "  " ++ map (const ' ') (takeWhile (/= '\n') rest) ++ dropWhile (/= '\n') rest
+      _ -> input
+    parser = Lexer.sc *> locatedTopLevel info (choice
+      [try (topLevelImport <* eof), try (topLevelExport <* eof), try (topLevelDataDecl <* eof),
+       try (topLevelLetRecDefWith expression <* eof), try (topLevelLetDefWith expression <* eof),
+       TLExpr <$> expression]) <* eof
+    trivia chunkText = case parse (Lexer.sc *> getInput) file chunkText of
+      Right remaining -> remaining
+      Left _ -> chunkText
+    emptyChunk (_,text) = null (trivia text)
+    go [] = Right []
+    go (first:rest) | emptyChunk first = go rest
+    go ((line,text):rest) = consume line text rest
+    consume line current remaining =
+      let (blankChunks,following) = span emptyChunk remaining
+          continues text = case trivia text of
+            '|':_ -> True
+            other -> startsWithKeyword "in" other
+      in case following of
+        (_,next):more | continues next -> consume line (current ++ concatMap snd blankChunks ++ next) more
+        _ -> case first (rebase line) (parse (atSourceLine line parser) file current) of
+          Right level -> (level:) <$> go remaining
+          Left err -> case remaining of
+            [] -> Left err
+            (_,next):more -> consume line (current ++ next) more
+
+-- Megaparsec's failure bundle starts from the runner's initial position, which
+-- precedes the parser-level position update used for successful AST spans.
+rebase :: Int -> ParseErrorBundle String Void -> ParseErrorBundle String Void
+rebase line bundle = bundle { bundlePosState = positions
+  { pstateSourcePos = (pstateSourcePos positions) { sourceLine = mkPos line } } }
+  where positions = bundlePosState bundle

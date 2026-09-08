@@ -14,8 +14,8 @@ import ExampleSpec (withTempDir)
 spec :: Spec
 spec = describe "Output failures" $ do
   forM_ [(["--version"],"IO error:"), (["--help"],"IO error:"),
-         (["-e","print 42"],"Runtime error: TypeError \"print: could not write to stdout\""),
-         (["-e","1/0"],"Runtime error: DivByZero"),
+         (["-e","print 42"],"Runtime error: print: I/O operation failed."),
+         (["-e","1/0"],"Runtime error: Division by zero."),
          (["-e","1+true"],"Type error:"),
          (["-e","let x ="],"Parse error:"),
          (["--debug","-e","42"],"IO error:")] $ \(arguments, diagnostic) ->
@@ -30,7 +30,7 @@ spec = describe "Output failures" $ do
     (code, err) <- runWithReadOnlyOutput directory
       ["-e","print \"hello\"; writeFile " ++ show marker ++ " \"unexpected\""] False
     code `shouldBe` ExitFailure 1
-    err `shouldContain` "print: could not write to stdout"
+    err `shouldContain` "print: I/O operation failed."
     doesFileExist marker `shouldReturn` False
 
   it "returns failure even when both output streams are unwritable" $ withTempDir $ \directory -> do

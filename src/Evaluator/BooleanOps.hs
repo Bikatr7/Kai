@@ -10,15 +10,23 @@ import qualified Data.Map as Map
 evalBooleanOps :: MonadError RuntimeError m => Eval m -> Eval m
 evalBooleanOps eval env (And e1 e2) = do
   v1 <- eval env e1
-  v2 <- eval env e2
-  case (v1, v2) of
-    (VBool b1, VBool b2) -> pure $ VBool (b1 && b2)
+  case v1 of
+    VBool False -> pure $ VBool False
+    VBool True -> do
+      v2 <- eval env e2
+      case v2 of
+        VBool b -> pure $ VBool b
+        _ -> throwError $ TypeError "AND requires boolean operands"
     _ -> throwError $ TypeError "AND requires boolean operands"
 evalBooleanOps eval env (Or e1 e2) = do
   v1 <- eval env e1
-  v2 <- eval env e2
-  case (v1, v2) of
-    (VBool b1, VBool b2) -> pure $ VBool (b1 || b2)
+  case v1 of
+    VBool True -> pure $ VBool True
+    VBool False -> do
+      v2 <- eval env e2
+      case v2 of
+        VBool b -> pure $ VBool b
+        _ -> throwError $ TypeError "OR requires boolean operands"
     _ -> throwError $ TypeError "OR requires boolean operands"
 evalBooleanOps eval env (Not e) = do
   v <- eval env e

@@ -5,6 +5,8 @@ import Control.Monad.Trans (lift)
 import Syntax (Expr(..))
 import TypeChecker.Types
 import TypeChecker.Substitution
+import StandardLibrary (standardTypeEnv)
+import Control.Applicative ((<|>))
 
 inferLiteral :: TypeEnv -> Expr -> TypeInfer (Substitution, Type)
 inferLiteral _ (IntLit _) = return (Map.empty, TInt)
@@ -18,7 +20,7 @@ inferLiteral _ GetCurrentDirectory = return (Map.empty, TString)
 inferLiteral _ _ = error "inferLiteral called on non-literal expression"
 
 inferVariable :: TypeEnv -> Expr -> TypeInfer (Substitution, Type)
-inferVariable env (Var x) = case Map.lookup x env of
+inferVariable env (Var x) = case Map.lookup x env <|> Map.lookup x standardTypeEnv of
   Just scheme -> do
     ty <- instantiate scheme
     return (Map.empty, ty)

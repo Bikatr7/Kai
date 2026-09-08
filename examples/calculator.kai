@@ -8,10 +8,11 @@ let parseNumber : String -> String -> Either String Int = (\label -> \text ->
 )
 let parseNumbers = (\leftText -> \rightText ->
   case parseNumber "First" leftText of
-    Right left ->
+    Right left -> (
       case parseNumber "Second" rightText of
         Right right -> Right (left, right)
         | Left message -> Left message
+      )
     | Left message -> Left message
 )
 let chooseOperation = (\choice ->

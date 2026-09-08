@@ -45,12 +45,13 @@ spec = describe "Parser Tests" $ do
     it "parses variable with underscores" $ do
       parseExpr "my_var" `shouldBe` Right (Var "my_var")
 
-    it "reserves module and fixpoint keywords" $ do
+    it "reserves module keywords and permits a shadowed fix function" $ do
       mapM_
         (\name -> case parseExpr ("let " ++ name ++ " = 1 in 1") of
           Left _ -> return ()
           Right parsed -> expectationFailure $ "Should reject reserved name " ++ name ++ ", got " ++ show parsed)
-        ["import", "export", "fix"]
+        ["import", "export"]
+      parseExpr "let fix = 1 in fix" `shouldBe` Right (Let "fix" Nothing (IntLit 1) (Var "fix"))
 
     it "does not split keyword-prefixed identifiers" $ do
       mapM_
@@ -129,28 +130,28 @@ spec = describe "Parser Tests" $ do
       (\(source, expected) ->
         it ("parses " ++ source ++ " before the surrounding operator") $ do
           parseExpr source `shouldBe` Right expected)
-      [ ("head [1] + 2", Add (Head (ListLit [IntLit 1])) (IntLit 2))
-      , ("tail [1] ++ [2]", Concat (Tail (ListLit [IntLit 1])) (ListLit [IntLit 2]))
-      , ("null [] == true", Eq (Null (ListLit [])) (BoolLit True))
-      , ("fix f + 1", Add (Fix (Var "f")) (IntLit 1))
-      , ("parseInt \"1\" == Nothing", Eq (ParseInt (StrLit "1")) MNothing)
-      , ("toString 1 ++ \"!\"", Concat (ToString (IntLit 1)) (StrLit "!"))
-      , ("show 1 ++ \"!\"", Concat (Show (IntLit 1)) (StrLit "!"))
-      , ("fst (1, 2) + 3", Add (Fst (TupleLit [IntLit 1, IntLit 2])) (IntLit 3))
-      , ("snd (1, 2) + 3", Add (Snd (TupleLit [IntLit 1, IntLit 2])) (IntLit 3))
-      , ("Just 1 == Nothing", Eq (MJust (IntLit 1)) MNothing)
-      , ("Just 1 :: []", Cons (MJust (IntLit 1)) (ListLit []))
-      , ("Left \"bad\" == Right 1", Eq (ELeft (StrLit "bad")) (ERight (IntLit 1)))
-      , ("discard 1; 2", Seq (Discard (IntLit 1)) (IntLit 2))
-      , ("print 1; 2", Seq (Print (IntLit 1)) (IntLit 2))
+      [ ("head [1] + 2", Add (App (Var "head") (ListLit [IntLit 1])) (IntLit 2))
+      , ("tail [1] ++ [2]", Concat (App (Var "tail") (ListLit [IntLit 1])) (ListLit [IntLit 2]))
+      , ("null [] == true", Eq (App (Var "null") (ListLit [])) (BoolLit True))
+      , ("fix f + 1", Add (App (Var "fix") (Var "f")) (IntLit 1))
+      , ("parseInt \"1\" == Nothing", Eq (App (Var "parseInt") (StrLit "1")) MNothing)
+      , ("toString 1 ++ \"!\"", Concat (App (Var "toString") (IntLit 1)) (StrLit "!"))
+      , ("show 1 ++ \"!\"", Concat (App (Var "show") (IntLit 1)) (StrLit "!"))
+      , ("fst (1, 2) + 3", Add (App (Var "fst") (TupleLit [IntLit 1, IntLit 2])) (IntLit 3))
+      , ("snd (1, 2) + 3", Add (App (Var "snd") (TupleLit [IntLit 1, IntLit 2])) (IntLit 3))
+      , ("Just 1 == Nothing", Eq (App (Var "Just") (IntLit 1)) MNothing)
+      , ("Just 1 :: []", Cons (App (Var "Just") (IntLit 1)) (ListLit []))
+      , ("Left \"bad\" == Right 1", Eq (App (Var "Left") (StrLit "bad")) (App (Var "Right") (IntLit 1)))
+      , ("discard 1; 2", Seq (App (Var "discard") (IntLit 1)) (IntLit 2))
+      , ("print 1; 2", Seq (App (Var "print") (IntLit 1)) (IntLit 2))
       , ( "take 1 [1, 2] ++ [3]"
-        , Concat (Take (IntLit 1) (ListLit [IntLit 1, IntLit 2])) (ListLit [IntLit 3])
+        , Concat (App (App (Var "take") (IntLit 1)) (ListLit [IntLit 1, IntLit 2])) (ListLit [IntLit 3])
         )
       , ( "foldl (\\acc -> \\x -> acc + x) 0 [1, 2] + 3"
         , Add
-            (Foldl
-              (Lambda "acc" Nothing (Lambda "x" Nothing (Add (Var "acc") (Var "x"))))
-              (IntLit 0)
+            (App (App (App (Var "foldl")
+              (Lambda "acc" Nothing (Lambda "x" Nothing (Add (Var "acc") (Var "x")))))
+              (IntLit 0))
               (ListLit [IntLit 1, IntLit 2]))
             (IntLit 3)
         )
@@ -160,12 +161,12 @@ spec = describe "Parser Tests" $ do
       parseExpr "head ([1] ++ [2]) + 3"
         `shouldBe` Right
           (Add
-            (Head (Concat (ListLit [IntLit 1]) (ListLit [IntLit 2])))
+            (App (Var "head") (Concat (ListLit [IntLit 1]) (ListLit [IntLit 2])))
             (IntLit 3))
 
     it "leaves later application arguments outside a unary built-in" $ do
       parseExpr "head xs fallback"
-        `shouldBe` Right (App (Head (Var "xs")) (Var "fallback"))
+        `shouldBe` Right (App (App (Var "head") (Var "xs")) (Var "fallback"))
   
   describe "Conditional Parsing" $ do
     it "parses if-then-else" $ do
@@ -190,14 +191,14 @@ spec = describe "Parser Tests" $ do
 
     it "parses do blocks into sequencing expressions" $ do
       parseExpr "do { print \"hello\"; 42 }"
-        `shouldBe` Right (Seq (Print (StrLit "hello")) (IntLit 42))
+        `shouldBe` Right (Seq (App (Var "print") (StrLit "hello")) (IntLit 42))
 
     it "parses empty do blocks as unit" $ do
       parseExpr "do {}" `shouldBe` Right UnitLit
 
     it "parses do blocks with trailing semicolons" $ do
       parseExpr "do { print \"hello\"; 42; }"
-        `shouldBe` Right (Seq (Print (StrLit "hello")) (IntLit 42))
+        `shouldBe` Right (Seq (App (Var "print") (StrLit "hello")) (IntLit 42))
   
   describe "Parse Errors" $ do
     it "rejects empty input" $ do

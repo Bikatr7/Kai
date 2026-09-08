@@ -9,6 +9,7 @@ import Parser.Literals
 import Parser.Types
 import Parser.Builtins
 import Parser.ComplexExpr
+import Parser.Source
 
 expr :: Parser Expr
 expr = buildExpr True
@@ -17,23 +18,31 @@ exprNoSeq :: Parser Expr
 exprNoSeq = buildExpr False
 
 buildExpr :: Bool -> Parser Expr
-buildExpr allowSeq = exprParser
+buildExpr = buildExpression Nothing
+
+buildExpression :: Maybe SourceInfo -> Bool -> Parser Expr
+buildExpression source allowSeq = exprParser
   where
-    exprParser = makeExprParser appParser (operatorTable allowSeq)
+    exprParser = located source $ makeExprParser appParser (operatorTableWith source allowSeq)
 
     appParser = do
-      first <- atomParser
-      rest <- many (recordAccess <|> application atomParser)
+      first <- postfixParser
+      rest <- many (application postfixParser)
       return $ foldl (flip ($)) first rest
 
-    atomParser = choice
+    postfixParser = located source $ do
+      first <- atomParser
+      fields <- many (recordAccessWith source)
+      return $ foldl (flip ($)) first fields
+
+    atomParser = located source $ choice
       [ UnitLit <$ unit
       , IntLit <$> integer
       , try (parensOrTuple exprParser)
       , BoolLit <$> boolean
       , StrLit <$> stringLit
-      , builtinExpr atomParser
-      , complexExprWithBlock exprParser
+      , builtinExpr
+      , complexExprWithBlock source exprParser
       , try (listLitExpr exprParser)
       , try (recordLitExpr exprParser)
       , try (Var <$> constructorIdentifier)
@@ -41,74 +50,45 @@ buildExpr allowSeq = exprParser
       , try (typeAnnotationExpr exprParser)
       ]
 
-builtinExpr :: Parser Expr -> Parser Expr
-builtinExpr atomParser = choice
-  [ printExpr atomParser
-  , discardExpr atomParser
-  , inputExpr
+builtinExpr :: Parser Expr
+builtinExpr = choice
+  [ inputExpr
   , argsExpr
-  , parseIntExpr atomParser
-  , toStringExpr atomParser
-  , showExpr atomParser
-  , headExpr atomParser
-  , tailExpr atomParser
-  , nullExpr atomParser
-  , fixExpr atomParser
-  , fstExpr atomParser
-  , sndExpr atomParser
-  , mapExpr atomParser
-  , filterExpr atomParser
-  , foldlExpr atomParser
-  , lengthExpr atomParser
-  , reverseExpr atomParser
-  , takeExpr atomParser
-  , dropExpr atomParser
-  , zipExpr atomParser
-  , splitExpr atomParser
-  , joinExpr atomParser
-  , trimExpr atomParser
-  , replaceExpr atomParser
-  , strLengthExpr atomParser
-  , readFileExpr atomParser
-  , writeFileExpr atomParser
-  , appendFileExpr atomParser
-  , fileExistsExpr atomParser
-  , listDirectoryExpr atomParser
-  , createDirectoryExpr atomParser
-  , removeDirectoryExpr atomParser
   , getCurrentDirectoryExpr
-  , setCurrentDirectoryExpr atomParser
-  , systemExpr atomParser
-  , getEnvExpr atomParser
-  , setEnvExpr atomParser
-  , exitExpr atomParser
-  , justExpr atomParser
   , nothingExpr
-  , leftExpr atomParser
-  , rightExpr atomParser
   ]
 
-complexExprWithBlock :: Parser Expr -> Parser Expr
-complexExprWithBlock exprParser = choice
+complexExprWithBlock :: Maybe SourceInfo -> Parser Expr -> Parser Expr
+complexExprWithBlock source exprParser = choice
   [ lambdaExpr exprParser
   , ifExpr exprParser
   , letRecExpr exprParser
   , letExpr exprParser
-  , caseExpr exprParser
-  , blockExpr exprNoSeq
+  , caseExprWith source exprParser
+  , blockExpr (buildExpression source False)
   ]
 
 recordAccess :: Parser (Expr -> Expr)
-recordAccess = do
+recordAccess = recordAccessWith Nothing
+
+recordAccessWith :: Maybe SourceInfo -> Parser (Expr -> Expr)
+recordAccessWith source = do
   _ <- symbol "."
   field <- identifier
-  return (`RecordAccess` field)
+  case source of
+    Nothing -> return (`RecordAccess` field)
+    Just _ -> do
+      end <- getSourcePos
+      pure $ \receiver -> case exprSpan receiver of
+        Just start -> Located (start {spanEndLine = unPos (sourceLine end), spanEndColumn = unPos (sourceColumn end)})
+          (RecordAccess receiver field)
+        Nothing -> RecordAccess receiver field
 
 application :: Parser Expr -> Parser (Expr -> Expr)
 application atomParser = do
   notFollowedBy (char '+' <|> char '-')
   arg <- atomParser
-  return (`App` arg)
+  return (\fun -> spanBinary App fun arg)
 
 parensOrTuple :: Parser Expr -> Parser Expr
 parensOrTuple exprParser = do
@@ -142,24 +122,39 @@ typeAnnotationExpr exprParser = do
   return $ TypeAnnotation e t
 
 operatorTable :: Bool -> [[Operator Parser Expr]]
-operatorTable allowSeq =
-  [ [Prefix (foldr (.) id <$> some prefixOperator)]
-  , [ InfixL (Mul <$ symbol "*")
-    , InfixL (Div <$ symbol "/")
+operatorTable = operatorTableWith Nothing
+
+operatorTableWith :: Maybe SourceInfo -> Bool -> [[Operator Parser Expr]]
+operatorTableWith source allowSeq =
+  [ [Prefix (foldr (.) id <$> some (prefixOperatorWith source))]
+  , [ InfixL (spanBinary Mul <$ symbol "*")
+    , InfixL (spanBinary Div <$ symbol "/")
     ]
-  , [ InfixL (Add <$ try (char '+' <* notFollowedBy (char '+') <* sc))
-    , InfixL (Sub <$ symbol "-")
+  , [ InfixL (spanBinary Add <$ try (char '+' <* notFollowedBy (char '+') <* sc))
+    , InfixL (spanBinary Sub <$ symbol "-")
     ]
-  , [ InfixR (Cons <$ symbol "::") ]
-  , [ InfixR (Concat <$ symbol "++") ]
-  , [ InfixN (Lt <$ symbol "<")
-    , InfixN (Gt <$ symbol ">")
-    , InfixN (Eq <$ symbol "==")
+  , [ InfixR (spanBinary Cons <$ symbol "::") ]
+  , [ InfixR (spanBinary Concat <$ symbol "++") ]
+  , [ InfixN (spanBinary Lt <$ symbol "<")
+    , InfixN (spanBinary Gt <$ symbol ">")
+    , InfixN (spanBinary Eq <$ symbol "==")
     ]
-  , [ InfixR (And <$ keyword "and") ]
-  , [ InfixR (Or <$ keyword "or") ]
-  ] ++ [[InfixR (Seq <$ symbol ";")] | allowSeq]
+  , [ InfixR (spanBinary And <$ keyword "and") ]
+  , [ InfixR (spanBinary Or <$ keyword "or") ]
+  ] ++ [[InfixR (spanBinary Seq <$ symbol ";")] | allowSeq]
 
 prefixOperator :: Parser (Expr -> Expr)
-prefixOperator = (Not <$ keyword "not") <|>
+prefixOperator = prefixOperatorWith Nothing
+
+prefixOperatorWith :: Maybe SourceInfo -> Parser (Expr -> Expr)
+prefixOperatorWith Nothing = (Not <$ keyword "not") <|>
   (Sub (IntLit 0) <$ try (char '-' <* notFollowedBy digitChar <* sc))
+prefixOperatorWith (Just info) = do
+  start <- getSourcePos
+  constructor <- prefixOperatorWith Nothing
+  end <- getSourcePos
+  let operator = sourceSpan info start end
+  pure $ \argument -> case exprSpan argument of
+    Just finish -> Located (operator {spanEndLine = spanEndLine finish, spanEndColumn = spanEndColumn finish})
+      (constructor argument)
+    Nothing -> Located operator (constructor argument)

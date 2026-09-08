@@ -6,7 +6,7 @@ import Control.Monad (forM_)
 import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 import System.Timeout (timeout)
 import System.IO.Error (isEOFError, isUserError)
 import ReplSpec (replTranscript)
@@ -108,12 +108,15 @@ spec = describe "Audit regressions" $ do
           code `shouldBe` ExitSuccess
           out `shouldBe` loadedOutput mode path "(42, True)\n" "()"
       it ("stops after an initializer failure through " ++ mode) $
-        runMode mode "letrec first = (print (1/0); \\x -> x)\nletrec second = (print \"LEAK\"; \\x -> x)\n" "42" $ \_ code out -> do
+        runMode mode "letrec first = (print (1/0); \\x -> x)\nletrec second = (print \"LEAK\"; \\x -> x)\n" "42" $ \path code out -> do
           code `shouldBe` if mode == "repl" then ExitSuccess else ExitFailure 1
+          let failure file = file ++ ":1:24: Runtime error: Division by zero.\n1 | letrec first = (print (1/0); \\x -> x)\n  |                        ^\n  while evaluating call to print at " ++ file ++ ":1:17\n"
+              importer = takeDirectory path </> "main.kai"
+              helper = takeDirectory path </> "Helpers.kai"
           out `shouldBe` case mode of
-            "repl" -> replTranscript "kai> Runtime error: DivByZero\nkai> "
-            "import" -> "Runtime error: TypeError \"Failed to import module Helpers: Runtime error in module Helpers: DivByZero\"\n"
-            _ -> "Runtime error: DivByZero\n"
+            "repl" -> replTranscript ("kai> " ++ failure path ++ "kai> ")
+            "import" -> importer ++ ":1:1: Runtime error: Failed to import module Helpers: In module Helpers: " ++ failure helper ++ "1 | import Helpers\n  | ^\n"
+            _ -> failure path
       it ("preserves initializer effect order through " ++ mode) $
         runMode mode "letrec zebra = (print \"FIRST\"; \\x -> x)\nletrec alpha = (print \"SECOND\"; \\x -> x)\n" "42" $ \path code out -> do
           code `shouldBe` ExitSuccess
@@ -127,9 +130,9 @@ spec = describe "Audit regressions" $ do
         code `shouldBe` ExitSuccess
         out `shouldBe` "FIRST\nSECOND\n"
     it "checks an entire REPL load before running effects" $
-      runMode "repl" "let first = print \"LEAK\"\n" "1+true" $ \_ code out -> do
+      runMode "repl" "let first = print \"LEAK\"\n" "1+true" $ \path code out -> do
         code `shouldBe` ExitSuccess
-        out `shouldBe` replTranscript "kai> Type error: UnificationError TBool TInt\nkai> "
+        out `shouldBe` replTranscript ("kai> " ++ path ++ ":2:1: Type error: Cannot match Bool with Int.\n2 | 1+true\n  | ^\nkai> ")
     it "rejects conflicting imported declarations including hidden constructors" $ withTempDir $ \dir -> do
       writeFile (dir </> "A.kai") "data T = Mk Int\nlet old = Mk 1\nexport old\n"
       writeFile (dir </> "B.kai") "data T = Mk Bool\nexport Mk\n"

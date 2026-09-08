@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module REPL
   ( runREPL
   , renderType
@@ -8,6 +6,7 @@ module REPL
 import Control.Monad (when)
 import qualified Data.List as List
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
 import Data.Char (isSpace)
 import Data.Version (showVersion)
 import Data.Void (Void)
@@ -16,18 +15,21 @@ import System.Directory (doesFileExist, getCurrentDirectory, makeAbsolute)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), isAbsolute, takeDirectory)
 import System.IO (hFlush, isEOF, stdout)
-import Text.Megaparsec (ParseError(..), ParseErrorBundle(..))
+import Text.Megaparsec (ParseError(..), ParseErrorBundle(..), errorBundlePretty)
 import Text.Megaparsec.Error (ErrorItem(..))
 
 import DataDeclarations (constructorScheme, registerDataDeclaration, mergeTypeEnvironments, dataConstructorsValueEnv)
 import Evaluator (Env, RuntimeError(..), evalWithEnv)
 import Evaluator.Helpers (showValue)
-import ModuleSystem (filterByExports, ModuleInfo(..), loadModule, loadModuleTypeEnvIO)
-import Parser (parseExpr, parseProgram)
+import ModuleSystem (filterByExports, ModuleInfo(..), loadModule, loadModuleTypeEnvIO, loadModuleTypeEnvWithWarningsIO)
+import Parser (parseExpr, parseProgram, parseLocatedExpr, parseLocatedProgram)
+import Diagnostics (renderTypeError, renderRuntimeError)
 import Evaluator.IOOps (cliArgsEnv)
 import Syntax
-import TypeChecker (Type(..), TypeEnv, typeCheckWithEnv, inferProgramWithEnvIO, inferDefinitionType, inferRecursiveDefinitions)
-import TypeChecker.Types (schemeType)
+import TypeChecker (Type(..), TypeEnv, typeCheckWithEnv, typeCheckWithWarnings, inferProgramWithWarningsIO, inferDefinitionType, inferRecursiveDefinitions)
+import TypeChecker.Warnings (reportWarnings)
+import TypeChecker.Pretty (renderType)
+import TypeChecker.Types (schemeType, Predicate(..))
 import Evaluator.Recursion (initializeRecursiveBindings)
 import SourceIO (readSourceFile)
 
@@ -146,12 +148,13 @@ handleCommand debug state commandLine =
         if null initialExpr
           then collectUntilComplete "type> " parseExpr ""
           else collectUntilComplete "type> " parseExpr initialExpr
-      case parseExpr exprSource of
-        Left parseErr -> return $ Left $ "Parse error: " ++ show parseErr
+      case parseLocatedExpr "<repl>" exprSource of
+        Left parseErr -> return $ Left $ "Parse error: " ++ errorBundlePretty parseErr
         Right expr ->
-          case typeCheckWithEnv (replTypeEnv state) expr of
-            Left err -> return $ Left $ "Type error: " ++ show err
-            Right ty -> do
+          case typeCheckWithWarnings (replTypeEnv state) expr of
+            Left err -> return $ Left $ if debug then "Type error: " ++ show err else renderTypeError err
+            Right (ty,warnings) -> do
+              reportWarnings warnings
               putStrLn $ renderType ty
               return $ Right (Nothing, state)
     _ -> return $ Left $ "Unknown command: " ++ commandLine
@@ -185,33 +188,36 @@ resolvePath currentDir rawPath =
 
 handleProgramInput :: Bool -> Bool -> ReplState -> String -> IO (Either String (Maybe ExitCode, ReplState))
 handleProgramInput debug announceDefinitions state source =
-  case parseProgram source of
-    Left parseErr -> return $ Left $ "Parse error: " ++ show parseErr
+  case parseLocatedProgram (if announceDefinitions then "<repl>" else fromMaybe "<repl>" (replLoadedFile state)) source of
+    Left parseErr -> return $ Left $ "Parse error: " ++ errorBundlePretty parseErr
     Right program@(Program topLevels) -> do
-      checked <- inferProgramWithEnvIO loadModuleTypeEnvIO (replCurrentDir state) (replTypeEnv state) program
+      checked <- inferProgramWithWarningsIO loadModuleTypeEnvWithWarningsIO (replCurrentDir state) (replTypeEnv state) program
       case checked of
-        Left err -> return $ Left $ "Type error: " ++ show err
-        Right _ -> processTopLevels debug announceDefinitions state topLevels
+        Left err -> return $ Left $ if debug then "Type error: " ++ show err else renderTypeError err
+        Right (_,warnings) -> do
+          reportWarnings warnings
+          processTopLevels debug announceDefinitions state topLevels
 
 processTopLevels :: Bool -> Bool -> ReplState -> [TopLevel] -> IO (Either String (Maybe ExitCode, ReplState))
 processTopLevels _ _ state [] = return $ Right (Nothing, state)
+processTopLevels debug announce state (TLAt _ level:rest) = processTopLevels debug announce state (level:rest)
 processTopLevels debug announce state (TLExpr expr : rest) = do
   when debug $ putStrLn $ "AST: " ++ show expr
   case typeCheckWithEnv (replTypeEnv state) expr of
-    Left err -> return $ Left $ "Type error: " ++ show err
+    Left err -> return $ Left $ if debug then "Type error: " ++ show err else renderTypeError err
     Right ty -> do
       when debug $ putStrLn $ "Type: " ++ renderType ty
       evalResult <- evalWithEnv (replEnv state) expr
       case evalResult of
         Left (ExitRequested code) -> return $ Right (Just (toExitCode code), state)
-        Left err -> return $ Left $ "Runtime error: " ++ show err
+        Left err -> return $ Left $ if debug then "Runtime error: " ++ show err else renderRuntimeError err
         Right value -> do
           when (null rest) $ putStrLn $ showValue value
           processTopLevels debug announce state rest
 processTopLevels debug announce state (TLImport importedName : rest) = do
   typeEnvResult <- loadModuleTypeEnvIO (replCurrentDir state) importedName
   case typeEnvResult >>= (`mergeTypeEnvironments` replTypeEnv state) of
-    Left err -> return $ Left $ "Type error: " ++ show err
+    Left err -> return $ Left $ if debug then "Type error: " ++ show err else renderTypeError err
     Right importedTypeEnv -> do
       moduleResult <- loadModule evalWithEnv (replCurrentDir state) importedName []
       case moduleResult of
@@ -227,7 +233,7 @@ processTopLevels debug announce state (TLImport importedName : rest) = do
           processTopLevels debug announce newState rest
 processTopLevels debug announce state (TLData typeName typeVars constructors : rest) =
   case registerDataDeclaration (replTypeEnv state) typeName typeVars constructors of
-    Left err -> return $ Left $ "Type error: " ++ show err
+    Left err -> return $ Left $ if debug then "Type error: " ++ show err else renderTypeError err
     Right next -> do
       let newState = state
             { replEnv = Map.union (dataConstructorsValueEnv constructors) (replEnv state)
@@ -240,12 +246,12 @@ processTopLevels debug announce state defs@(TLDef _ _ expr : _)
   | isLetrecExpr expr = do
       let (letrecs, remaining) = collectConsecutiveLetrecs defs
       case inferRecursiveDefinitions (replTypeEnv state) letrecs of
-        Left err -> return $ Left $ "Type error: " ++ show err
+        Left err -> return $ Left $ if debug then "Type error: " ++ show err else renderTypeError err
         Right (newTypeEnv, bindingTypes) -> do
           valueResult <- initializeRecursiveBindings evalWithEnv (replEnv state) [(name, value) | TLDef name _ (LetRec _ _ value _) <- letrecs]
           case valueResult of
             Left (ExitRequested code) -> return $ Right (Just (toExitCode code), state)
-            Left err -> return $ Left $ "Runtime error: " ++ show err
+            Left err -> return $ Left $ if debug then "Runtime error: " ++ show err else renderRuntimeError err
             Right newEnv -> do
               when announce $
                 mapM_ (\(name, ty) -> putStrLn $ name ++ " : " ++ renderType ty) bindingTypes
@@ -256,13 +262,13 @@ processTopLevels debug announce state defs@(TLDef _ _ expr : _)
                 remaining
 processTopLevels debug announce state (TLDef var maybeType expr : rest) =
   case inferDefinitionType (replTypeEnv state) var maybeType expr of
-    Left err -> return $ Left $ "Type error: " ++ show err
+    Left err -> return $ Left $ if debug then "Type error: " ++ show err else renderTypeError err
     Right (newTypeEnv, defType) -> do
       when debug $ putStrLn $ "AST: " ++ show expr
       evalResult <- evalWithEnv (replEnv state) expr
       case evalResult of
         Left (ExitRequested code) -> return $ Right (Just (toExitCode code), state)
-        Left err -> return $ Left $ "Runtime error: " ++ show err
+        Left err -> return $ Left $ if debug then "Runtime error: " ++ show err else renderRuntimeError err
         Right value -> do
           when announce $ putStrLn $ var ++ " : " ++ renderType defType
           let newEnv =
@@ -274,31 +280,6 @@ processTopLevels debug announce state (TLDef var maybeType expr : rest) =
 renderConstructorBinding :: String -> [String] -> DataConstructor -> String
 renderConstructorBinding typeName typeVars constructorDecl@(DataConstructor constructorName _) =
   constructorName ++ " : " ++ renderType (schemeType (constructorScheme typeName typeVars constructorDecl))
-
-renderType :: Type -> String
-renderType ty =
-  case ty of
-    TFun left right -> renderTypeAtom left ++ " -> " ++ renderType right
-    _ -> renderTypeAtom ty
-
-renderTypeAtom :: Type -> String
-renderTypeAtom = \case
-  TInt -> "Int"
-  TBool -> "Bool"
-  TString -> "String"
-  TUnit -> "Unit"
-  TVar name -> name
-  TCustom name [] -> name
-  TCustom name args -> unwords (name : map renderTypeAtom args)
-  TMaybe ty -> "Maybe " ++ renderTypeAtom ty
-  TEither left right -> "Either " ++ renderTypeAtom left ++ " " ++ renderTypeAtom right
-  TList ty -> "[" ++ renderType ty ++ "]"
-  TRecord fields ->
-    "{" ++ List.intercalate ", " [name ++ ": " ++ renderType fieldType | (name, fieldType) <- Map.toList fields] ++ "}"
-  TTuple tys ->
-    "(" ++ List.intercalate ", " (map renderType tys) ++ ")"
-  TFun left right ->
-    "(" ++ renderType left ++ " -> " ++ renderType right ++ ")"
 
 isLetrecExpr :: Expr -> Bool
 isLetrecExpr (LetRec _ _ _ _) = True

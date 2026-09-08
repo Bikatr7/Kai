@@ -39,6 +39,24 @@ def line_comment(line):
     return line, ""
 
 
+def matches_diagnostic(output, path, source, message):
+    """Require the claimed error and its actual source excerpt, with no extra output."""
+    header = re.match(re.escape(str(path)) + r":([1-9][0-9]*):([1-9][0-9]*): " +
+                      re.escape(message) + r"\n", output)
+    if header is None:
+        return False
+    line, column = map(int, header.groups())
+    lines = source.splitlines()
+    if line > len(lines):
+        return False
+    excerpt = lines[line - 1].expandtabs(8)
+    if column > len(excerpt) + 1:
+        return False
+    expected = (header.group() + f"{line} | {excerpt}\n" +
+                " " * len(str(line)) + " | " + " " * (column - 1) + "^\n")
+    return output == expected
+
+
 class WebsiteExamples(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -138,7 +156,8 @@ def check_examples(binary, root, html):
                 expected_stdout = string_fixture(source, "stdout", default="" if checked else None)
                 run = subprocess.run(command, cwd=work, input=stdin, capture_output=True,
                                      text=True, encoding="utf-8", timeout=10)
-                passed = (run.returncode == 1 and run.stdout == error + "\n") if error else run.returncode == 0
+                passed = (run.returncode == 1 and matches_diagnostic(
+                    run.stdout, source_file, source, error)) if error else run.returncode == 0
                 detail = run.stdout + run.stderr
                 passed = passed and not run.stderr
                 if expected_stdout is not None:
@@ -156,7 +175,7 @@ def check_examples(binary, root, html):
                             "expected_error": error,
                             "checks_stdout": expected_stdout is not None})
 
-    for filename in ["README.md", "SPEC.md", "DEVELOPING.md", "FEATURES.md"]:
+    for filename in ["README.md", "SPEC.md", "DEVELOPING.md", "FEATURES.md", "MIGRATING-0.0.5.0.md"]:
         for index, (language, source) in enumerate(fences((root / filename).read_text(encoding="utf-8")), 1):
             label = f"{filename} block {index}"
             if language == "kai":

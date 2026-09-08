@@ -3,6 +3,8 @@ module ReleaseWorkflowSpec where
 import Control.Exception (bracket)
 import Control.Monad (when, forM_)
 import qualified Data.ByteString as BS
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import Data.List (isInfixOf)
 import Data.Maybe (listToMaybe)
 import System.Directory
@@ -234,6 +236,33 @@ spec = describe "Release workflow asset naming" $ do
         else do
           code `shouldBe` ExitFailure 1
           err `shouldContain` "release binary failure:"
+
+  forM_ [("wrong error", 1, "Runtime error: Empty list."),
+         ("missing source", 1, "Runtime error: Division by zero."),
+         ("extra output", 1, "unexpected effect\n<expression>:1:1: Runtime error: Division by zero.\n1 | 1 / 0\n  | ^"),
+         ("wrong location", 1, "<expression>:1:2: Runtime error: Division by zero.\n1 | 1 / 0\n  |  ^"),
+         ("success status", 0, "<expression>:1:1: Runtime error: Division by zero.\n1 | 1 / 0\n  | ^"),
+         ("wrong failure status", 7, "<expression>:1:1: Runtime error: Division by zero.\n1 | 1 / 0\n  | ^")] $
+    \(label, status, diagnostic) -> it ("rejects a release binary with " ++ label) $ withTempDirectory $ \dir -> do
+      found <- findExecutable "kai"
+      binary <- maybe (expectationFailure "Built kai executable is missing from PATH" >> return "") return found
+      bash <- requireBash
+      let wrapper = dir </> "incorrect-kai"
+          quote text = "'" ++ concatMap (\c -> if c == '\'' then "'\\''" else [c]) text ++ "'"
+      BS.writeFile wrapper $ Text.encodeUtf8 $ Text.pack $ unlines
+        [ "#!/usr/bin/env bash", "set -euo pipefail"
+        , "if [ \"$#\" -eq 2 ] && [ \"$1\" = '-e' ] && [ \"$2\" = '1 / 0' ]; then"
+        , "  printf '%s\\n' " ++ quote diagnostic
+        , "  exit " ++ show (status :: Int), "fi"
+        , "exec " ++ quote binary ++ " \"$@\""
+        ]
+      permissions <- getPermissions wrapper
+      setPermissions wrapper permissions {executable = True}
+      (versionCode, versionOut, _) <- readProcessWithExitCode binary ["--version"] ""
+      versionCode `shouldBe` ExitSuccess
+      let version = takeWhile (`notElem` "\r\n") (drop 5 versionOut)
+      (code, out, err) <- readProcessWithExitCode bash ["scripts/test-release-binary.sh",wrapper,version] ""
+      (code,out,err) `shouldBe` (ExitFailure 1,"","release binary did not report division by zero correctly\n")
 
   it "syntax-checks every release helper script" $ do
     let scripts =

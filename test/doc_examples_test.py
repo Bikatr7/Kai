@@ -22,6 +22,24 @@ HTML = '<h3>Example</h3><div class="code-example kai-example"><code>40 + 2</code
 
 
 class ParsingTests(unittest.TestCase):
+    def test_diagnostic_requires_exact_message_source_caret_and_no_effect_output(self):
+        path = Path('C:/source files/example.kai')
+        message = 'Type error: Cannot match Bool with Int.'
+        source = '// heading\n\t1 + true'
+        diagnostic = str(path) + ':2:9: ' + message + '\n2 |         1 + true\n  |         ^\n'
+        self.assertTrue(checker.matches_diagnostic(diagnostic, path, source, message))
+        for wrong in [diagnostic.replace('Bool', 'String'),
+                      diagnostic.replace('1 + true', '1 + false'),
+                      diagnostic.replace('^', ''),
+                      diagnostic.replace(':2:9:', ':3:9:'),
+                      diagnostic.replace(':2:9:', ':2:90:'),
+                      diagnostic.replace('example.kai', 'other.kai'),
+                      diagnostic.replace('         ^', '        ^'),
+                      'unexpected effect\n' + diagnostic, diagnostic + 'extra\n',
+                      message + '\n']:
+            with self.subTest(output=wrong):
+                self.assertFalse(checker.matches_diagnostic(wrong, path, source, message))
+
     def test_accepts_a_website_executable(self):
         args = checker.parse_args(['kai', 'kai-website'])
         self.assertEqual(args.website, 'kai-website')
@@ -96,7 +114,7 @@ class ExecutionTests(unittest.TestCase):
                 (root / 'examples' / (module + '.kai')).write_text('// expect: ()\n', encoding='utf-8')
             (root / 'README.md').write_text(MATH + extra, encoding='utf-8')
             (root / 'SPEC.md').write_text(signature, encoding='utf-8')
-            for file in ['DEVELOPING.md', 'FEATURES.md']:
+            for file in ['DEVELOPING.md', 'FEATURES.md', 'MIGRATING-0.0.5.0.md']:
                 (root / file).write_text('', encoding='utf-8')
             return checker.check_examples(BINARY, root, html)
 
@@ -115,7 +133,7 @@ class ExecutionTests(unittest.TestCase):
 
     def test_accepts_values_signatures_and_exact_errors(self):
         results = self.run_examples('```kai\n40+2 // => 42\n```\n'
-                                    '```kai\n1+true // Type error: UnificationError TBool TInt\n```',
+                                    '```kai\n1+true // Type error: Cannot match Bool with Int.\n```',
                                     '```text\nlength : [a] -> Int\n```')
         self.assertTrue(all(row['passed'] for row in results), results)
 
@@ -125,7 +143,7 @@ class ExecutionTests(unittest.TestCase):
 
     def test_report_distinguishes_execution_from_result_and_output_assertions(self):
         results = self.run_examples('```kai\n40+2 // => 42\n```\n'
-                                    '```kai\n1+true // Type error: UnificationError TBool TInt\n```')
+                                    '```kai\n1+true // Type error: Cannot match Bool with Int.\n```')
         smoke = next(row for row in results if row['name'] == 'Website: Example')
         self.assertFalse(smoke['checks_result'])
         self.assertFalse(smoke['checks_stdout'])
@@ -137,11 +155,11 @@ class ExecutionTests(unittest.TestCase):
         self.assertIn('// expect: 42', value['source'])
         error = next(row for row in results if ' expected error' in row['name'])
         self.assertFalse(error['checks_result'])
-        self.assertEqual(error['expected_error'], 'Type error: UnificationError TBool TInt')
+        self.assertEqual(error['expected_error'], 'Type error: Cannot match Bool with Int.')
 
     def test_rejects_an_invalid_runnable_example(self):
         results = self.run_examples('```kai\n1+true\n```')
-        self.assertTrue(any(not row['passed'] and 'UnificationError' in row['detail'] for row in results))
+        self.assertTrue(any(not row['passed'] and 'Type error: Cannot match Bool with Int.' in row['detail'] for row in results))
 
     def test_rejects_an_incorrect_error_claim(self):
         results = self.run_examples('```kai\n1+true // Type error: UnboundVariable "x"\n```')

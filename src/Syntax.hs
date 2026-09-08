@@ -1,6 +1,7 @@
 module Syntax where
 
 import Control.DeepSeq
+import qualified Data.Text as Text
 
 kaiIntMin :: Integer
 kaiIntMin = -2147483648
@@ -22,12 +23,49 @@ data SyntaxType
   | STEither SyntaxType SyntaxType
   | STList SyntaxType
   | STRecord [(String, SyntaxType)]
+  | STRecordRow [(String, SyntaxType)] String
   | STTuple [SyntaxType]
   | STCustom String [SyntaxType]
+  | STQualified [(String, SyntaxType)] SyntaxType
   deriving (Show, Eq)
 
+-- Excerpts use strict Text so forcing an AST does not repeatedly traverse a
+-- shared source line for every expression on that line.
+data SourceSpan = SourceSpan
+  { spanFile :: FilePath
+  , spanLine :: Int
+  , spanColumn :: Int
+  , spanEndLine :: Int
+  , spanEndColumn :: Int
+  , spanExcerpt :: Text.Text
+  } deriving (Show, Eq)
+
+instance NFData SourceSpan where
+  rnf (SourceSpan file line column endLine endColumn excerpt) =
+    rnf file `seq` rnf line `seq` rnf column `seq` rnf endLine `seq` rnf endColumn `seq` rnf excerpt
+
+exprSpan :: Expr -> Maybe SourceSpan
+exprSpan (Located location _) = Just location
+exprSpan _ = Nothing
+
+unlocatedExpr :: Expr -> Expr
+unlocatedExpr (Located _ expression) = unlocatedExpr expression
+unlocatedExpr expression = expression
+
+unlocatedTopLevel :: TopLevel -> TopLevel
+unlocatedTopLevel (TLAt _ level) = unlocatedTopLevel level
+unlocatedTopLevel level = level
+
+-- Compose spans while preserving the source line of the leftmost expression.
+spanBinary :: (Expr -> Expr -> Expr) -> Expr -> Expr -> Expr
+spanBinary constructor left right = case (exprSpan left,exprSpan right) of
+  (Just start,Just end) -> Located
+    (start {spanEndLine = spanEndLine end, spanEndColumn = spanEndColumn end}) (constructor left right)
+  _ -> constructor left right
+
 data Expr
-  = IntLit Int
+  = Located SourceSpan Expr
+  | IntLit Int
   | BoolLit Bool
   | StrLit String
   | UnitLit
@@ -108,6 +146,11 @@ data Expr
   | GetEnv Expr
   | SetEnv Expr Expr
   | Exit Expr
+  | Attempt Expr
+  | Raise Expr
+  | ReadLine Expr
+  | HeadMaybe Expr
+  | TailMaybe Expr
   -- Command-line arguments
   | Args
   deriving (Show, Eq)
@@ -117,7 +160,8 @@ data DataConstructor = DataConstructor String [SyntaxType]
 
 -- Top-level definitions for modules
 data TopLevel
-  = TLDef String (Maybe SyntaxType) Expr      -- let x = expr
+  = TLAt SourceSpan TopLevel
+  | TLDef String (Maybe SyntaxType) Expr      -- let x = expr
   | TLExpr Expr                               -- top-level expression
   | TLData String [String] [DataConstructor]  -- data Tree a = Leaf a | Node (Tree a) (Tree a)
   | TLImport String                           -- import ModuleName
@@ -156,10 +200,13 @@ instance NFData SyntaxType where
   rnf (STEither t1 t2) = rnf t1 `seq` rnf t2
   rnf (STList t) = rnf t
   rnf (STRecord fs) = rnf fs
+  rnf (STRecordRow fs row) = rnf fs `seq` rnf row
   rnf (STTuple ts) = rnf ts
   rnf (STCustom name args) = rnf name `seq` rnf args
+  rnf (STQualified predicates ty) = rnf predicates `seq` rnf ty
 
 instance NFData Expr where
+  rnf (Located location expression) = rnf location `seq` rnf expression
   rnf (IntLit n) = rnf n
   rnf (BoolLit b) = rnf b
   rnf (StrLit s) = rnf s
@@ -231,12 +278,18 @@ instance NFData Expr where
   rnf (GetEnv e) = rnf e
   rnf (SetEnv e1 e2) = rnf e1 `seq` rnf e2
   rnf (Exit e) = rnf e
+  rnf (Attempt e) = rnf e
+  rnf (Raise e) = rnf e
+  rnf (ReadLine e) = rnf e
+  rnf (HeadMaybe e) = rnf e
+  rnf (TailMaybe e) = rnf e
   rnf Args = ()
 
 instance NFData DataConstructor where
   rnf (DataConstructor name tys) = rnf name `seq` rnf tys
 
 instance NFData TopLevel where
+  rnf (TLAt location level) = rnf location `seq` rnf level
   rnf (TLDef s mt e) = rnf s `seq` rnf mt `seq` rnf e
   rnf (TLExpr e) = rnf e
   rnf (TLData name vars ctors) = rnf name `seq` rnf vars `seq` rnf ctors

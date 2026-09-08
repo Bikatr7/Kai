@@ -58,7 +58,7 @@ spec = describe "Advanced Type Inference" $ do
 
     it "rejects a fixpoint operand that is not a function" $ do
       case parseAndInferType "fix 42" of
-        Left (UnificationError TInt (TFun (TVar inputVar) (TVar outputVar))) ->
+        Left (UnificationError (TFun (TVar inputVar) (TVar outputVar)) TInt) ->
           inputVar `shouldBe` outputVar
         Left err -> expectationFailure $ "Expected function unification error, got: " ++ show err
         Right ty -> expectationFailure $ "Should reject non-function fixpoint, got: " ++ show ty
@@ -120,7 +120,8 @@ spec = describe "Advanced Type Inference" $ do
     
     it "infers boolean predicates" $ do
       case parseAndInferType "\\x -> \\y -> x == y" of
-        Right (TFun (TVar a) (TFun (TVar b) TBool)) -> a `shouldBe` b
+        Right (TQualified [Equality (TVar constrained)] (TFun (TVar a) (TFun (TVar b) TBool))) ->
+          (a,constrained) `shouldBe` (b,b)
         Right ty -> expectationFailure $ "Expected equality predicate type, got: " ++ show ty
         Left err -> expectationFailure $ "Should infer predicate type: " ++ show err
 

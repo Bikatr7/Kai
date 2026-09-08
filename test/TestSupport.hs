@@ -56,14 +56,27 @@ canonicalType ty = evalState (walk ty) Map.empty
           put $ Map.insert name fresh names
           pure fresh
       pure $ T.TVar (show index)
+    walk (T.TQualified ps value) = do
+      value' <- walk value
+      ps' <- mapM walkPredicate ps
+      pure $ T.TQualified ps' value'
     walk (T.TFun argument result) = T.TFun <$> walk argument <*> walk result
     walk (T.TCustom name arguments) = T.TCustom name <$> mapM walk arguments
     walk (T.TMaybe element) = T.TMaybe <$> walk element
     walk (T.TEither left right) = T.TEither <$> walk left <*> walk right
     walk (T.TList element) = T.TList <$> walk element
     walk (T.TRecord fields) = T.TRecord <$> mapM walk fields
+    walk (T.TOpenRecord fields row) = T.TOpenRecord <$> mapM walk fields <*> walk row
+    walk (T.TRowVar name) = do
+      renamed <- walk (T.TVar name)
+      case renamed of
+        T.TVar variable -> pure (T.TRowVar variable)
+        _ -> error "Row variable renaming must remain a variable"
     walk (T.TTuple elements) = T.TTuple <$> mapM walk elements
     walk primitive = pure primitive
+    walkPredicate (T.PredicateAt _ predicate) = walkPredicate predicate
+    walkPredicate (T.Equality value) = T.Equality <$> walk value
+    walkPredicate (T.Appendable value) = T.Appendable <$> walk value
 
 shouldInfer :: String -> T.Type -> Expectation
 shouldInfer source expected =

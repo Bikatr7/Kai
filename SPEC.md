@@ -7,6 +7,10 @@ This document provides a comprehensive technical specification of the Kai progra
 
 **Note**: Kai uses a modular architecture with focused Parser, TypeChecker, Evaluator, REPL, and module-loading components. Performance benchmarks are available via `stack bench`.
 
+The next release's target semantics are defined in
+[Kai 0.0.5.0 release design](RELEASE-0.0.5.0.md). This specification continues to
+describe 0.0.4.6; each section changes alongside its implemented language behavior.
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -75,7 +79,7 @@ Kai is a functional-first scripting language with static typing, implemented in 
 - Special identifier: `_` (wildcard) can be used in let bindings to discard values
 
 ### Reserved Keywords
-`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `print`, `discard`, `let`, `letrec`, `in`, `do`, `data`, `import`, `export`, `input`, `args`, `Int`, `Bool`, `String`, `Unit`, `parseInt`, `toString`, `show`, `fix`, `Maybe`, `Either`, `Just`, `Nothing`, `Left`, `Right`, `case`, `of`, `head`, `tail`, `null`, `fst`, `snd`, `map`, `filter`, `foldl`, `length`, `reverse`, `take`, `drop`, `zip`, `split`, `join`, `trim`, `replace`, `strLength`, `readFile`, `writeFile`, `appendFile`, `fileExists`, `listDirectory`, `createDirectory`, `removeDirectory`, `getCurrentDirectory`, `setCurrentDirectory`, `system`, `getEnv`, `setEnv`, `exit`
+`true`, `false`, `if`, `then`, `else`, `and`, `or`, `not`, `let`, `letrec`, `in`, `do`, `data`, `import`, `export`, `input`, `Int`, `Bool`, `String`, `Unit`, `Maybe`, `Either`, `Nothing`, `case`, `of`, `getCurrentDirectory`, `args`
 
 **Note**: `_` is not a keyword but has special meaning as a wildcard identifier in let bindings.
 
@@ -98,6 +102,8 @@ Kai has a static type system with the following base types:
 ### Error Handling Types
 - `Maybe T`: Optional values: `Just value` or `Nothing`
 - `Either T U`: Error propagation: `Left error` or `Right value`
+- `Error`: Structured recoverable runtime failures
+- `IOErrorKind`: Stable categories for operating-system and decoding failures
 
 ### Function Types
 - `T₁ -> T₂`: Function from type T₁ to type T₂
@@ -132,16 +138,18 @@ Function types in lambda parameter annotations need parentheses, for example
 ### Boolean Expressions
 - `and`, `or` (right-associative)
 - `not` (prefix)
-- Both operands of `and` and `or` evaluate from left to right; neither operator short-circuits. Use `if` to avoid evaluating an unselected branch.
+- The left operand evaluates first. `false and rhs` and `true or rhs` skip the right operand; the other cases evaluate it once. Both operands must type-check as `Bool`.
 
 ### Comparison Expressions
 - `==`, `<`, `>` (non-associative)
 - Equality is structural for integers, booleans, strings, unit, custom data,
   `Maybe`, `Either`, lists, records, and tuples. Different constructors of the
   same custom, `Maybe`, or `Either` type compare as `false`.
-- Callable values and recursive runtime references are not comparable. Equality
-  returns a `TypeError` when either operand contains one, including inside a
-  composite value.
+- Inference retains `Eq a` constraints and rejects functions, including nested
+  callable payloads, before execution. Comparability uses every constructor
+  payload of a custom type, including private constructors. Phantom parameters
+  impose no requirement. Internal evaluator callers still receive a defensive
+  runtime `TypeError` for callable or recursive reference values.
 
 ### String Operations
 - `++` (concatenation, right-associative)
@@ -168,9 +176,25 @@ Function types in lambda parameter annotations need parentheses, for example
 - `record.field` - field access
 - `==` - structural equality
 
-Record literals evaluate fields in source order. If a literal repeats a field,
-the last value is retained. Record patterns and type annotations reject duplicate
-field names instead.
+Record literals evaluate fields in source order. Duplicate field names in literals,
+patterns, and annotations are static errors. Literals and `{a : Int}` annotations
+are closed; an accessor such as `\r -> r.a` infers an open row and accepts extra
+fields. `{a : Int | row}` explicitly names an open row. Required fields accumulate
+across an expression; missing fields, conflicting payloads, infinite rows, and
+repeated labels introduced through a shared row are rejected. Row variables are
+scoped to one annotation and cannot also serve as value type variables.
+
+```kai
+let total = \record -> record.a + record.b in
+total {a = 2, b = 3, extra = "ok"}  // => 5
+
+let get : {a : Int | row} -> Int = \record -> record.a in
+get {a = 7, other = true}  // => 7
+```
+
+Data declaration parameters have value kind. To store an open record in custom
+data, use a value parameter such as `data Holder a = Hold a`; direct row-kinded
+data parameters are not supported.
 
 ### Tuple Operations
 - `(val1, val2, ...)` - tuple literals (2 or more elements)
@@ -211,9 +235,27 @@ constructor fields each count as one field. Repeated `_` is allowed. Duplicate
 record pattern fields are rejected. These
 fail with `DuplicatePatternBinding` or `DuplicateRecordField` during type checking.
 Branches are tried in order. Matching a nested constructor with fields requires
-parentheses, for example `Just (Box value)`. A case with no matching branch returns
-`TypeError "No matching pattern in case expression"`; exhaustiveness is not checked
-statically.
+parentheses, for example `Just (Box value)`. Every case must cover its scrutinee
+type, including nested constructor payloads, tuple/record combinations, and list
+lengths. Missing cases are static errors with a witness such as `Nothing`,
+`Just false`, or `[]`. Integer and string literal alternatives need a catch-all.
+When a constructor is private, the diagnostic uses `_` rather than its name;
+a catch-all handles those hidden alternatives.
+
+An alternative already covered by earlier branches produces a warning on stderr.
+Warnings preserve first-match behavior and do not change the successful exit code.
+The CLI and REPL report warnings from imported modules as well as local code.
+The evaluator retains a defensive no-match error for internal callers that bypass
+source checking.
+
+A nested `case` consumes its own `|` alternatives. Parenthesize it before writing
+another branch of the outer case:
+
+```kai
+case Just 1 of
+  Just left -> (case Just 2 of Just right -> left + right | Nothing -> 0)
+  | Nothing -> 0  // => 3
+```
 
 **Example**:
 ```kai
@@ -363,6 +405,40 @@ Kai uses unification-based type inference:
 - Recursive bindings can recurse polymorphically when they have explicit type annotations
 - Recursive calls within an unannotated group share one monomorphic type. After inference, the completed definitions are generalized for later uses.
 
+### Built-in Constraints
+
+```text
+Append a => a -> a -> a
+Eq a => a -> a -> Bool
+(Eq a, Append a) => a -> a -> Bool
+```
+
+`x ++ y` unifies both operands and retains `Append a` until the type is known.
+Only strings and homogeneous lists support concatenation; list elements may be
+functions. `x == y` retains `Eq a`. Primitive data are comparable; containers
+require comparable stored payloads. Recursive custom types are analyzed without
+expanding them indefinitely, and unused phantom parameters need no equality.
+
+Requirements survive generalization, substitution, annotations, recursion,
+module exports, and REPL definitions. Qualified annotations belong on whole
+bindings or expressions, not inside constructor fields or lambda parameter types.
+An unconstrained polymorphic annotation cannot hide an inferred requirement.
+These two capabilities are built into Kai; users cannot define classes or instances.
+
+At a closed execution entry point, variables used only in equality obligations
+and absent from the environment and result may default to `Unit`. This permits
+`[] == []` and `Nothing == Nothing`. Concrete callable types never default, and
+returned/exported helpers retain their contexts. Unresolved `Append` obligations
+have no default; an ambiguous entry point is rejected.
+
+```kai
+let append = \left -> \right -> left ++ right in
+(append "a" "b", append [1] [2])  // => ("ab", [1, 2])
+
+let same : Eq a => a -> a -> Bool = \left -> \right -> left == right in
+same (Just 1) (Just 1)  // => true
+```
+
 ### Unification
 - Occurs check prevents infinite types
 - Type variables are unified across expressions
@@ -374,18 +450,23 @@ Kai uses unification-based type inference:
 - `InfiniteType x T`: Occurs check failure
 - `RecordFieldMismatch field`: Required record field is missing
 - `DuplicatePatternBinding name`: A pattern binds the same name more than once
-- `DuplicateRecordField field`: A record pattern or type annotation repeats a field
+- `DuplicateRecordField field`: A record literal, pattern, annotation, or row repeats a field
 - `InvalidDataDeclaration message`: Invalid or conflicting data declaration
 - `ConstructorPatternArity name expected actual`: Constructor pattern has the wrong number of fields
 - `InvalidWildcard message`: Invalid use of `_`, such as a recursive binding
 - `GeneralTypeError message`: Other program or module constraints, including duplicate names in a recursive block
+- `UnsatisfiedConstraint predicate`: A concrete type does not support equality or concatenation
+- `MissingConstraint predicate`: A polymorphic annotation omits a required context
+- `AmbiguousConstraint predicate`: An execution entry point cannot resolve an obligation
+- `NonExhaustivePatterns witness`: A case expression leaves a possible input uncovered
+- `KindMismatch value row` / `ConflictingVariableKind name`: A row is used as a value type or vice versa
 
 ## Built-in Functions
 
 Builtins support first-class and partial use, such as `let f = length in f [1,2]`
 and `let f = take 2 in f [1,2,3]`. Supplied arguments evaluate immediately; missing
-arguments become lambda parameters. Builtin syntax consumes atom arguments, so
-parenthesize a builtin used as an argument: `map (length) [[1],[2,3]]`.
+arguments become captured function parameters. Builtins use ordinary application:
+`map length [[1],[2,3]]`. Local definitions may shadow callable builtin names.
 `input`, `args`, `Nothing`, and `getCurrentDirectory` are values, not functions.
 
 
@@ -402,11 +483,38 @@ discard : a -> Unit             // Evaluates and discards any value, returns ()
 fix : (a -> a) -> a             // Typed fixed-point combinator
 ```
 
+### Recovery Functions
+
+```text
+attempt : (Unit -> a) -> Either Error a
+raise : Error -> a
+```
+
+`attempt action` invokes `action ()` once and returns `Right result` or `Left error`.
+The nearest active boundary catches a recoverable failure. Evaluating the action
+argument happens before that boundary, and a returned function does not retain it.
+`raise error` raises or rethrows an `Error` value. Handler failures propagate to
+enclosing boundaries. Effects already performed are retained.
+
+Error constructors are `DivisionByZero`, `ArithmeticOverflow`, `EmptyList String`,
+`EndOfInput`, `UserError String`, and
+`IOError IOErrorKind String (Maybe String) String`. I/O payloads are category,
+operation, optional path, and host detail. Categories are `NotFound`,
+`PermissionDenied`, `AlreadyExists`, `InvalidPath`, `InvalidEncoding`, `ResourceBusy`,
+and `OtherIO`. Match categories rather than platform-specific detail text.
+
+`exit`, cancellation, resource exhaustion, uninitialized recursive bindings,
+interpreter invariant failures, parse/type errors, and invalid imported source
+remain outside recovery. An unhandled failure stops a script. A handled failure
+permits ordinary continuation and successful exit.
+
 ### List Functions
 ```text
 // Basic operations
 head : [a] -> a            // First element (runtime error if empty)
 tail : [a] -> [a]          // List without first element (runtime error if empty)
+headMaybe : [a] -> Maybe a  // Nothing for empty lists
+tailMaybe : [a] -> Maybe [a] // Nothing for empty lists; Just [] for a singleton
 null : [a] -> Bool         // Check if list is empty
 length : [a] -> Int        // Number of elements in list
 
@@ -434,8 +542,8 @@ strLength : String -> Int                   // Length of string
 `split "" "ab"` yields `["", "a", "b"]`, including a leading empty element.
 `show` and `print` produce readable displays, not a serialization format; strings
 inside containers are unquoted and different values can have the same display.
-Record displays separate fields with commas. Record inference requires exact
-field sets and does not support row polymorphism.
+Record displays separate fields with commas. Accessors infer open rows, while
+literals and closed record annotations require exact field sets.
 
 ### Tuple Functions
 ```text
@@ -448,6 +556,7 @@ snd : (a, b) -> b          // Second element of pair
 // Console I/O
 print : a -> Unit           // Print value and return ()
 input : String              // Read line from stdin
+readLine : Unit -> Maybe String // Nothing at EOF, Just "" for a blank line
 
 // File I/O
 readFile : String -> String              // Read entire file as string
@@ -475,16 +584,17 @@ args : [String]             // List of command-line arguments passed to script o
 - `input` reads a complete line from stdin
 - Returns the line without its terminating newline, preserving other whitespace
 - No prompt is displayed
-- EOF returns a runtime `TypeError`; `evalPure input` returns `TypeError "input not available in pure evaluation"`
+- `input` raises recoverable `EndOfInput` at EOF. `readLine ()` returns `Nothing` for EOF and preserves blank lines as `Just ""`.
+- The host pure evaluator rejects console reads; `evalPure input` returns `TypeError "input not available in pure evaluation"`.
 
 ### Standard Output
 - `print expr` evaluates expr, prints its value followed by a newline, flushes stdout, and returns `()`
 - Output format matches value representation
-- A write or flush failure returns `TypeError "print: could not write to stdout"` and stops subsequent effects
+- A write or flush failure raises an `IOError` for operation `print` and stops subsequent effects inside the action; an explicit `attempt` can handle it
 - CLI output failures return a nonzero exit status. Diagnostics fall back to stderr when stdout is unavailable; failure status is preserved even if neither stream is writable.
 
 ### File I/O
-- `readFile`, `writeFile`, and `appendFile` use UTF-8 with native newline handling, independent of the host locale. Invalid UTF-8 input returns a runtime `TypeError`.
+- `readFile`, `writeFile`, and `appendFile` use UTF-8 with native newline handling, independent of the host locale. Invalid UTF-8 input raises an `IOError` with category `InvalidEncoding`.
 - `readFile path` reads entire file as string
   - Returns file contents as a string
   - Runtime error if file cannot be read
@@ -553,6 +663,14 @@ print ("Hello, " ++ name)
 
 ## Error Handling
 
+Normal CLI and REPL type/runtime errors include file, line and column, an original
+source excerpt, and a caret. Function failures retain their definition location
+and call context; imported type failures include the import chain. Comments,
+shebangs, blank lines and CRLF input preserve physical source positions.
+`--debug` exposes structured internal errors; names listed below describe those
+internal constructors, not the normal diagnostic text. Script expected errors
+continue to compare the underlying constructor independently of source context.
+
 ### Parse Errors
 - Invalid syntax causes immediate parse failure
 - Error messages indicate location and expected tokens
@@ -560,7 +678,7 @@ print ("Hello, " ++ name)
 ### Type Errors
 - Static type checking occurs before evaluation
 - Type mismatches expressible by Kai's type system are rejected before evaluation
-- Runtime-only constraints, such as non-comparable callable values, still report typed runtime errors
+- Callable equality and unsupported concatenation operands are rejected statically
 
 ### Runtime Errors
 - Division by zero: `DivByZero`
@@ -569,8 +687,11 @@ print ("Hello, " ++ name)
 - Unbound variable references: `UnboundVariable "var_name"`
 - Missing record fields: `RecordFieldNotFound "field_name"`
 - Type errors in runtime contexts: `TypeError "message"`
-- No case branch matches: `TypeError "No matching pattern in case expression"`
-- Host I/O failures, including stdin EOF and invalid file/environment operations, are converted to `TypeError` values rather than escaping as Haskell exceptions
+- No case branch matches: defensive `TypeError "No matching pattern in case expression"` for internal callers; public source is checked for completeness
+- Empty list access: `EmptyListError operation`, exposed to recovery as `EmptyList operation`
+- Stdin EOF: `EndOfInputError`, exposed as `EndOfInput`
+- Host I/O failures: `IOFailure category operation path detail`, exposed as `IOError` values
+- Application errors: `UserFailure message`, exposed as `UserError message`
 
 `exit code` is represented internally as `ExitRequested code`. The CLI and REPL
 turn it into an exit status (`0` is success); it stops the program rather than
@@ -608,22 +729,23 @@ returning an ordinary value.
 
 From highest to lowest precedence:
 
-1. **Function Application and Field Access**: application and `.field` form one left-associated chain
-2. **Prefix Operators**: `not`, unary `-`
-3. **Multiplicative**: `*`, `/` (left-associative)
-4. **Additive**: `+`, `-` (left-associative)
-5. **Cons**: `::` (right-associative)
-6. **Concatenation**: `++` (right-associative)
-7. **Comparison**: `==`, `<`, `>` (non-associative)
-8. **Logical AND**: `and` (right-associative)
-9. **Logical OR**: `or` (right-associative)
-10. **Sequencing**: `;` (right-associative, lowest precedence)
+1. **Field Access**: `.field`
+2. **Function Application**: left-associative
+3. **Prefix Operators**: `not`, unary `-`
+4. **Multiplicative**: `*`, `/` (left-associative)
+5. **Additive**: `+`, `-` (left-associative)
+6. **Cons**: `::` (right-associative)
+7. **Concatenation**: `++` (right-associative)
+8. **Comparison**: `==`, `<`, `>` (non-associative)
+9. **Logical AND**: `and` (right-associative)
+10. **Logical OR**: `or` (right-associative)
+11. **Sequencing**: `;` (right-associative, lowest precedence)
 
-`f x.field` means `(f x).field`, and `record.fn x` means `(record.fn) x`.
-Use `f (x.field)` to pass a field value as an argument.
+`f x.field` means `f (x.field)`, and `record.fn x` means `(record.fn) x`.
+Use `(f x).field` to access a field of the function result.
 
 ```kai
-let f = \r -> {a = r.a + 1} in f {a = 1}.a  // => 2
+let f = \r -> {a = r.a + 1} in (f {a = 1}).a  // => 2
 let record = {fn = \n -> n + 1} in record.fn 3  // => 4
 ```
 
@@ -632,11 +754,11 @@ and `- - 5` is `5`. Each negation checks signed 32-bit overflow.
 
 ## Language Limitations (Current)
 
-- **Script failures**: A parse, type, runtime, or output error stops a script; the REPL accepts subsequent input after language errors
+- **Script failures**: Unhandled failures stop a script; `attempt` handles recoverable runtime failures and the REPL accepts subsequent input after language errors
 - **Minimal REPL ergonomics**: No history, completion, or editor integration yet
 - **Limited standard library depth**: Core file/process/env helpers exist, but line-oriented I/O, JSON/HTTP, and packaging are still missing
 - **Polymorphic recursion requires explicit annotations**: Recursive calls in an unannotated group share one type; definitions may be generalized for later uses
-- **Pattern matching**: No exhaustiveness checking, guards, or as-patterns
+- **Pattern matching**: Coverage is checked, but guards and as-patterns are not supported
 
 ## Grammar Summary
 
@@ -670,23 +792,13 @@ ConsExpr ::= AddExpr ('::' ConsExpr)?
 AddExpr ::= AddExpr ('+' | '-') MulExpr | MulExpr
 MulExpr ::= MulExpr ('*' | '/') UnaryExpr | UnaryExpr
 UnaryExpr ::= ('not' | '-') UnaryExpr | AppExpr
-AppExpr ::= AppExpr ('.' Ident | Atom) | Atom
+AppExpr ::= AppExpr FieldExpr | FieldExpr
+FieldExpr ::= Atom ('.' Ident)*
 
 Atom ::= Integer | Boolean | String | ListLit | RecordLit | TupleLit
        | '(' Expr ')' | Ident | ConstructorIdent | '()' | 'input'
-       | UnaryBuiltin Atom? | BinaryBuiltin Atom? Atom?
-       | TernaryBuiltin Atom? Atom? Atom? | NullaryBuiltin
+       | NullaryBuiltin
 
-UnaryBuiltin ::= 'print' | 'discard' | 'parseInt' | 'toString' | 'show' | 'fix'
-               | 'head' | 'tail' | 'null' | 'fst' | 'snd'
-               | 'length' | 'reverse' | 'trim' | 'strLength'
-               | 'Just' | 'Left' | 'Right' | 'readFile'
-               | 'fileExists' | 'listDirectory' | 'createDirectory'
-               | 'removeDirectory' | 'setCurrentDirectory' | 'system'
-               | 'getEnv' | 'exit'
-BinaryBuiltin ::= 'map' | 'filter' | 'take' | 'drop' | 'zip' | 'split' | 'join'
-                | 'writeFile' | 'appendFile' | 'setEnv'
-TernaryBuiltin ::= 'foldl' | 'replace'
 NullaryBuiltin ::= 'input' | 'args' | 'Nothing' | 'getCurrentDirectory'
 
 ListLit ::= '[' (Expr (',' Expr)*)? ']'
@@ -703,10 +815,13 @@ PatternAtom ::= Integer | Boolean | String | '()' | Ident | ConstructorIdent
               | '{' (Ident '=' Pattern (',' Ident '=' Pattern)*)? '}'
               | '(' Pattern (',' Pattern)* ')'
 
-Type ::= TypeApplication ('->' Type)?
+Type ::= (ConstraintContext '=>')? FunctionType
+FunctionType ::= TypeApplication ('->' FunctionType)?
+ConstraintContext ::= Constraint | '(' Constraint (',' Constraint)* ')'
+Constraint ::= ('Eq' | 'Append') TypeAtom
 TypeApplication ::= ConstructorIdent TypeAtom* | TypeAtom
 TypeAtom ::= 'Int' | 'Bool' | 'String' | 'Unit' | Ident | ConstructorIdent
-           | '[' Type ']' | '{' (Ident ':' Type (',' Ident ':' Type)*)? '}'
+           | '[' Type ']' | '{' (Ident ':' Type (',' Ident ':' Type)*)? ('|' Ident)? '}'
            | 'Maybe' TypeAtom | 'Either' TypeAtom TypeAtom | '(' Type ')'
            | '(' ')' | '(' Type ',' Type (',' Type)* ')'
 

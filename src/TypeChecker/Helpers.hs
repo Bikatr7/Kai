@@ -26,12 +26,12 @@ inferThree infer env e1 e2 e3 = do
 inferUnary :: InferFunc -> TypeEnv -> Expr -> Type -> Type -> TypeInfer (Substitution, Type)
 inferUnary infer env expression argument result = do
   (subst, actual) <- infer env expression
-  constraint <- lift $ unify (applySubst subst actual) argument
+  constraint <- unifyInfer (applySubst subst actual) argument
   return (composeSubst constraint subst, result)
 
 inferBinary :: InferFunc -> TypeEnv -> Expr -> Expr -> Type -> Type -> Type -> TypeInfer (Substitution, Type)
 inferBinary infer env first second firstType secondType result = do
   (subst, actualFirst, actualSecond) <- inferTwo infer env first second
-  firstConstraint <- lift $ unify actualFirst firstType
-  secondConstraint <- lift $ unify (applySubst firstConstraint actualSecond) secondType
+  firstConstraint <- unifyInfer actualFirst firstType
+  secondConstraint <- unifyInfer (applySubst firstConstraint actualSecond) secondType
   return (composeSubst secondConstraint (composeSubst firstConstraint subst), result)

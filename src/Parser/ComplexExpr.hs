@@ -6,6 +6,7 @@ import Parser.Lexer
 import Parser.Literals
 import Parser.Types
 import Parser.Patterns
+import Parser.Source
 
 type ExprParser = Parser Expr
 
@@ -53,19 +54,33 @@ letRecExpr expr = do
   LetRec var maybeType val <$> expr
 
 caseExpr :: ExprParser -> Parser Expr
-caseExpr expr = do
+caseExpr = caseExprWith Nothing
+
+caseExprWith :: Maybe SourceInfo -> ExprParser -> Parser Expr
+caseExprWith source expr = do
   keyword "case"
   scrutinee <- expr
   keyword "of"
-  patterns <- sepBy1 (casePattern expr) (symbol "|")
+  patterns <- sepBy1 (casePatternWith source expr) (symbol "|")
   return $ Case scrutinee patterns
 
 casePattern :: ExprParser -> Parser (Pattern, Expr)
-casePattern expr = do
+casePattern = casePatternWith Nothing
+
+casePatternWith :: Maybe SourceInfo -> ExprParser -> Parser (Pattern, Expr)
+casePatternWith Nothing expr = do
   pat <- patternParser
   _ <- symbol "->"
   e <- expr
   return (pat, e)
+
+casePatternWith (Just info) expr = do
+  start <- getSourcePos
+  pat <- patternParser
+  _ <- symbol "->"
+  e <- expr
+  end <- getSourcePos
+  pure (pat, Located (sourceSpan info start end) e)
 
 blockExpr :: ExprParser -> Parser Expr
 blockExpr entryExpr = do
@@ -75,4 +90,4 @@ blockExpr entryExpr = do
   where
     mkBlock [] = UnitLit
     mkBlock [e] = e
-    mkBlock (e:es) = Seq e (mkBlock es)
+    mkBlock (e:es) = spanBinary Seq e (mkBlock es)

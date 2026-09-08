@@ -116,3 +116,13 @@ error constructors, and assert that later effects do not occur after a failure.
 - Scripts, imported modules, and text-file operations use UTF-8. Console streams use their host encoding.
 - `print` flushes stdout; an output failure stops later effects and makes the CLI fail.
 - Stress tests exercise 1000-level parsing, inference, and evaluation. Benchmark execution and timing comparisons are separate checks.
+
+## Recovery and diagnostic testing
+
+- Callable builtins use ordinary application and may be shadowed; field access binds tighter than application.
+- `attempt` catches structured recoverable errors inside a `Unit -> a` action. Assert retained earlier effects, skipped later effects and process-control exclusions.
+- `and`/`or` short-circuit while both operands remain statically checked.
+- Open records and retained `Eq`/`Append` contexts must work through annotations, recursion, imports and REPL definitions.
+- Cases must be exhaustive; unreachable alternatives warn without changing execution.
+- CLI/module/REPL parsing preserves source spans. Assert exact readable diagnostics with excerpts and relevant call/import context. Keep exact structured error checks for library APIs and script expectations.
+- Execute migration examples in `MIGRATING-0.0.5.0.md` through the documentation checker. The file-report example must retain its exact failure, continuation and EOF tests.

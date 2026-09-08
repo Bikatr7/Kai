@@ -10,7 +10,7 @@ import System.IO (hClose, hPutStr, openTempFile)
 import Evaluator (Value(..))
 import qualified Evaluator as E
 import Parser (parseExpr, parseProgram)
-import TypeChecker (Type(..), TypeError(..), typeCheckProgram, typeCheckProgramWithDirIO)
+import TypeChecker (Type(..), Predicate(..), TypeError(..), typeCheckProgram, typeCheckProgramWithDirIO)
 import qualified ModuleSystem
 import Syntax
 
@@ -65,7 +65,7 @@ spec = describe "Custom Data Types" $ do
     let source = unlines
           [ "data MaybeTree = NothingElse | Justly Int"
           , "data Wrapper = Wrap MaybeTree MaybeTree"
-          , "case Wrap (Justly 4) NothingElse of Wrap (Justly value) NothingElse -> value"
+          , "case Wrap (Justly 4) NothingElse of Wrap (Justly value) NothingElse -> value | _ -> 0"
           ]
     case parseProgram source of
       Left err -> expectationFailure $ "Parse error: " ++ show err
@@ -299,7 +299,9 @@ spec = describe "Custom Data Types" $ do
     case parseProgram source of
       Left err -> expectationFailure $ "Parse error: " ++ show err
       Right program -> do
-        typeCheckProgram program `shouldBe` Right (TTuple [TBool, TBool])
+        case typeCheckProgram program of
+          Left (UnsatisfiedConstraint (Equality TFun {})) -> pure ()
+          other -> expectationFailure $ "Expected static callable equality rejection: " ++ show other
         E.evalProgram program `shouldReturn` expected
     let assertRuntime sourceExpression = case parseExpr sourceExpression of
           Left err -> expectationFailure $ "Parse error: " ++ show err
@@ -320,7 +322,9 @@ spec = describe "Custom Data Types" $ do
     case parseProgram source of
       Left err -> expectationFailure $ "Parse error: " ++ show err
       Right program -> do
-        typeCheckProgram program `shouldBe` Right TBool
+        case typeCheckProgram program of
+          Left (UnsatisfiedConstraint (Equality TFun {})) -> pure ()
+          other -> expectationFailure $ "Expected static callable equality rejection: " ++ show other
         E.evalProgram program `shouldReturn` expected
     case parseExpr "let identity = \\value -> value in Holder identity == Holder identity" of
       Left err -> expectationFailure $ "Parse error: " ++ show err

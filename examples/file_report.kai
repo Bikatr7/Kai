@@ -1,0 +1,21 @@
+// expect: ()
+// expect-type: TUnit
+// Read paths from arguments, or one path per stdin line until EOF.
+// Blank input lines are ignored; spaces within paths are preserved.
+letrec readPaths = \unit -> case readLine () of Nothing -> [] | Just path -> if path == "" then readPaths () else path :: readPaths ()
+
+let processFile = \totals -> \path ->
+  case attempt (\unit -> readFile path) of
+    Right text -> do {
+      print ("OK " ++ path ++ ": " ++ toString (strLength text) ++ " characters");
+      {succeeded = totals.succeeded + 1, failed = totals.failed, characters = totals.characters + strLength text}
+    }
+    | Left (IOError category _ _ _) -> do {
+      print ("ERROR " ++ path ++ ": " ++ show category);
+      {succeeded = totals.succeeded, failed = totals.failed + 1, characters = totals.characters}
+    }
+    | Left other -> raise other
+
+let paths = if null args then readPaths () else args
+let totals = foldl processFile {succeeded = 0, failed = 0, characters = 0} paths
+print ("Summary: " ++ toString totals.succeeded ++ " read, " ++ toString totals.failed ++ " failed, " ++ toString totals.characters ++ " characters")

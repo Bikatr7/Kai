@@ -78,7 +78,11 @@ assertEqualityBoth :: String -> Either RuntimeError Value -> Expectation
 assertEqualityBoth source expected = case parseExpr source of
   Left err -> expectationFailure $ "Parse error: " ++ show err
   Right expression -> do
-    typeCheck expression `shouldBe` Right TBool
+    case expected of
+      Left _ -> case typeCheck expression of
+        Left (UnsatisfiedConstraint (Equality TFun {})) -> pure ()
+        other -> expectationFailure $ "Expected static callable equality rejection, got: " ++ show other
+      Right _ -> typeCheck expression `shouldBe` Right TBool
     evalPure expression `shouldBe` expected
     eval expression `shouldReturn` expected
 

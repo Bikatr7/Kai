@@ -21,7 +21,7 @@ import System.FilePath ((</>))
 import System.Info (os)
 import System.IO (hClose, openTempFile)
 
-import Evaluator (RuntimeError(..), Value(..), evalWithEnv)
+import Evaluator (RuntimeError(..), IOErrorKind(..), Value(..), evalWithEnv)
 import Parser (parseExpr)
 import TypeChecker (Type(..), typeCheck)
 import Syntax
@@ -61,17 +61,21 @@ spec :: Spec
 spec = describe "Extended IO Stdlib" $ do
   it "returns a typed error when stdout is not writable" $ do
     result <- withReadOnlyStdout $ evalSource "print 42"
-    result `shouldBe` Left (TypeError "print: could not write to stdout")
+    case result of
+      Left (IOFailure OtherIO "print" Nothing detail) -> detail `shouldSatisfy` (not . null)
+      other -> expectationFailure (show other)
 
   it "stops subsequent effects after a failed print" $ withTempDir $ \dir -> do
     let path = dir </> "after-print.txt"
     result <- withReadOnlyStdout $ evalSource ("print 42; writeFile " ++ show path ++ " \"unexpected\"")
-    result `shouldBe` Left (TypeError "print: could not write to stdout")
+    case result of
+      Left (IOFailure OtherIO "print" Nothing detail) -> detail `shouldSatisfy` (not . null)
+      other -> expectationFailure (show other)
     doesFileExist path `shouldReturn` False
 
   it "converts stdin EOF into a Kai runtime error" $ do
     withEofStdin $ evalSource "input"
-      `shouldReturn` Left (TypeError "input: could not read from stdin")
+      `shouldReturn` Left EndOfInputError
 
   it "writes, appends, and reads files" $ do
     withTempDir $ \dir -> do
@@ -85,7 +89,6 @@ spec = describe "Extended IO Stdlib" $ do
     withTempDir $ \dir -> do
       let missingPath = dir </> "missing.txt"
           failure = ReadFile (StrLit missingPath)
-          expectedError = TypeError $ "readFile: could not read file '" ++ missingPath ++ "'"
           later marker = Seq (WriteFile (StrLit marker) (StrLit "ran"))
           mapFunction marker resultValue =
             Lambda "item" Nothing $
@@ -130,7 +133,12 @@ spec = describe "Extended IO Stdlib" $ do
             ]
       forM_ cases $ \(label, makeExpression) -> do
         let marker = dir </> (label ++ ".marker")
-        evalWithEnv Map.empty (makeExpression marker) `shouldReturn` Left expectedError
+        result <- evalWithEnv Map.empty (makeExpression marker)
+        case result of
+          Left (IOFailure NotFound "readFile" (Just path) detail) -> do
+            path `shouldBe` missingPath
+            detail `shouldSatisfy` (not . null)
+          other -> expectationFailure (label ++ ": " ++ show other)
         doesFileExist marker `shouldReturn` False
 
   it "reports file existence for present and missing files" $ do
@@ -186,8 +194,10 @@ spec = describe "Extended IO Stdlib" $ do
 
   it "converts invalid environment names into Kai runtime errors" $ do
     let invalidEnvName = "KAI_INVALID=NAME"
-    evalSource ("setEnv " ++ show invalidEnvName ++ " \"value\"")
-      `shouldReturn` Left (TypeError $ "setEnv: could not set environment variable '" ++ invalidEnvName ++ "'")
+    result <- evalSource ("setEnv " ++ show invalidEnvName ++ " \"value\"")
+    case result of
+      Left (IOFailure OtherIO "setEnv" Nothing detail) -> detail `shouldSatisfy` (not . null)
+      other -> expectationFailure (show other)
 
   it "reports missing record fields consistently in IO evaluation" $ do
     evalWithEnv Map.empty (RecordAccess (RecordLit [("present", IntLit 1)]) "missing")

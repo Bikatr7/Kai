@@ -99,7 +99,7 @@ spec = do
       it "sequences print without requiring parentheses" $ do
         let expr = "print \"hello\"; 42"
         case parseExpr expr of
-          Right (Seq (Print (StrLit "hello")) (IntLit 42)) -> return ()
+          Right (Seq (App (Var "print") (StrLit "hello")) (IntLit 42)) -> return ()
           Right ast -> expectationFailure $ "Wrong AST structure: " ++ show ast
           Left err -> expectationFailure $ "Parse error: " ++ show err
 

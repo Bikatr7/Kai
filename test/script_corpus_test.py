@@ -83,7 +83,7 @@ class ScriptCorpusTests(unittest.TestCase):
         self.check_source('// expect: ()\n// stdout: "before\\n"\nprint "before"; 1 / 0', False)
 
     def test_eof_input(self):
-        self.check_source('// expect: error TypeError "input: could not read from stdin"\ninput', True)
+        self.check_source('// expect: error EndOfInputError\ninput', True)
 
     def test_empty_input_line(self):
         self.check_source('// expect: ()\n// stdin: "\\n"\n// stdout: "Hello, !\\n"\nprint ("Hello, " ++ input ++ "!")', True)

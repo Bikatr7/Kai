@@ -4,6 +4,13 @@ import Test.Hspec
 import TestReport (runReportedSpec)
 import qualified TestReportSpec
 import qualified TestSupportSpec
+import qualified OrdinaryBuiltinsSpec
+import qualified ShortCircuitSpec
+import qualified ErrorRecoverySpec
+import qualified SourceLocationSpec
+import qualified CoverageSpec
+import qualified ConstraintSpec
+import qualified OpenRecordSpec
 
 import qualified SelfReviewSpec
 import qualified RunnerSpec
@@ -52,6 +59,13 @@ main :: IO ()
 main = runReportedSpec $ do
   TestReportSpec.spec
   TestSupportSpec.spec
+  OrdinaryBuiltinsSpec.spec
+  ShortCircuitSpec.spec
+  ErrorRecoverySpec.spec
+  SourceLocationSpec.spec
+  CoverageSpec.spec
+  ConstraintSpec.spec
+  OpenRecordSpec.spec
   RunnerSpec.spec
   DocumentationSpec.spec
   SourceDistributionSpec.spec

@@ -7,7 +7,13 @@ import Parser.Lexer
 import Parser.Literals (constructorIdentifier, identifier, lowerIdentifier)
 
 syntaxType :: Parser SyntaxType
-syntaxType = makeExprParser syntaxTypeApplication [[InfixR (STFun <$ symbol "->")]]
+syntaxType = do
+  predicates <- optional (try (constraintContext <* symbol "=>"))
+  ty <- makeExprParser syntaxTypeApplication [[InfixR (STFun <$ symbol "->")]]
+  pure $ maybe ty (`STQualified` ty) predicates
+  where
+    constraintContext = parens (sepBy1 constraint (symbol ",")) <|> ((:[]) <$> constraint)
+    constraint = (,) <$> constructorIdentifier <*> syntaxTypeAtom
 
 -- Lambda parameter annotations stop before the lambda arrow. Function-valued
 -- parameters use parentheses, e.g. \f : (Int -> Int) -> f 1.
@@ -44,7 +50,10 @@ syntaxTypeAtom = choice
 
     listType = STList <$> brackets syntaxType
 
-    recordType = STRecord <$> braces (sepBy recordTypeField (symbol ","))
+    recordType = braces $ do
+      fields <- sepBy recordTypeField (symbol ",")
+      row <- optional (symbol "|" *> lowerIdentifier)
+      pure $ maybe (STRecord fields) (STRecordRow fields) row
 
     recordTypeField = do
       name <- identifier

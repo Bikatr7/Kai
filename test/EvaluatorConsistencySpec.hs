@@ -30,17 +30,21 @@ spec = describe "Evaluator consistency" $ do
       captureOutput (eval $ parseExpression source) `shouldReturn` (expected, output)
   where
     checkEffects (OperationCase _ build arguments expected) = do
-      it "evaluates arguments once in source order" $ do
+      let required = case build arguments of
+            And (BoolLit False) _ -> 1
+            Or (BoolLit True) _ -> 1
+            _ -> length arguments
+      it "evaluates required arguments once in source order" $ do
         (result, output) <- captureOutput $ eval $ build $ zipWith trace [1..] arguments
         result `shouldBe` expected
-        output `shouldBe` traceOutput (length arguments)
+        output `shouldBe` traceOutput required
       forM_ [0 .. length arguments - 1] $ \failed ->
         it ("stops at failed argument " ++ show (failed + 1)) $ do
           let modified = [trace index (if index == failed + 1 then Div (IntLit 1) (IntLit 0) else argument)
                          | (index, argument) <- zip [1..] arguments]
           (result, output) <- captureOutput $ eval $ build modified
-          result `shouldBe` Left DivByZero
-          output `shouldBe` traceOutput (failed + 1)
+          result `shouldBe` (if failed < required then Left DivByZero else expected)
+          output `shouldBe` traceOutput (min required (failed + 1))
     trace index = Seq (Print (IntLit index))
     traceOutput count = unlines (map show [1..count])
 
@@ -57,8 +61,8 @@ operations =
   , binary "string concatenation" Concat "\"a\"" "\"雪\"" (ok $ VStr "a雪")
   , binary "list concatenation" Concat "[1]" "[2]" (ok $ VList [VInt 1,VInt 2])
   , binary "invalid concatenation" Concat "1" "[]" (bad "Concatenation requires string or list operands")
-  , binary "strict and" And "false" "true" (ok $ VBool False)
-  , binary "strict or" Or "true" "false" (ok $ VBool True)
+  , binary "short-circuit and" And "false" "true" (ok $ VBool False)
+  , binary "short-circuit or" Or "true" "false" (ok $ VBool True)
   , unary "not" Not "false" (ok $ VBool True)
   , unary "invalid not" Not "1" (bad "NOT requires a boolean operand")
   , binary "equality" Eq "(Just 1,[true])" "(Just 1,[true])" (ok $ VBool True)
@@ -88,9 +92,9 @@ operations =
   , OperationCase "duplicate record fields" (RecordLit . zip ["a","a"]) [IntLit 1,BoolLit True] (ok $ VRecord $ Map.singleton "a" (VBool True))
   , binary "cons" Cons "1" "[2]" (ok $ VList [VInt 1,VInt 2])
   , unary "head" Head "[1,2]" (ok $ VInt 1)
-  , unary "empty head" Head "[]" (bad "Head of an empty list")
+  , unary "empty head" Head "[]" (Left $ EmptyListError "head")
   , unary "tail" Tail "[1,2]" (ok $ VList [VInt 2])
-  , unary "empty tail" Tail "[]" (bad "Tail of an empty list")
+  , unary "empty tail" Tail "[]" (Left $ EmptyListError "tail")
   , unary "null" Null "[]" (ok $ VBool True)
   , unary "record access" (`RecordAccess` "a") "{a=1}" (ok $ VInt 1)
   , unary "missing field" (`RecordAccess` "b") "{a=1}" (Left $ RecordFieldNotFound "b")

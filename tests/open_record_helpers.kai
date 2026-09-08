@@ -1,0 +1,4 @@
+// expect: (3, 7, "text")
+let total = \record -> record.a + record.b
+let get = \record -> record.a
+(total {a = 1, b = 2, extra = true}, get {a = 7, extra = false}, get {a = "text", other = 2})

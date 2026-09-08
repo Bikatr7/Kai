@@ -24,11 +24,10 @@ inferArithmetic infer env (Div e1 e2) =
 inferArithmetic infer env (Concat e1 e2) = do
   (s1, t1) <- infer env e1
   (s2, t2) <- infer (applySubstEnv s1 env) e2
-  s3 <- lift $ unify (applySubst s2 t1) (applySubst s2 t2)
+  s3 <- unifyInfer (applySubst s2 t1) (applySubst s2 t2)
   let finalSubst = composeSubst s3 (composeSubst s2 s1)
-  case applySubst finalSubst t1 of
-    TString -> return (finalSubst, TString)
-    TList _ -> return (finalSubst, applySubst finalSubst t1)
-    finalType -> lift $ throwError $ UnificationError finalType (applySubst finalSubst t2)
+  let resultType = applySubst finalSubst t1
+  addPredicates [Appendable resultType]
+  return (finalSubst, resultType)
 
 inferArithmetic _ _ _ = error "inferArithmetic called on non-arithmetic expression"

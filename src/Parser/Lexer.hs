@@ -34,4 +34,4 @@ brackets :: Parser a -> Parser a
 brackets = between (symbol "[") (symbol "]")
 
 keywords :: [String]
-keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "print", "discard", "let", "letrec", "in", "do", "data", "import", "export", "input", "Int", "Bool", "String", "Unit", "parseInt", "toString", "show", "fix", "Maybe", "Either", "Just", "Nothing", "Left", "Right", "case", "of", "head", "tail", "null", "fst", "snd", "map", "filter", "foldl", "length", "reverse", "take", "drop", "zip", "split", "join", "trim", "replace", "strLength", "readFile", "writeFile", "appendFile", "fileExists", "listDirectory", "createDirectory", "removeDirectory", "getCurrentDirectory", "setCurrentDirectory", "system", "getEnv", "setEnv", "exit", "args"]
+keywords = ["true", "false", "if", "then", "else", "and", "or", "not", "let", "letrec", "in", "do", "data", "import", "export", "input", "Int", "Bool", "String", "Unit", "Maybe", "Either", "Nothing", "case", "of", "getCurrentDirectory", "args"]

@@ -8,14 +8,10 @@ import Data.Graph (SCC(..), stronglyConnComp)
 import qualified Data.Set as Set
 
 collectConsecutiveLetrecs :: [TopLevel] -> ([TopLevel], [TopLevel])
-collectConsecutiveLetrecs [] = ([], [])
-collectConsecutiveLetrecs (TLDef var maybeType expr : rest) =
-  case expr of
-    LetRec _ _ _ _ ->
-      let (moreLetrecs, remaining) = collectConsecutiveLetrecs rest
-      in (TLDef var maybeType expr : moreLetrecs, remaining)
-    _ -> ([], TLDef var maybeType expr : rest)
-collectConsecutiveLetrecs (other : rest) = ([], other : rest)
+collectConsecutiveLetrecs levels =
+  let recursive level = case unlocatedTopLevel level of TLDef _ _ LetRec {} -> True; _ -> False
+      (group,rest) = span recursive levels
+  in (map unlocatedTopLevel group,rest)
 
 dependencyOrderedLetrecGroups :: [TopLevel] -> [[TopLevel]]
 dependencyOrderedLetrecGroups letrecs =
@@ -45,6 +41,7 @@ referencedLetrecNames :: Set.Set String -> Expr -> [String]
 referencedLetrecNames candidates = Set.toList . go Set.empty
   where
     go bound expr = case expr of
+      Located _ expression -> go bound expression
       IntLit _ -> Set.empty
       BoolLit _ -> Set.empty
       StrLit _ -> Set.empty
@@ -126,6 +123,11 @@ referencedLetrecNames candidates = Set.toList . go Set.empty
       GetEnv e -> go bound e
       SetEnv e1 e2 -> go2 bound e1 e2
       Exit e -> go bound e
+      Attempt e -> go bound e
+      Raise e -> go bound e
+      ReadLine e -> go bound e
+      HeadMaybe e -> go bound e
+      TailMaybe e -> go bound e
       Args -> Set.empty
 
     go2 bound e1 e2 = go bound e1 `Set.union` go bound e2

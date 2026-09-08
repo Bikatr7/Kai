@@ -22,7 +22,9 @@ extra-source-files:
     DEVELOPING.md
     FEATURES.md
     GEMINI.md
+    MIGRATING-0.0.5.0.md
     README.md
+    RELEASE-0.0.5.0.md
     SPEC.md
     package.yaml
     stack.yaml
@@ -68,6 +70,7 @@ extra-source-files:
     tests/complex.kai
     tests/composition_chain.kai
     tests/conditionals.kai
+    tests/constrained_helpers.kai
     tests/conversion_functions.kai
     tests/curried.kai
     tests/curried_arithmetic.kai
@@ -158,6 +161,7 @@ extra-source-files:
     tests/negatives.kai
     tests/nested_conditional.kai
     tests/nested_if.kai
+    tests/open_record_helpers.kai
     tests/polymorphic_recursion_annotated.kai
     tests/polymorphic_top_level.kai
     tests/precedence.kai
@@ -205,6 +209,7 @@ extra-source-files:
     examples/discard_demo.kai
     examples/file_counter.kai
     examples/file_io.kai
+    examples/file_report.kai
     examples/fizzbuzz.kai
     examples/greet.kai
     examples/guess_the_number.kai
@@ -233,10 +238,12 @@ source-repository head
 library
   exposed-modules:
       CLI
+      Diagnostics
       ModuleSystem
       Syntax
       Parser
       Evaluator
+      Evaluator.Errors
       TypeChecker
   other-modules:
       DataDeclarations
@@ -261,14 +268,19 @@ library
       Parser.Lexer
       Parser.Literals
       Parser.Patterns
+      Parser.Source
       Parser.Types
       REPL
       ScriptCheck
       SourceIO
+      StandardData
+      StandardLibrary
       TopLevelRecursion
       TypeChecker.Arithmetic
       TypeChecker.Bindings
+      TypeChecker.Constraints
       TypeChecker.ControlFlow
+      TypeChecker.Coverage
       TypeChecker.DataStructures
       TypeChecker.Functions
       TypeChecker.Helpers
@@ -276,9 +288,11 @@ library
       TypeChecker.Literals
       TypeChecker.Operations
       TypeChecker.Patterns
+      TypeChecker.Pretty
       TypeChecker.Substitution
       TypeChecker.Types
       TypeChecker.Unification
+      TypeChecker.Warnings
       UTF8
       Paths_kai_lang
   autogen-modules:
@@ -296,6 +310,7 @@ library
     , parser-combinators
     , process
     , split
+    , text
   default-language: Haskell2010
 
 executable kai
@@ -319,6 +334,7 @@ executable kai
     , parser-combinators
     , process
     , split
+    , text
   default-language: Haskell2010
 
 executable kai-website
@@ -365,10 +381,13 @@ test-suite kai-test
       CLISpec
       ComparisonSpec
       ConditionalSpec
+      ConstraintSpec
+      CoverageSpec
       DataStructureSpec
       DataTypeSpec
       DocumentationSpec
       EdgeCaseSpec
+      ErrorRecoverySpec
       EvaluatorConsistencySpec
       ExampleAssertionsSpec
       ExampleSpec
@@ -379,6 +398,8 @@ test-suite kai-test
       LetBindingSpec
       ListFunctionsSpec
       ModuleSpec
+      OpenRecordSpec
+      OrdinaryBuiltinsSpec
       OutputFailureSpec
       ParserSpec
       ProgramSpec
@@ -390,8 +411,10 @@ test-suite kai-test
       ScriptSpec
       SelfReviewSpec
       SequencingSpec
+      ShortCircuitSpec
       SiteExportSpec
       SourceDistributionSpec
+      SourceLocationSpec
       StressTestSpec
       StringFunctionsSpec
       StringSpec

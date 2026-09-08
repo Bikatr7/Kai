@@ -87,13 +87,13 @@ spec = describe "Self-review regression tests" $ do
           modules mode privateModule ""
                   ("import A\n" ++ binding ++ "\nprint (case old of Mk x -> x)") $ \_ code out -> do
             code `shouldBe` if mode == "repl" then ExitSuccess else ExitFailure 1
-            out `shouldContain` "Type error: UnboundVariable \"Mk\""
+            out `shouldContain` "Type error: Unknown name 'Mk'."
       it ("keeps a constructor private across re-exports through " ++ mode) $
         modules mode "data T = Mk Int\nlet old = Mk 1\nexport Mk,old\n"
                      "import A\nexport old\n"
                      "import B\nlet Mk = \\x -> old\nprint (case old of Mk x -> x)" $ \_ code out -> do
           code `shouldBe` if mode == "repl" then ExitSuccess else ExitFailure 1
-          out `shouldContain` "Type error: UnboundVariable \"Mk\""
+          out `shouldContain` "Type error: Unknown name 'Mk'."
       it ("allows public constructor patterns after a second private import through " ++ mode) $
         modules mode "data T = Mk Int\nlet old = Mk 1\nexport Mk,old\n"
                      "import A\nexport old\n"

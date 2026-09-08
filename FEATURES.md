@@ -21,7 +21,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Arithmetic**: `+`, `-`, `*`, `/` (integer division with checked 32-bit overflow)
 - ✅ **Unary minus**: `-expr`; repeated prefix operators apply from right to left
 - ✅ **Boolean logic**: `and`, `or` (right-associative), `not` (prefix)
-- ✅ **Comparison**: `==`, `<`, `>` (non-associative); equality is structural for data and rejects callable/reference values
+- ✅ **Comparison**: `==`, `<`, `>` (non-associative); equality is structural for data and statically rejects callable payloads
 - ✅ **String concatenation**: `++` (right-associative)
 - ✅ **List concatenation**: `++` (right-associative)
 - ✅ **Cons operator**: `::` (right-associative)
@@ -57,6 +57,9 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Custom data types**: `data TypeName a = Constructor ...` with partially applicable, first-class constructor functions
 
 #### Pattern Matching
+- ✅ **Exhaustiveness**: Missing-pattern witnesses for nested constructors, tuples, records, and lists
+- ✅ **Unreachable alternatives**: Warnings preserve first-match behavior, including imported and REPL definitions
+- ✅ **Constructor privacy**: Hidden alternatives require a catch-all without revealing their names
 - ✅ **Variable patterns**: `x`
 - ✅ **Wildcard patterns**: `_` (matches any value without binding)
 - ✅ **Literal patterns**: `42`, `true`, `"hello"`, `()`
@@ -79,12 +82,15 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **Composite types**: `[T]`, `(T1, T2, ...)`, `{field: T}`
 - ✅ **Custom algebraic types**: `Tree Int`, `Result String`, `Pair a b`
 - ✅ **Function types**: `T1 -> T2` (right-associative)
+- ✅ **Open records**: Inferred accessors and `{a : Int | row}` annotations accept additional fields
+- ✅ **Built-in constraints**: Retained `Eq a` and `Append a` requirements through helpers, annotations, recursion, imports, and REPL definitions
+- ✅ **Static comparability**: Reject nested callable payloads; preserve equality for phantom parameters
 - ✅ **Maybe types**: `Maybe T`
 - ✅ **Either types**: `Either T U`
 
 ### Built-in Operations
 
-The 39 operations below include zero-argument values such as `input` and `args`.
+The 44 operations below include zero-argument values such as `input` and `args`.
 The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately under data structures.
 
 #### Type Conversion (4)
@@ -93,12 +99,18 @@ The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately un
 - ✅ `show : a -> String` - Any value to string representation
 - ✅ `discard : a -> Unit` - Evaluates and discards any value
 
+#### Recovery (2)
+- ✅ `attempt : (Unit -> a) -> Either Error a` - Recover from an action failure
+- ✅ `raise : Error -> a` - Raise or rethrow a structured error
+
 #### Recursion (1)
 - ✅ `fix : (a -> a) -> a` - Fixed point for a callable value
 
-#### List Operations (11)
+#### List Operations (13)
 - ✅ `head : [a] -> a` - First element (runtime error if empty)
 - ✅ `tail : [a] -> [a]` - List without first element (runtime error if empty)
+- ✅ `headMaybe : [a] -> Maybe a` - Optional first element
+- ✅ `tailMaybe : [a] -> Maybe [a]` - Optional tail
 - ✅ `null : [a] -> Bool` - Check if list is empty
 - ✅ `length : [a] -> Int` - Number of elements
 - ✅ `map : (a -> b) -> [a] -> [b]` - Apply function to each element
@@ -120,9 +132,10 @@ The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately un
 - ✅ `fst : (a, b) -> a` - First element of pair
 - ✅ `snd : (a, b) -> b` - Second element of pair
 
-#### I/O Operations (16)
+#### I/O Operations (17)
 - ✅ `print : a -> Unit` - Print and flush value, then return unit; output failures stop later effects
-- ✅ `input : String` - Read line from stdin
+- ✅ `input : String` - Read line from stdin, raising `EndOfInput` at EOF
+- ✅ `readLine : Unit -> Maybe String` - Distinguish EOF from blank input
 - ✅ `readFile : String -> String` - Read an entire UTF-8 text file
 - ✅ `writeFile : String -> String -> Unit` - Write UTF-8 text to a file (overwrite)
 - ✅ `appendFile : String -> String -> Unit` - Append UTF-8 text to a file
@@ -138,7 +151,7 @@ The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately un
 - ✅ `exit : Int -> a` - Exit the current program with an explicit code
 - ✅ `args : [String]` - Command-line arguments passed to script or REPL session
 
-**Total Built-in Operations**: 39
+**Total Built-in Operations**: 44
 
 ### Module System
 
@@ -158,7 +171,7 @@ The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately un
 - ✅ **Line comments**: `// comment`
 - ✅ **Block comments**: `/* comment */`
 - ✅ **Multi-statement files**: Top-level newlines split expressions while respecting nested `()`, `[]`, `{}`, strings, and comments
-- ✅ **Reserved keywords**: 66 reserved names, including `do` and the builtins
+- ✅ **Reserved keywords**: 27 reserved names; callable builtins are ordinary identifiers
 - ✅ **Keyword boundary checking**: Prevents `trimmed` from parsing as `trim` + `med`
 - ✅ **String escapes**: `\"`, `\\`, `\n` with helpful error messages for unknown escapes
 - ✅ **Integer overflow detection**: Parse errors for values outside 32-bit range
@@ -167,7 +180,7 @@ The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately un
 ### Evaluator
 
 - ✅ **Strict evaluation**: Call-by-value semantics
-- ✅ **Boolean evaluation**: Both operands of `and` and `or` execute; `if` executes only the selected branch
+- ✅ **Boolean evaluation**: `and`/`or` short-circuit; both operands are statically checked, and `if` executes only the selected branch
 - ✅ **Lexical scoping**: Static binding with closure support
 - ✅ **Environment-based evaluation**: Separate pure and IO evaluation modes
 - ✅ **Error handling**: Graceful runtime errors with descriptive messages
@@ -181,6 +194,7 @@ The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately un
 - ✅ **Expression evaluation**: `kai -e "expr"`; use `print` for visible output outside the REPL
 - ✅ **File execution**: `kai script.kai [args...]`
 - ✅ **Shebang support**: `#!/usr/bin/env kai` for executable scripts
+- ✅ **Source diagnostics**: File, line, column, excerpt and function/import context; structured errors in debug mode
 - ✅ **Debug mode**: `kai --debug` for detailed output
 - ✅ **Help system**: `kai --help`
 - ✅ **REPL commands**: `:type`, `:load`, `:reload`, `:quit`/`:q`, `:help`
@@ -212,7 +226,7 @@ The `Just`, `Nothing`, `Left`, and `Right` constructors are listed separately un
 - ✅ **CLAUDE.md and GEMINI.md**: Entry points to the shared agent instructions
 - ✅ **benchmarks/README.md**: Workloads, commands, measurement limits, and comparison process
 - ✅ **Website**: Yesod-based static site with examples
-- ✅ **Working examples**: 12 runnable scripts plus reusable module samples
+- ✅ **Working examples**: 13 runnable scripts plus reusable module samples
 
 ### Performance & Optimization
 
@@ -242,18 +256,26 @@ for what each workload measures.
 
 ## Roadmap
 
-Development focuses on practical scripting tools, useful standard-library additions, and REPL ergonomics.
+The next release is **0.0.5.0**, focused on error recovery and predictable language
+behavior. [RELEASE-0.0.5.0.md](RELEASE-0.0.5.0.md) defines its required semantics,
+migration work, implementation order, and acceptance tests. The implemented
+feature list above continues to describe 0.0.4.6.
 
 ### Priorities
 
-#### 1. REPL Polish
-- ⏳ **History and completion**: The core REPL works; now it needs comfort features
-- ⏳ **Better interactive diagnostics**: Friendlier parse/type/runtime feedback in the session loop
+#### 1. Required for 0.0.5.0
+- ✅ **Error recovery**: Structured `Error` values, explicit `attempt`/`raise`, nested recovery, and preserved process-control behavior
+- ✅ **Safe input and list access**: EOF-aware `readLine`, `headMaybe`, and `tailMaybe`
+- ✅ **Boolean guards**: Short-circuit `and`/`or` with static checking of both operands
+- ✅ **Consistent application**: Builtins follow ordinary function rules; field access binds tighter than application
+- ✅ **Useful inference**: Open record rows and retained `Append` constraints across definitions and modules
+- ✅ **Static rejection**: `Eq` constraints, exhaustive patterns, and duplicate record-literal checks
+- ✅ **Diagnostics and migration**: Source locations, clear errors, practical recovery examples, and a migration guide
+- ⏳ **Acceptance**: Full tests, real I/O, stress measurements, and native package execution on all supported platforms
 
-#### 2. Stdlib Depth
-- ⏳ **Line-oriented file helpers**: A practical follow-up to `readFile`/`writeFile`/`appendFile`
-- ⏳ **JSON and HTTP**: Valuable once the local scripting story is rounded out
-- ⏳ **Small utility gaps**: A few missing math/list/string helpers that matter in scripts
+#### 2. Scripting Ergonomics After 0.0.5.0
+- ⏳ **History and completion**: Improve the interactive development experience
+- ⏳ **More stdlib depth**: File-processing helpers, JSON/HTTP, and missing math/list/string utilities
 
 #### 3. Tooling and Distribution
 - ⏳ **Formatter and linter**: Useful once the surface syntax is more settled
@@ -262,7 +284,8 @@ Development focuses on practical scripting tools, useful standard-library additi
 
 #### 4. Longer-Term Type/System Work
 - ⏳ **Full polymorphic recursion inference/ergonomics**: Explicitly not the next priority
-- ⏳ **Type classes, row polymorphism, GADTs, rank-N types**: Out of scope for the near term
+- ⏳ **General type classes, effect types, GADTs, rank-N types**: Deferred; open record rows and fixed `Eq`/`Append` constraints are part of 0.0.5.0
+- ⏳ **Module-qualified type identities and wider numeric types**: Separate projects after the five required language fixes
 - ⏳ **List comprehensions, ranges, `where`, multi-way `if`**: Backlog ideas, not current release goals
 
 #### Compiler and Runtime Work
@@ -278,7 +301,7 @@ Development focuses on practical scripting tools, useful standard-library additi
 - ❌ **Limited pattern matching**: No guards, no as-patterns
 - ❌ **Wildcard restrictions**: `_` not allowed in `letrec` bindings (cannot be meaningfully recursive)
 - ❌ **Polymorphic recursion still needs explicit annotations**: Recursive calls within an unannotated group share one type; completed definitions may be generalized for later uses
-- ❌ **Script failures**: A parse, type, runtime, or output error stops a script; the REPL accepts subsequent input after language errors
+- ❌ **Unhandled failures**: Unhandled errors stop a script; explicit `attempt` boundaries recover from supported runtime failures
 - ❌ **Integer-only arithmetic**: No floating-point numbers
 - ❌ **Limited escape sequences**: Only `\"`, `\\`, `\n` supported
 - ❌ **No regex support**: String operations are basic
@@ -311,10 +334,10 @@ Development focuses on practical scripting tools, useful standard-library additi
 - **Tests**: Hspec, QuickCheck, script expectations, CLI and REPL integration, and stress tests
 - **HLint Warnings**: 0
 - **Base Types**: 4 (Int, Bool, String, Unit), plus lists, tuples, records, functions, Maybe, Either, and custom types
-- **Built-in Operations**: 39
-- **Reserved Keywords**: 66
-- **Operator Precedence Levels**: 10; application and field access share the highest level
-- **Example Scripts**: 12 runnable scripts plus reusable module samples
+- **Built-in Operations**: 44
+- **Reserved Keywords**: 27
+- **Operator Precedence Levels**: 11; field access binds tighter than application
+- **Example Scripts**: 13 runnable scripts plus reusable module samples
 - **Documentation**: 8 Markdown files covering the language, development, benchmarks, and agent guidance
 - **Benchmark Suites**: 3 (Parser, Evaluator, TypeChecker)
 - **Performance Optimizations**: Record access inlining, boolean syntax fixes
@@ -413,7 +436,7 @@ Development focuses on practical scripting tools, useful standard-library additi
 
 Kai is designed to be a **functional-first scripting language** with the following priorities:
 
-1. **Functional by default**: Immutable data, pure functions, expressions over statements
+1. **Functional by default**: Immutable data and expressions over statements; function types do not enforce purity
 2. **Imperative when needed**: Escape hatches for I/O, performance, when clearer
 3. **Static first**: Strong, predictable types with inference
 4. **Scriptable**: Fast edit-run cycle, no compilation step

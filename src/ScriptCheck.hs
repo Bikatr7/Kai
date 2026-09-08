@@ -3,9 +3,11 @@ module ScriptCheck (checkScriptFile) where
 import qualified Data.Map as Map
 import Data.List (stripPrefix)
 import Data.Char (isSpace)
-import Parser (parseExpr, parseProgram)
-import Evaluator (evalPure, evalProgramWithEnv)
+import Parser (parseExpr, parseLocatedProgram)
+import Evaluator (evalPure, evalProgramWithEnv, stripRuntimeLocation)
 import TypeChecker (typeCheck, typeCheckProgramWithDirIO)
+import Diagnostics (renderTypeError)
+import Text.Megaparsec (errorBundlePretty)
 import qualified ModuleSystem
 import SourceIO (readSourceFile)
 import System.FilePath (takeDirectory)
@@ -17,13 +19,13 @@ checkScriptFile path = do
   source <- readSourceFile path
   case source of
     Left err -> return $ Left $ "IO error: " ++ show err
-    Right content -> case (directive "expect" content, parseProgram content) of
+    Right content -> case (directive "expect" content, parseLocatedProgram path content) of
       (Left err, _) -> return $ Left err
-      (_, Left err) -> return $ Left $ "Parse error: " ++ show err
+      (_, Left err) -> return $ Left $ "Parse error: " ++ errorBundlePretty err
       (Right expected, Right program) -> do
         checked <- typeCheckProgramWithDirIO ModuleSystem.loadModuleTypeEnvIO (takeDirectory path) program
         case checked of
-          Left err -> return $ Left $ "Type error: " ++ show err
+          Left err -> return $ Left $ renderTypeError err
           Right ty -> case optionalDirective "expect-type" content of
             Left err -> return $ Left err
             Right expectedType | maybe False (/= show ty) expectedType ->
@@ -32,7 +34,7 @@ checkScriptFile path = do
               result <- evalProgramWithEnv Map.empty (takeDirectory path) program
               return $ case stripPrefix "error " expected of
                 Just errorName -> case result of
-                  Left err | show err == errorName -> Right ()
+                  Left err | show (stripRuntimeLocation err) == errorName -> Right ()
                   _ -> Left $ "Expected error " ++ errorName ++ ", got " ++ show result
                 Nothing -> do
                   expression <- either (Left . ("Bad expectation: " ++) . show) Right (parseExpr expected)
