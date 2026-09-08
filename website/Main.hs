@@ -282,9 +282,12 @@ getHomeR = do
           <div .code-example .kai-example>
             <code>let append = \left -> \right -> left ++ right
             <code>let total = \record -> record.a + record.b
+            <code>let dropA = \record -> case record of {a = _ | rest} -> rest
+            <code>print (dropA {a = 1, b = true})
             <code>print (append "a" "b", append [1] [2], total {a = 2, b = 3, extra = true})
             <code>case attempt (\unit -> 1 / 0) of Left DivisionByZero -> print "Recovered" | Left other -> raise other | Right value -> print value
           <p>Reusable functions retain Eq and Append requirements. Callable equality and incomplete matches are rejected before effects run. Unreachable alternatives produce warnings. Function types describe inputs and outputs without enforcing purity.
+          <p>Open record patterns use {a = x | rest} to bind extra fields as a record, or | _ to ignore them. Patterns without | require exactly the listed fields.
 
         <div .element-block>
           <h3>File Reports That Continue After Read Failures

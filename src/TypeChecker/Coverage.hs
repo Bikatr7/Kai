@@ -1,7 +1,7 @@
 module TypeChecker.Coverage (checkCoverage) where
 
 import Data.List (find, nub)
-import Data.Maybe (isJust, mapMaybe)
+import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import qualified Data.Map as Map
 import Syntax (Pattern(..))
 import TypeChecker.Types
@@ -13,12 +13,12 @@ import DataDeclarations (standardDataTypeEnv, constructorPatternScheme)
 data Head
   = BooleanHead Bool | IntegerHead Int | StringHead String | UnitHead
   | NothingHead | JustHead | LeftHead | RightHead | NilHead | ConsHead
-  | TupleHead Int | RecordHead [String] | DataHead String | ExtraFieldsHead
+  | TupleHead Int | RecordHead [String] | DataHead String | ExtraFieldsHead [String]
   deriving (Show, Eq)
 
 data Shape = Shape Head [Type] Bool
 
-data Cell = Wild | Construct Head [Cell]
+data Cell = Wild | Construct Head [Cell] | OpenFields (Map.Map String Cell)
   deriving (Show, Eq)
 
 type Matrix = [[Cell]]
@@ -51,6 +51,7 @@ cell (PCons a b) = Construct ConsHead [cell a,cell b]
 cell (PTuple ps) = Construct (TupleHead (length ps)) (map cell ps)
 cell (PRecord fields) = let ordered = Map.toList (Map.fromList fields)
   in Construct (RecordHead (map fst ordered)) (map (cell . snd) ordered)
+cell (POpenRecord fields _) = OpenFields (Map.fromList [(name,cell p) | (name,p) <- fields])
 cell (PConstructor name ps) = Construct (DataHead name) (map cell ps)
 
 shapes :: TypeEnv -> Type -> Maybe [Shape]
@@ -63,7 +64,8 @@ shapes env ty = case ty of
   TTuple values -> Just [shape (TupleHead (length values)) values]
   TRecord fields -> Just [shape (RecordHead (Map.keys fields)) (Map.elems fields)]
   TOpenRecord fields _ -> Just
-    [shape (RecordHead (Map.keys fields)) (Map.elems fields),Shape ExtraFieldsHead [] False]
+    [shape (RecordHead (Map.keys fields)) (Map.elems fields),
+     Shape (ExtraFieldsHead (Map.keys fields)) (Map.elems fields) False]
   TCustom name values -> case Map.lookup (dataTypeKey name) env of
     Just (Forall variables (TRecord constructors)) ->
       let subst = Map.fromList (zip variables values)
@@ -83,12 +85,32 @@ headOf (Shape headTag _ _) = headTag
 argumentsOf :: Shape -> [Type]
 argumentsOf (Shape _ arguments _) = arguments
 
+-- An open pattern applies to both the exact known fields and records with an
+-- additional tail. Its payload restrictions must be checked in both shapes.
+recordArguments :: Head -> Map.Map String Cell -> Maybe [Cell]
+recordArguments headTag fields = case headTag of
+  RecordHead names -> arguments names
+  ExtraFieldsHead names -> arguments names
+  _ -> Nothing
+  where
+    arguments names
+      | all (`elem` names) (Map.keys fields) = Just [Map.findWithDefault Wild name fields | name <- names]
+      | otherwise = Nothing
+
+presentHeads :: TypeEnv -> Type -> Matrix -> [Head]
+presentHeads env ty rows = nub $ concatMap heads rows
+  where
+    heads (Construct headTag _ : _) = [headTag]
+    heads (OpenFields fields : _) =
+      [headOf shape | shape <- fromMaybe [] (shapes env ty), isJust (recordArguments (headOf shape) fields)]
+    heads _ = []
+
 -- Each specialization consumes a constructor appearing in the finite pattern
 -- matrix. Wildcard-only columns take the default path without expanding an ADT.
 uncovered :: TypeEnv -> Matrix -> [Type] -> Maybe [Cell]
 uncovered _ rows [] = if null rows then Just [] else Nothing
 uncovered env rows (ty:rest) =
-  let present = nub [headTag | Construct headTag _ : _ <- rows]
+  let present = presentHeads env ty rows
       defaults = defaultRows rows
   in case shapes env ty of
     Just alternatives | all ((`elem` present) . headOf) alternatives ->
@@ -109,7 +131,7 @@ uncovered env rows (ty:rest) =
 useful :: TypeEnv -> Matrix -> [Cell] -> [Type] -> Bool
 useful _ rows [] [] = null rows
 useful env rows (Wild:query) (ty:rest) =
-  let present = nub [headTag | Construct headTag _ : _ <- rows]
+  let present = presentHeads env ty rows
   in case shapes env ty of
     Just alternatives | all ((`elem` present) . headOf) alternatives -> any
       (\alternative -> useful env (specialize alternative rows)
@@ -121,6 +143,12 @@ useful env rows (Construct headTag args:query) (ty:rest) =
         Just found -> found
         Nothing -> Shape headTag (replicate (length args) TUnit) True
   in useful env (specialize alternative rows) (args ++ query) (argumentsOf alternative ++ rest)
+useful env rows (OpenFields fields:query) (ty:rest) = any
+  (\alternative -> case recordArguments (headOf alternative) fields of
+    Just arguments -> useful env (specialize alternative rows)
+      (arguments ++ query) (argumentsOf alternative ++ rest)
+    Nothing -> False)
+  (fromMaybe [] (shapes env ty))
 useful _ _ _ _ = False
 
 defaultRows :: Matrix -> Matrix
@@ -131,6 +159,7 @@ specialize (Shape headTag arguments _) = mapMaybe go
   where
     go (Wild:rest) = Just (replicate (length arguments) Wild ++ rest)
     go (Construct tag fields:rest) | tag == headTag = Just (fields ++ rest)
+    go (OpenFields fields:rest) = (++ rest) <$> recordArguments headTag fields
     go _ = Nothing
 
 missingLiteral :: Type -> [Head] -> Cell
@@ -163,6 +192,7 @@ firstJust (value:_) = value
 -- A wildcard is the actionable witness when a hidden constructor is required.
 renderCell :: TypeEnv -> Type -> Cell -> String
 renderCell _ _ Wild = "_"
+renderCell _ _ OpenFields {} = "_"
 renderCell env ty (Construct headTag arguments) =
   let candidate = shapes env ty >>= find ((== headTag) . headOf)
       fields = maybe (replicate (length arguments) TUnit) argumentsOf candidate

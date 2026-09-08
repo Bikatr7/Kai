@@ -58,6 +58,14 @@ inferPatternUnchecked env (PRecord fields) ty = do
     let typedFields = zipWith (\(name, _) fieldType -> (name, fieldType)) fields fieldTypes
     s1 <- unifyInfer ty (TRecord (Map.fromList typedFields))
     inferPatternSiblings env s1 (zip (map snd fields) fieldTypes)
+inferPatternUnchecked env (POpenRecord fields rest) ty = do
+    fieldTypes <- mapM (const freshTVar) fields
+    row <- freshRowVar
+    let typedFields = Map.fromList (zip (map fst fields) fieldTypes)
+    initial <- unifyInfer ty (TOpenRecord typedFields row)
+    (subst, bindings) <- inferPatternSiblings env initial (zip (map snd fields) fieldTypes)
+    let remaining = monoScheme (applySubst subst (TOpenRecord Map.empty row))
+    pure (subst, if rest == "_" then bindings else Map.insert rest remaining bindings)
 inferPatternUnchecked env (PTuple pats) ty = do
     elemTypes <- mapM (const freshTVar) pats
     s1 <- unifyInfer ty (TTuple elemTypes)
@@ -119,6 +127,9 @@ inferPattern env pat ty = do
     bindings (PRecord fields) = do
       distinct DuplicateRecordField (map fst fields)
       siblings (map snd fields)
+    bindings (POpenRecord fields rest) = do
+      distinct DuplicateRecordField (map fst fields)
+      siblings (PVar rest : map snd fields)
     bindings _ = Right []
     siblings ps = do
       names <- concat <$> mapM bindings ps

@@ -225,9 +225,23 @@ case expression of pattern -> expr | pattern -> expr
 - `[p1, p2, ...]` - matches a list of exactly that length
 - `x :: xs` - matches non-empty list (head and tail)
 - `{field1 = pattern1, field2 = pattern2, ...}` - matches records
+- `{field1 = pattern1 | rest}` - matches records with additional fields, binding the remaining record
 - `(pattern1, pattern2, ...)` - matches tuples
 
 A name may be bound only once within a pattern, including nested patterns.
+Record patterns without `|` require exactly the listed fields. An open pattern
+`{a = x | rest}` requires `a`, matches any additional fields, and binds those
+additional fields as a record named `rest`; `{a = x | _}` ignores them. The rest
+binding excludes every explicitly matched field and may be `{}`. `{| rest}`
+matches any record and binds it whole. Rest bindings share the pattern's ordinary
+duplicate-name and lexical-scope rules. Open patterns retain row polymorphism
+through helpers, recursion, imports, and REPL definitions. Their nested payload
+patterns must still be exhaustive, including cases with extra fields.
+
+```kai
+case {a = 1, b = true} of {a = value | rest} -> (value, rest)  // => (1, {b = true})
+```
+
 Constructor patterns must supply exactly the declared number of fields, otherwise
 type checking reports `ConstructorPatternArity name expected actual`. Function-valued
 constructor fields each count as one field. Repeated `_` is allowed. Duplicate
@@ -812,6 +826,7 @@ PatternAtom ::= Integer | Boolean | String | '()' | Ident | ConstructorIdent
               | 'Left' PatternAtom | 'Right' PatternAtom
               | '[' (Pattern (',' Pattern)*)? ']'
               | '{' (Ident '=' Pattern (',' Ident '=' Pattern)*)? '}'
+              | '{' (Ident '=' Pattern (',' Ident '=' Pattern)*)? '|' Ident '}'
               | '(' Pattern (',' Pattern)* ')'
 
 Type ::= (ConstraintContext '=>')? FunctionType

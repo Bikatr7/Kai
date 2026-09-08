@@ -123,6 +123,7 @@ error constructors, and assert that later effects do not occur after a failure.
 - `attempt` catches structured recoverable errors inside a `Unit -> a` action. Assert retained earlier effects, skipped later effects and process-control exclusions.
 - `and`/`or` short-circuit while both operands remain statically checked.
 - Open records and retained `Eq`/`Append` contexts must work through annotations, recursion, imports and REPL definitions.
+- Open record patterns `{a = x | rest}` must preserve and type the unmatched record fields. Test `| _`, empty remainders, duplicate bindings, nested payload coverage and row-polymorphic exports; exact patterns without `|` retain their field-set requirement.
 - Cases must be exhaustive; unreachable alternatives warn without changing execution.
 - CLI/module/REPL parsing preserves source spans. Assert exact readable diagnostics with excerpts and relevant call/import context. Keep exact structured error checks for library APIs and script expectations.
 - Execute migration examples in `MIGRATING-0.0.5.0.md` through the documentation checker. The file-report example must retain its exact failure, continuation and EOF tests.

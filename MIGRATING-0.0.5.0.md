@@ -130,6 +130,17 @@ rows. Replace a literal such as `{a = old, a = new}` with `{a = new}`. If evalua
 `old` is intentional, sequence `discard old` explicitly before the literal.
 Rows have a distinct kind; a row variable cannot also name a value type variable.
 
+Existing record patterns still require exactly their listed fields. Use an open
+pattern when a helper should accept additional fields. `| rest` binds a record
+containing just those extra fields; `| _` ignores them. No extra fields produces
+an empty record. Names cannot be repeated between field patterns and the rest
+binding, and payload alternatives must still be exhaustive.
+
+```kai
+let dropA = \record -> case record of {a = _ | rest} -> rest in
+(dropA {a = 1, b = true}, dropA {a = "x"})  // => ({b = true}, {})
+```
+
 ## Preserve equality and concatenation constraints in annotations
 
 Generic helpers retain their requirements rather than prematurely choosing a

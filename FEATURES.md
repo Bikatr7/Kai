@@ -68,6 +68,7 @@ This document provides a comprehensive overview of all implemented and planned f
 - ✅ **List patterns**: `[]`, `x :: xs`
 - ✅ **Tuple patterns**: `(x, y, z)`
 - ✅ **Record patterns**: `{a = x, b = y}`
+- ✅ **Open record patterns**: `{a = x | rest}` binds extra fields as a record; `| _` ignores them
 - ✅ **Constructor patterns**: `Leaf x`, `Node left right`, and other user-defined variants
 
 ### Type System

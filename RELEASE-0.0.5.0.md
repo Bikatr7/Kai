@@ -167,6 +167,14 @@ types, invalid row kinds, duplicate labels, and infinite rows remain errors.
 Reject duplicate fields in record literals as well as patterns and annotations;
 silently replacing a field hides mistakes and discarded effects.
 
+Open record patterns use `{a = x | rest}` to match required fields and bind all
+remaining fields as a record. `| _` ignores the remainder, and `{| rest}` binds
+the whole record. The remainder can be empty and cannot contain a matched field.
+Preserve its row relationship through inference and generalization, reject
+duplicate names across the entire pattern, and check nested payload coverage
+both with and without extra fields. Patterns without `|` retain exact-field
+matching.
+
 ### Constrained concatenation
 
 Retain an `Append a` constraint while inferring `x ++ y`; do not demand a concrete

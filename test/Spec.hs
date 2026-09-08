@@ -11,6 +11,7 @@ import qualified SourceLocationSpec
 import qualified CoverageSpec
 import qualified ConstraintSpec
 import qualified OpenRecordSpec
+import qualified OpenRecordPatternSpec
 
 import qualified SelfReviewSpec
 import qualified RunnerSpec
@@ -66,6 +67,7 @@ main = runReportedSpec $ do
   CoverageSpec.spec
   ConstraintSpec.spec
   OpenRecordSpec.spec
+  OpenRecordPatternSpec.spec
   RunnerSpec.spec
   DocumentationSpec.spec
   SourceDistributionSpec.spec

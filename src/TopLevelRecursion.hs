@@ -147,5 +147,7 @@ patternBindings pattern' = case pattern' of
   PList pats -> Set.unions (map patternBindings pats)
   PCons p1 p2 -> patternBindings p1 `Set.union` patternBindings p2
   PRecord fields -> Set.unions [patternBindings pat | (_, pat) <- fields]
+  POpenRecord fields rest -> Set.unions
+    ((if rest == "_" then Set.empty else Set.singleton rest) : map (patternBindings . snd) fields)
   PTuple pats -> Set.unions (map patternBindings pats)
   PConstructor _ pats -> Set.unions (map patternBindings pats)

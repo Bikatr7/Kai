@@ -185,6 +185,7 @@ data Pattern
   | PList [Pattern]
   | PCons Pattern Pattern
   | PRecord [(String, Pattern)]
+  | POpenRecord [(String, Pattern)] String
   | PTuple [Pattern]
   | PConstructor String [Pattern]
   deriving (Show, Eq)
@@ -312,5 +313,6 @@ instance NFData Pattern where
   rnf (PList ps) = rnf ps
   rnf (PCons p1 p2) = rnf p1 `seq` rnf p2
   rnf (PRecord fs) = rnf fs
+  rnf (POpenRecord fs rest) = rnf fs `seq` rnf rest
   rnf (PTuple ps) = rnf ps
   rnf (PConstructor name pats) = rnf name `seq` rnf pats

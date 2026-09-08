@@ -83,7 +83,10 @@ listPattern :: Parser Pattern
 listPattern = PList <$> brackets (sepBy patternParser (symbol ","))
 
 recordPattern :: Parser Pattern
-recordPattern = PRecord <$> braces (sepBy recordPatternField (symbol ","))
+recordPattern = braces $ do
+  fields <- sepBy recordPatternField (symbol ",")
+  rest <- optional (symbol "|" *> identifier)
+  pure $ maybe (PRecord fields) (POpenRecord fields) rest
 
 recordPatternField :: Parser (String, Pattern)
 recordPatternField = do

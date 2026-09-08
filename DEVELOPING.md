@@ -130,6 +130,7 @@ and the REPL.
 - Equality: `Eq a` constraints reject callable payloads statically, including private or nested fields. Comparable data use structural equality. Direct evaluator callers retain defensive runtime checks.
 - Concatenation: retained `Append a` constraints allow generic string/list helpers without defaulting unknown types. Qualified annotations must include required contexts.
 - Records: accessors infer open rows; literals and closed annotations retain exact fields. Row kinds, duplicate labels, missing fields, and infinite rows are checked.
+- Open record patterns use `{a = x | rest}` to bind the remaining fields, or `| _` to ignore them. The remainder preserves the argument's row type and excludes matched fields. Coverage checks payloads with and without additional fields; patterns without `|` keep exact-field matching.
 - Type annotations: Optional Haskell-style annotations for lambdas and let bindings. Variables are fresh for each annotation; repeated variables within one annotation remain tied.
 - Constructor patterns require every field, and cases must be exhaustive. Coverage checks combinations of nested payloads and terminates on recursive ADTs. Private constructors require a catch-all without leaking their names.
 - Unreachable alternatives warn on stderr. The warnings travel through definition inference and module loading; the REPL reports each prechecked input once.

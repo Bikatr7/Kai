@@ -255,6 +255,14 @@ same [1, 2] [1, 2]  // => true
 requirements survive aliases, recursive definitions, modules, and REPL inputs.
 An explicit open record annotation is `{a : Int | row}`; `{a : Int}` remains closed.
 
+Open record patterns bind the remaining fields with `| rest`, or ignore them with
+`| _`. The remainder is a record and can be empty:
+
+```kai
+let dropA = \record -> case record of {a = _ | rest} -> rest in
+dropA {a = 1, b = true}  // => {b = true}
+```
+
 List and string functions:
 
 ```kai

@@ -1,0 +1,4 @@
+// expect: (3, {b = true}, {c = 4})
+let total = \r -> case r of {a = first, b = second | _} -> first + second
+let dropA = \r -> case r of {a = _ | rest} -> rest
+(total {a = 1, b = 2, extra = false}, dropA {a = 0, b = true}, dropA {a = "x", c = 4})

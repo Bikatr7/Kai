@@ -34,6 +34,11 @@ matchPattern (PRecord pfs) (VRecord vfs) = do
             envs <- mapM (uncurry matchPattern) (Map.elems pvs)
             return $ Map.unions envs
         else Nothing
+matchPattern (POpenRecord fields rest) (VRecord values) = do
+    bindings <- mapM (\(name, pat) -> Map.lookup name values >>= matchPattern pat) fields
+    let remaining = VRecord (foldr (Map.delete . fst) values fields)
+        restBinding = if rest == "_" then Map.empty else Map.singleton rest remaining
+    pure $ Map.unions (restBinding : bindings)
 matchPattern (PTuple pats) (VTuple vals)
   | length pats == length vals = do
       envs <- sequence [matchPattern p v | (p, v) <- zip pats vals]

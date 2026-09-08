@@ -162,6 +162,7 @@ extra-source-files:
     tests/nested_conditional.kai
     tests/nested_if.kai
     tests/open_record_helpers.kai
+    tests/open_record_patterns.kai
     tests/polymorphic_recursion_annotated.kai
     tests/polymorphic_top_level.kai
     tests/precedence.kai
@@ -399,6 +400,7 @@ test-suite kai-test
       LetBindingSpec
       ListFunctionsSpec
       ModuleSpec
+      OpenRecordPatternSpec
       OpenRecordSpec
       OrdinaryBuiltinsSpec
       OutputFailureSpec
