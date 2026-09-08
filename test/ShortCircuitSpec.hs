@@ -42,6 +42,17 @@ spec = describe "Short-circuit boolean guards" $ do
       let source = guard ++ " (exit 7)"
       evaluateCheckedSource source `shouldBe` Right (VBool result)
       eval (parseExpression source) `shouldReturn` Right (VBool result)
+    it (guard ++ " skips a shell process that would create a file") $ withTempDir $ \dir -> do
+      let file = dir </> "process marker.txt"
+          command = "echo unexpected > \"" ++ file ++ "\""
+          process = "system " ++ show command
+          source = guard ++ " (" ++ process ++ " == 0)"
+      inferSource source `shouldBe` Right T.TBool
+      eval (parseExpression source) `shouldReturn` Right (VBool result)
+      doesFileExist file `shouldReturn` False
+      -- Prove the same command really creates the marker when evaluated.
+      eval (parseExpression process) `shouldReturn` Right (VInt 0)
+      doesFileExist file `shouldReturn` True
 
   forM_ ["true and", "false or"] $ \guard ->
     it (guard ++ " evaluates required input and output exactly once") $ do

@@ -1,4 +1,4 @@
-module TestIO (captureOutput, withStdin, withReadOnlyStdout) where
+module TestIO (captureOutput, withStdin, withReadOnlyStdout, withWriteOnlyStdin) where
 
 import Control.Exception (bracket, evaluate)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)
@@ -40,3 +40,11 @@ withReadOnlyStdout action = withTempHandle $ \(path, original) -> do
     bracket (hDuplicate stdout)
       (\saved -> hDuplicateTo saved stdout >> hClose saved)
       (\_ -> hDuplicateTo target stdout >> action)
+
+withWriteOnlyStdin :: IO a -> IO a
+withWriteOnlyStdin action = withTempHandle $ \(path, original) -> do
+  hClose original
+  withFile path WriteMode $ \source ->
+    bracket (hDuplicate stdin)
+      (\saved -> hDuplicateTo saved stdin >> hClose saved)
+      (\_ -> hDuplicateTo source stdin >> action)

@@ -1,0 +1,8 @@
+// expect: (42, false, true, [1, 2], Nothing)
+// expect-type: TTuple [TInt,TBool,TBool,TList TInt,TMaybe TString]
+// stdin: ""
+let recovered = case attempt (\unit -> 1 / 0) of
+  Left DivisionByZero -> 42
+  | Left other -> raise other
+  | Right value -> value
+(recovered, false and (1 / 0 == 0), true or (head ([] : [Int]) == 0), map length [[1], [2, 3]], readLine ())

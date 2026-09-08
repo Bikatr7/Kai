@@ -2,7 +2,7 @@ module ErrorRecoverySpec where
 
 import Control.Monad (forM_)
 import Control.Monad.Except (ExceptT, runExceptT, liftIO)
-import Control.Exception (AsyncException(ThreadKilled), IOException, bracket, try, throwIO)
+import Control.Exception (AsyncException(..), IOException, bracket, try, throwIO)
 import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import Evaluator (Value(..), RuntimeError(..), IOErrorKind(..), eval, evalPure)
@@ -14,7 +14,7 @@ import System.IO (IOMode(WriteMode), withFile)
 import System.IO.Error (isPermissionError)
 import Test.Hspec
 import TestSupport
-import TestIO (captureOutput, withStdin, withReadOnlyStdout)
+import TestIO (captureOutput, withStdin, withReadOnlyStdout, withWriteOnlyStdin)
 import qualified TypeChecker as T
 import Syntax
 
@@ -111,6 +111,27 @@ spec = describe "Structured error recovery" $ do
     result <- try (runExceptT $ evalRecoveryWith pure evaluate Map.empty (Attempt (Var "action")))
       :: IO (Either AsyncException (Either RuntimeError Value))
     result `shouldBe` Left ThreadKilled
+
+  forM_ [UserInterrupt,StackOverflow,HeapOverflow] $ \failure ->
+    it ("does not catch host " ++ show failure ++ " inside the action") $ do
+      let evaluate :: Map.Map String Value -> Expr -> ExceptT RuntimeError IO Value
+          evaluate _ (Var "action") = pure $ VFun "unit" (Var "body") Map.empty
+          evaluate _ _ = liftIO $ throwIO failure
+      result <- try (runExceptT $ evalRecoveryWith pure evaluate Map.empty (Attempt (Var "action")))
+        :: IO (Either AsyncException (Either RuntimeError Value))
+      result `shouldBe` Left failure
+
+  forM_ [("input","input"),("readLine","readLine ()")] $ \(operation,source) ->
+    it ("recovers from a real unreadable stdin handle for " ++ operation ++ " without treating it as EOF") $ do
+      let expression = parseExpression ("attempt (\\unit -> " ++ source ++ ")")
+      result <- withWriteOnlyStdin (eval expression)
+      case result of
+        Right (VLeft (VData "IOError" [VData "OtherIO" [],VStr actual,VNothing,VStr detail])) -> do
+          actual `shouldBe` operation
+          detail `shouldSatisfy` not . null
+        other -> expectationFailure (show other)
+      withStdin "restored\n" (eval (parseExpression "readLine ()")) `shouldReturn`
+        Right (VJust (VStr "restored"))
 
   it "does not claim external I/O is available to the pure evaluator" $
     evaluateCheckedSource "attempt (\\unit -> readLine ())" `shouldBe`

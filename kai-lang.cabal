@@ -176,6 +176,7 @@ extra-source-files:
     tests/record_access_b.kai
     tests/record_access_nested.kai
     tests/records.kai
+    tests/recovery_and_guards.kai
     tests/recursive_arithmetic.kai
     tests/sequencing_arithmetic.kai
     tests/sequencing_basic.kai
