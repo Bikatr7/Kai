@@ -1,5 +1,5 @@
 name: kai-lang
-version: 0.0.4.6
+version: 0.0.5.0
 synopsis: A functional-first scripting language with static typing
 description: Kai combines static type inference, first-class functions, algebraic data types, and scripting tools in an interpreter implemented in Haskell.
 category: Language

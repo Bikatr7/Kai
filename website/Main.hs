@@ -60,7 +60,7 @@ getHomeR = do
             <div .stat-number>44
             <div .stat-label>Built-in Operations
           <div .stat-item>
-            <div .stat-number>v0.0.4.6
+            <div .stat-number>v0.0.5.0
             <div .stat-label>Current Version
 
       <nav>
@@ -321,7 +321,7 @@ getHomeR = do
             <span>No JSON/HTTP/package manager yet; show/print are display rather than serialization
 
       <section #roadmap>
-        <h2>Kai v0.0.4.6 & Roadmap
+        <h2>Kai v0.0.5.0 & Roadmap
         <div .timeline>
           <div .timeline-item>
             <div .timeline-marker data-step="1">
@@ -383,15 +383,15 @@ getHomeR = do
             <div .timeline-content>
               <h3>v0.0.4.5 (Released 2026-07-11)
               <p>Version flags, permission-preserving archives, checksums, automatic version-driven releases, pinned deployment baselines, and native verification of exact release downloads
-          <div .timeline-item .current>
-            <div .timeline-marker .current data-step="13">
+          <div .timeline-item>
+            <div .timeline-marker data-step="13">
             <div .timeline-content>
               <h3>v0.0.4.6
               <p>Partially applied builtins, typed lambdas and tuples, consistent recursion, private constructors, UTF-8 source and text files, checked output failures, exact script assertions, and reliable executable-script installation
-          <div .timeline-item>
-            <div .timeline-marker data-step="14">
+          <div .timeline-item .current>
+            <div .timeline-marker .current data-step="14">
             <div .timeline-content>
-              <h3>Next: v0.0.5.0
+              <h3>v0.0.5.0
               <p>Structured errors with attempt/raise recovery; safe line input and optional list accessors; short-circuit booleans; ordinary builtin application; open record inference and reusable concatenation; static equality constraints and exhaustive patterns; source-aware diagnostics and migration examples
           <div .timeline-item>
             <div .timeline-marker data-step="15">

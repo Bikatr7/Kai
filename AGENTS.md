@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Contributor instructions for Kai **0.0.4.6**.
+Contributor instructions for Kai **0.0.5.0**.
 
 ## Read README.md in its entirety.
 ## Read DEVELOPING.md in its entirety.
@@ -107,7 +107,7 @@ error constructors, and assert that later effects do not occur after a failure.
 - **Feature priorities**: Match the roadmap and current limitations listed in README.md
 - **Documentation updates**: When adding language features, update README.md, SPEC.md, website, FEATURES.md and DEVELOPING.md
 
-## Kai 0.0.4.6 Implementation Notes
+## Kai 0.0.5.0 Implementation Notes
 - Builtins are first-class and support partial application; supplied arguments evaluate immediately.
 - Recursive constants and closures initialize in source order. Reading an uninitialized recursive binding returns `UninitializedRecursion`.
 - Annotation variables are scoped independently; constructor patterns require the declared arity and cannot repeat bound names.

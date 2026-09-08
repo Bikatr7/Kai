@@ -56,6 +56,7 @@ applySubstScheme sub (Forall vars ty) =
   in Forall vars (applySubst filteredSubst ty)
 
 applySubstEnv :: Substitution -> TypeEnv -> TypeEnv
+applySubstEnv sub | Map.null sub = id
 applySubstEnv sub = Map.map (applySubstScheme sub)
 
 composeSubst :: Substitution -> Substitution -> Substitution

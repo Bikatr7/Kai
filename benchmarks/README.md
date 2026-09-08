@@ -1,4 +1,4 @@
-# Kai 0.0.4.6 Benchmarks
+# Kai 0.0.5.0 Benchmarks
 
 Kai uses Criterion for runtime measurements and Weigh for allocation measurements.
 The suite contains 83 speed cases and 8 allocation cases. Parser-suite,

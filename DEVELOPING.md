@@ -1,8 +1,8 @@
-# Developing Kai 0.0.4.6
+# Developing Kai 0.0.5.0
 
 This document helps contributors work on Kai’s codebase efficiently.
 
-## Next Release: 0.0.5.0
+## Release Design: 0.0.5.0
 
 Follow [the release design](RELEASE-0.0.5.0.md) for the five required language
 changes: structured error recovery, short-circuit booleans, ordinary builtin
@@ -11,12 +11,11 @@ Source-aware diagnostics, safe input/list helpers, migration examples, and nativ
 acceptance tests are included. REPL history/completion and broader stdlib work
 follow these requirements.
 
-The design specifies implementation order and acceptance coverage. Keep current
-semantics documented until their implementation and tests change together. Future
-syntax belongs in `text` fences in the design; executable `kai` examples in the
-language docs must work with the documented interpreter version. Retain existing
-tests, updating expectations only for deliberately changed semantics and adding
-the corresponding migration case.
+The design specifies implementation order and acceptance coverage. Keep semantics,
+tests and documentation synchronized. Future syntax belongs in `text` fences;
+executable `kai` examples must work with the documented interpreter version.
+Retain existing tests, updating expectations only for deliberately changed semantics
+and adding the corresponding case in [the migration guide](MIGRATING-0.0.5.0.md).
 
 ## Architecture Overview
 
@@ -362,6 +361,16 @@ runs on the same machine and build profile.
 - Edit `website/Main.hs` for content changes (features, version, examples).
 - Run `stack exec kai-website` to serve locally. Static export via `scripts/export-site.sh`.
 
+## Changes in 0.0.5.0
+
+- Structured `Error` values with `attempt`/`raise` recovery, safe line input and optional list accessors
+- Short-circuit booleans with static checking of both operands
+- Ordinary builtin application, local shadowing and field access before application
+- Open record rows and retained `Eq`/`Append` constraints across reusable definitions
+- Static rejection of callable equality, incomplete cases and duplicate record fields
+- Source diagnostics with definition/call/import context and readable type names
+- Multi-file recovery reports, EOF-driven input and executable migration examples
+
 ## Changes in 0.0.4.6
 
 - First-class and partially applied builtins, typed lambda parameters, and tuple annotations
@@ -376,7 +385,7 @@ runs on the same machine and build profile.
 ## Notes / TODOs
 
 - **For each release**: Keep package, docs, website, tests, and benchmarks synchronized. Publishing begins with the `master` version-bump push described above.
-- **Development focus**: Complete all five language changes and supporting work in [the 0.0.5.0 design](RELEASE-0.0.5.0.md).
+- **Language contract**: Preserve the five language changes and supporting behavior in [the 0.0.5.0 design](RELEASE-0.0.5.0.md).
 - **Next ergonomic follow-up**: REPL history/completion and broader scripting helpers, including JSON/HTTP.
 - **Defer by default**: Package manager, formatter/linter/LSP, general type classes/effects, and full polymorphic-recursion inference. Open records and the fixed equality/concatenation constraints belong to the core language.
 - When changing semantics, align README.md, SPEC.md, website, and DEVELOPING.md immediately.

@@ -4,7 +4,7 @@ A functional-first scripting language with static typing, implemented in Haskell
 
 Kai aims to be a practical scripting language that's functional by default but allows imperative programming when you really need it. Clean syntax, strong static types, and a pleasant development experience.
 
-## Kai v0.0.4.6
+## Kai v0.0.5.0
 
 Kai combines type inference, first-class functions, algebraic data types, and
 practical scripting tools. Builtins support partial application, recursive
@@ -479,7 +479,7 @@ Design philosophy:
 
 Roadmap:
 
-**Next release: 0.0.5.0 — error recovery and predictable language behavior.**
+**Kai 0.0.5.0: error recovery and predictable language behavior.**
 The [release design](RELEASE-0.0.5.0.md) defines the semantics, migration work,
 implementation order, and acceptance requirements.
 
@@ -490,8 +490,8 @@ implementation order, and acceptance requirements.
 - Static equality constraints and exhaustive pattern checking
 - Source-aware diagnostics, migration examples, and native package validation
 
-These are targets for 0.0.5.0. The language reference and examples above describe
-0.0.4.6. Function types describe inputs and outputs; they do not enforce purity.
+Function types describe inputs and outputs; they do not enforce purity.
+See [the migration guide](MIGRATING-0.0.5.0.md) for changes from 0.0.4.6.
 
 REPL history/completion follows this language work. JSON/HTTP, formatter/linter
 and editor support, package management, module-qualified types, wider numbers,

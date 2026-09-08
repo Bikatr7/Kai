@@ -7,8 +7,8 @@ functional code. The release keeps strict evaluation, immutable values, lexical
 scope, type inference, and direct scripting. It adds explicit recovery and removes
 the five language-design obstacles listed below.
 
-This document defines the next release's target behavior. SPEC.md describes
-0.0.4.6 until the corresponding language changes are implemented and tested.
+This document defines the 0.0.5.0 release requirements. SPEC.md describes the
+language, and MIGRATING-0.0.5.0.md explains compatibility changes with examples.
 
 ## Required scope
 

@@ -6,6 +6,7 @@ import System.Directory (doesFileExist, findExecutable)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
 import System.IO (IOMode(ReadMode), withFile, hGetContents)
+import System.Info (os)
 import System.Process (CreateProcess(..), StdStream(..), proc, withCreateProcess, waitForProcess)
 import System.Timeout (timeout)
 import Test.Hspec
@@ -14,7 +15,7 @@ import ExampleSpec (withTempDir)
 spec :: Spec
 spec = describe "Output failures" $ do
   forM_ [(["--version"],"IO error:"), (["--help"],"IO error:"),
-         (["-e","print 42"],"Runtime error: print: I/O operation failed."),
+         (["-e","print 42"],"Runtime error: " ++ readOnlyPrintDiagnostic),
          (["-e","1/0"],"Runtime error: Division by zero."),
          (["-e","1+true"],"Type error:"),
          (["-e","let x ="],"Parse error:"),
@@ -30,7 +31,7 @@ spec = describe "Output failures" $ do
     (code, err) <- runWithReadOnlyOutput directory
       ["-e","print \"hello\"; writeFile " ++ show marker ++ " \"unexpected\""] False
     code `shouldBe` ExitFailure 1
-    err `shouldContain` "print: I/O operation failed."
+    err `shouldContain` readOnlyPrintDiagnostic
     doesFileExist marker `shouldReturn` False
 
   it "returns failure even when both output streams are unwritable" $ withTempDir $ \directory -> do
@@ -47,6 +48,13 @@ spec = describe "Output failures" $ do
     (code, err) <- runWithReadOnlyOutput directory ["--check",script] False
     code `shouldBe` ExitFailure 1
     err `shouldContain` "IO error:"
+
+-- Windows reports access denied for flushing the inherited read-only handle;
+-- POSIX reports a bad descriptor, which maps to OtherIO.
+readOnlyPrintDiagnostic :: String
+readOnlyPrintDiagnostic
+  | os == "mingw32" = "print: permission denied."
+  | otherwise = "print: I/O operation failed."
 
 runWithReadOnlyOutput :: FilePath -> [String] -> Bool -> IO (ExitCode,String)
 runWithReadOnlyOutput directory arguments brokenStderr = do

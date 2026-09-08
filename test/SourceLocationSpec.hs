@@ -193,6 +193,25 @@ spec = describe "Source locations and diagnostics" $ do
       E.evalProgram program `shouldReturn` Right (E.VInt 3)
     completed `shouldBe` Just ()
 
+  forM_ [100,1000] $ \count ->
+    it ("preserves inferred helpers through " ++ show count ++ " top-level definitions") $ do
+      let source = unlines $
+            ["let same = \\x -> x == x", "let append = \\x -> \\y -> x ++ y", "let get = \\r -> r.a"] ++
+            ["let x" ++ show n ++ " = " ++ show n | n <- [0..count-1]] ++
+            ["(same x0, append [1] [2], get {a = x" ++ show (count-1) ++ ", extra = true})"]
+      completed <- timeout 10000000 $ do
+        program <- evaluate (force (locatedProgram source))
+        T.typeCheckProgram program `shouldBe` Right (T.TTuple [T.TBool,T.TList T.TInt,T.TInt])
+        E.evalProgram program `shouldReturn` Right (E.VTuple [E.VBool True,E.VList [E.VInt 1,E.VInt 2],E.VInt (count-1)])
+      completed `shouldBe` Just ()
+
+  forM_ ["\\x -> x", "\\r -> r.a", "\\x -> x == x", "\\x -> \\y -> x ++ y"] $ \source ->
+    it ("preserves every scheme under an empty substitution: " ++ source) $ do
+      let expression = parseOrFail (parseExpr source)
+      case T.inferDefinitionType Map.empty "helper" Nothing expression of
+        Left failure -> expectationFailure (show failure)
+        Right (env,_) -> T.applySubstEnv Map.empty env `shouldBe` env
+
   it "reports file diagnostics after a shebang and blank lines through the executable" $ withTempDir $ \dir -> do
     kai <- requireExecutable "kai"
     let path = dir </> "source with spaces.kai"

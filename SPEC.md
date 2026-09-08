@@ -1,15 +1,14 @@
-# Kai Language Specification (v0.0.4.6)
+# Kai Language Specification (v0.0.5.0)
 
 This document provides a comprehensive technical specification of the Kai programming language in its current state. It serves as the authoritative reference for language semantics, syntax, and behavior.
 
-**Version**: 0.0.4.6
-**Last Updated**: 2026-09-06
+**Version**: 0.0.5.0
+**Last Updated**: 2026-09-07
 
 **Note**: Kai uses a modular architecture with focused Parser, TypeChecker, Evaluator, REPL, and module-loading components. Performance benchmarks are available via `stack bench`.
 
-The next release's target semantics are defined in
-[Kai 0.0.5.0 release design](RELEASE-0.0.5.0.md). This specification continues to
-describe 0.0.4.6; each section changes alongside its implemented language behavior.
+See [the 0.0.5.0 release design](RELEASE-0.0.5.0.md) for design decisions and
+[the migration guide](MIGRATING-0.0.5.0.md) for changes from earlier versions.
 
 ## Table of Contents
 
@@ -849,4 +848,4 @@ Function application does not consume an unparenthesized signed argument: use
 - **Performance**: Optimized for deeply nested expressions (1000+ levels), comprehensive benchmarking suite available
 - **Benchmarks**: Criterion timings and Weigh allocation measurements; CI runs one iteration, while regression comparisons require separate before/after measurements
 
-This specification defines Kai v0.0.4.6.
+This specification defines Kai v0.0.5.0.

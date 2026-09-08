@@ -1,13 +1,13 @@
 # Kai Language Features
 
-**Version**: 0.0.4.6
-**Last Updated**: 2026-09-06
+**Version**: 0.0.5.0
+**Last Updated**: 2026-09-07
 
 This document provides a comprehensive overview of all implemented and planned features for the Kai programming language.
 
 ---
 
-## Implemented Features (v0.0.4.6)
+## Implemented Features (v0.0.5.0)
 
 ### Core Language
 
@@ -256,33 +256,22 @@ for what each workload measures.
 
 ## Roadmap
 
-The next release is **0.0.5.0**, focused on error recovery and predictable language
-behavior. [RELEASE-0.0.5.0.md](RELEASE-0.0.5.0.md) defines its required semantics,
-migration work, implementation order, and acceptance tests. The implemented
-feature list above continues to describe 0.0.4.6.
+Kai 0.0.5.0 adds error recovery and predictable language behavior. See the
+[release design](RELEASE-0.0.5.0.md) and [migration guide](MIGRATING-0.0.5.0.md)
+for semantics, compatibility changes and examples.
 
 ### Priorities
 
-#### 1. Required for 0.0.5.0
-- ✅ **Error recovery**: Structured `Error` values, explicit `attempt`/`raise`, nested recovery, and preserved process-control behavior
-- ✅ **Safe input and list access**: EOF-aware `readLine`, `headMaybe`, and `tailMaybe`
-- ✅ **Boolean guards**: Short-circuit `and`/`or` with static checking of both operands
-- ✅ **Consistent application**: Builtins follow ordinary function rules; field access binds tighter than application
-- ✅ **Useful inference**: Open record rows and retained `Append` constraints across definitions and modules
-- ✅ **Static rejection**: `Eq` constraints, exhaustive patterns, and duplicate record-literal checks
-- ✅ **Diagnostics and migration**: Source locations, clear errors, practical recovery examples, and a migration guide
-- ⏳ **Acceptance**: Full tests, real I/O, stress measurements, and native package execution on all supported platforms
-
-#### 2. Scripting Ergonomics After 0.0.5.0
+#### 1. Scripting Ergonomics After 0.0.5.0
 - ⏳ **History and completion**: Improve the interactive development experience
 - ⏳ **More stdlib depth**: File-processing helpers, JSON/HTTP, and missing math/list/string utilities
 
-#### 3. Tooling and Distribution
+#### 2. Tooling and Distribution
 - ⏳ **Formatter and linter**: Useful once the surface syntax is more settled
 - ⏳ **Language server / IDE support**: Valuable after the interactive workflow matures
 - ⏳ **Package manager**: Important later, but still premature before the stdlib and module story stabilize
 
-#### 4. Longer-Term Type/System Work
+#### 3. Longer-Term Type/System Work
 - ⏳ **Full polymorphic recursion inference/ergonomics**: Explicitly not the next priority
 - ⏳ **General type classes, effect types, GADTs, rank-N types**: Deferred; open record rows and fixed `Eq`/`Append` constraints are part of 0.0.5.0
 - ⏳ **Module-qualified type identities and wider numeric types**: Separate projects after the five required language fixes
@@ -346,6 +335,16 @@ feature list above continues to describe 0.0.4.6.
 ---
 
 ## Version History
+
+### v0.0.5.0
+
+- Structured `Error` values with `attempt`/`raise` recovery, safe line input and optional list accessors
+- Short-circuit booleans with static checking of both operands
+- Ordinary builtin application, local shadowing and field access before application
+- Open record rows and retained `Eq`/`Append` constraints across reusable definitions
+- Static rejection of callable equality, incomplete cases and duplicate record fields
+- Source diagnostics with definition/call/import context and readable type names
+- Multi-file recovery reports, EOF-driven input and executable migration examples
 
 ### v0.0.4.6
 
